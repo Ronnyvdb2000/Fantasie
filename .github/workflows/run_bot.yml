@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # Hiermee kun je de bot ook handmatig starten via de knop
 
 jobs:
-    run-bot:
+  run-trading-bots:
     runs-on: ubuntu-latest
       # Hiermee dwingen we GitHub om direct de nieuwste Node-versie te gebruiken
       env:
