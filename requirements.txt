@@ -1,0 +1,6 @@
+yfinance
+pandas
+requests
+vaderSentiment
+newsapi-python
+python-dotenv
