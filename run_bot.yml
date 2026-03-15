@@ -2,8 +2,11 @@ name: Ronny Trading Bot Daily
 
 on:
   schedule:
-    # Elke werkdag om 21:00 uur (Nederlandse tijd / 20:00 UTC)
-    - cron: '0 20 * * 1-5'
+    # cron werkt in UTC tijd. 
+    # In de winter: 08:30 UTC = 09:30 NL/BE | 15:00 UTC = 16:00 NL/BE
+    # We stellen hem in op 08:30 en 15:00 UTC.
+    - cron: '30 8 * * 1-5'
+    - cron: '0 15 * * 1-5'
   workflow_dispatch: # Zodat je de bot ook handmatig kunt starten via de GitHub website
 
 jobs:
