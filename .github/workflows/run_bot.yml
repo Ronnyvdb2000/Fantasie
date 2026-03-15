@@ -1,4 +1,4 @@
-name: Ronny Trading Bot Daily
+name: Ronny Dual strategy Bot
 
 on:
   schedule:
