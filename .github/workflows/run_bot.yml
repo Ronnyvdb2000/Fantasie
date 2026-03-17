@@ -18,7 +18,7 @@ jobs:
       - name: Installeren
         run: |
           pip install --upgrade pip
-          pip install yfinance pandas vaderSentiment newsapi-python python-telegram-bot requests
+          pip install yfinance pandas vaderSentiment newsapi-python python-telegram-bot requests python-dotenv
 
       - name: Start de Bots
         env:
