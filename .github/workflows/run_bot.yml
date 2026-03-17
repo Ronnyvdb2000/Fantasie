@@ -11,12 +11,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - name: Installeren
-        run: pip install yfinance pandas pandas-ta vaderSentiment newsapi-python python-telegram-bot
-      - name: Start Bots
+    - name: Installeren
+        run: |
+          pip install --upgrade pip
+          pip install yfinance pandas vaderSentiment newsapi-python python-telegram-bot requests
+          pip install git+https://github.com/twopirllc/pandas-ta.git
+     - name: Start Bot 1
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python bot.py
-          python bot2.py
+        run: python bot.py
+
+      - name: Start Bot 2
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot2.py
