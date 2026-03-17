@@ -1,6 +1,6 @@
 yfinance
 pandas
-requests
+pandas_ta
 vaderSentiment
 newsapi-python
-python-dotenv
+python-telegram-bot
