@@ -7,16 +7,21 @@ jobs:
   run-trading-bots:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-    - name: Installeren
+
+      - name: Installeren
         run: |
           pip install --upgrade pip
           pip install yfinance pandas vaderSentiment newsapi-python python-telegram-bot requests
           pip install git+https://github.com/twopirllc/pandas-ta.git
-     - name: Start Bot 1
+
+      - name: Start Bot 1
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
