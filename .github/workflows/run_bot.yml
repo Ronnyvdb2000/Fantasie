@@ -19,7 +19,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install yfinance pandas vaderSentiment newsapi-python python-telegram-bot requests
-          pip install git+https://github.com/twopirllc/pandas-ta.git
+          pip install pandas-ta --iconsider-using-fips
 
       - name: Start de Bots
         env:
@@ -27,9 +27,5 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
         run: |
-          echo "Check welke bestanden aanwezig zijn:"
-          ls -la
-          echo "Starten van Bot 1..."
           python bot.py
-          echo "Starten van Bot 2..."
           python bot2.py
