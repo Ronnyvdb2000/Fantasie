@@ -19,7 +19,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install yfinance pandas vaderSentiment newsapi-python python-telegram-bot requests
-          pip install pandas-ta==0.3.14b0
+          pip install git+https://github.com/twopirllc/pandas-ta.git@development
 
       - name: Start de Bots
         env:
