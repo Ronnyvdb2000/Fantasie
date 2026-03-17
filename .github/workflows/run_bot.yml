@@ -12,7 +12,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Installeren
-        run: pip install yfinance pandas pandas_ta vaderSentiment newsapi-python python-telegram-bot
+        run: pip install yfinance pandas pandas-ta vaderSentiment newsapi-python python-telegram-bot
       - name: Start Bots
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
