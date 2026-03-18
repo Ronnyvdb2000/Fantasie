@@ -28,5 +28,6 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
         run: |
+          python test_telegram.py
           python bot.py
           python bot2.py
