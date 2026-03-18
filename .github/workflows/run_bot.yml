@@ -2,9 +2,11 @@ name: Ronny Dual Strategy Bot
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 8 * * *'
-
+schedule:
+    # 08:30 UTC is 09:30 Nederlandse tijd (winter)
+    # 15:00 UTC is 16:00 Nederlandse tijd (winter)
+    - cron: '30 8 * * *'
+    - cron: '0 15 * * *'
 jobs:
   run-trading-bots:
     runs-on: ubuntu-latest
