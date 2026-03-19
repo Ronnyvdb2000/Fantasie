@@ -3,7 +3,7 @@ name: Ronny Dual Strategy Bot
 on:
 workflow_dispatch:
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '1 0 * * *'
 jobs:
   run-trading-bots:
     runs-on: ubuntu-latest
