@@ -94,30 +94,26 @@ def analyseer_aandeel(ticker):
     return None
 
 def main():
-    # Lijst inladen
-    if not os.path.exists('aandelen.txt'):
-        print("Fout: aandelen.txt niet gevonden!")
-        return
-
+# Lijst met aandelen laden
     with open('aandelen.txt', 'r') as f:
-        tickers = [line.strip().upper() for line in f if line.strip()]
-
-    gevonden_signalen = []
+        tickers = [line.strip() for line in f if line.strip()]
+    
+    # Variabele om bij te houden of we iets interessants hebben gevonden
+    belangrijke_signalen = []
+    
     for t in tickers:
-        resultaat = analyseer_aandeel(t)
-        if resultaat:
-            gevonden_signalen.append(resultaat)
-        # Pauze om API-limieten (Yahoo/NewsAPI) te respecteren
-        time.sleep(1)
-
-    # Resultaten sturen
-    if gevonden_signalen:
-        verzend_bericht = "🔔 *Ronny Trading Bot Update:*\n\n" + "\n\n".join(gevonden_signalen)
-        stuur_telegram(verzend_bericht)
+        resultaat = get_analysis(t) # Dit roept jouw analyse-functie aan
+        
+        # Alleen toevoegen als het GEEN "NEUTRAAL" is
+        if "KOOP" in resultaat or "VERKOOP" in resultaat:
+            belangrijke_signalen.append(resultaat)
+    
+    # Alleen een bericht sturen als er daadwerkelijk signalen zijn
+    if belangrijke_signalen:
+        volledig_bericht = "🚨 *Handels Signalen Gevonden!*\n\n" + "\n".join(belangrijke_signalen)
+        send_telegram(volledig_bericht)
     else:
-        # Optioneel: stuur altijd een bericht dat de bot gewerkt heeft
-        # stuur_telegram("🤖 Bot scan voltooid: Geen acties nodig.")
-        print("Check voltooid. Geen signalen gevonden.")
+        print("Check voltooid: Alles is stabiel (Neutraal). Geen bericht verzonden.")
 
 if __name__ == "__main__":
     main()
