@@ -5,8 +5,7 @@ on:
   schedule:
     # Draait om 08:00, 10:00, 12:00, 14:00 en 16:00 UTC
     # In de winter is dat: 09:00, 11:00, 13:00, 15:00 en 17:00 NL tijd
-    - cron:"0 6,8,10,12,14,16,18,21,23 * * *" 
-
+    - cron:"0 */2 * * *"
 jobs:
   run-trading-bots:
     runs-on: ubuntu-latest
