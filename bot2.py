@@ -102,49 +102,26 @@ def analyseer_aandeel(ticker):
     return None
 
 def main():
-    if not os.path.exists('aandelen.txt'):
-        print("Fout: aandelen.txt niet gevonden!")
-        return
-
     with open('aandelen.txt', 'r') as f:
-        tickers = [line.strip().upper() for line in f if line.strip()]
-
-    gevonden_signalen = []
-    totaal_overzicht = []
-
+        tickers = [line.strip() for line in f if line.strip()]
+    
+    nieuws_signalen = []
+    
     for t in tickers:
-        # Prijzen ophalen voor de status update
-        try:
-            temp_df = yf.download(t, period="5d", progress=False)
-            if not temp_df.empty:
-                laatste_prijs = temp_df['Close'].iloc[-1].item()
-                totaal_overzicht.append(f"{t}: ${laatste_prijs:.2f}")
-        except:
-            pass
-
-        # Analyse uitvoeren
-        resultaat = analyseer_aandeel(t)
-        if resultaat:
-            gevonden_signalen.append(resultaat)
+        # Hier roept de bot jouw functie aan die het nieuws ophaalt en de score berekent
+        analyse_resultaat = get_news_analysis(t) 
         
-        time.sleep(1) # API limit respecteren
-
-    # --- BERICHTGEVING ---
-
-    # 1. Signalen sturen (indien aanwezig)
-    if gevonden_signalen:
-        signaal_bericht = "🔔 *SWING ALERTS:*\n\n" + "\n\n".join(gevonden_signalen)
-        stuur_telegram(signaal_bericht)
+        # Check of het sentiment GEEN 'Stabiel' of 'Neutraal' is
+        # We kijken of de woorden "Positief" of "Negatief" in de tekst staan
+        if "Positief" in analyse_resultaat or "Negatief" in analyse_resultaat:
+            nieuws_signalen.append(analyse_resultaat)
     
-    # 2. Dagelijkse Status Update
-    status_tekst = "🤖 *Ronny Bot Status Update*\n"
-    status_tekst += "Marktscan voltooid.\n\n"
-    status_tekst += "*Huidige koersen:*\n" + "\n".join(totaal_overzicht)
-    
-    if not gevonden_signalen:
-        stuur_telegram(status_tekst)
+    # Alleen een bericht sturen als er echt opvallend nieuws is
+    if nieuws_signalen:
+        volledig_nieuws_bericht = "📰 *Belangrijk Nieuws Gevonden!*\n\n" + "\n".join(nieuws_signalen)
+        send_telegram(volledig_nieuws_bericht)
     else:
-        stuur_telegram("✅ Overige aandelen in de lijst zijn gecontroleerd.")
+        print("Geen groot nieuws gevonden. Telegram blijft stil.")
 
 if __name__ == "__main__":
     main()
