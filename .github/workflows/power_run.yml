@@ -1,0 +1,29 @@
+name: "Bot: Power & AI (2-uurs scan)"
+
+on:
+  workflow_dispatch: # Hiermee kun je de bot handmatig starten met de knop
+  schedule:
+    # Draait elke 2 uur op werkdagen (om :15 over het uur)
+    # Voorbeeld: 08:15, 10:15, 12:15, etc.
+    - cron: '15 */2 * * 1-5'
+
+jobs:
+  run_power:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Bibliotheken installeren
+        run: pip install yfinance pandas requests python-dotenv
+
+      - name: Voer Power & AI Analyse uit
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_power.py
