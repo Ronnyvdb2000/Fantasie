@@ -4,12 +4,11 @@ import os
 import requests
 from dotenv import load_dotenv
 import warnings
+from datetime import datetime
 
-# Onderdruk waarschuwingen voor een schone GitHub-log
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
-# --- CONFIGURATIE ---
 load_dotenv()
+
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
@@ -19,103 +18,89 @@ def stuur_telegram(bericht):
     try:
         requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=10)
     except:
-        print("Telegram verzenden mislukt.")
+        print("Telegram fout.")
 
-def bereken_strategie(df, inzet, snelle_ma, trage_ma):
-    # Belgische Kosten & Taksen
-    VASTE_KOST = 15.00
-    BEURSTAKS_PCT = 0.0035
-    MEERWAARDE_TAX_PCT = 0.10
-
+def check_live_signaal(df, s, t, ticker):
     df = df.copy()
-    df['Fast'] = df['Close'].rolling(window=snelle_ma).mean()
-    df['Slow'] = df['Close'].rolling(window=trage_ma).mean()
+    df['F'] = df['Close'].rolling(window=s).mean()
+    df['S'] = df['Close'].rolling(window=t).mean()
     
-    # Test op het laatste jaar
-    test_data = df.iloc[-252:].copy()
+    # Link naar Yahoo Finance voor snelle check
+    link = f"https://finance.yahoo.com/quote/{ticker}"
     
-    positie = False
-    koop_prijs = 0
-    huidig_saldo = inzet
-    aantal_trades = 0
+    if df['F'].iloc[-1] > df['S'].iloc[-1] and df['F'].iloc[-2] <= df['S'].iloc[-2]:
+        return f"🚀 *KOOP* ([Grafiek]({link}))"
+    elif df['F'].iloc[-1] < df['S'].iloc[-1] and df['F'].iloc[-2] >= df['S'].iloc[-2]:
+        return f"💀 *VERKOOP* ([Grafiek]({link}))"
+    return None
 
-    for i in range(1, len(test_data)):
-        f_nu = test_data['Fast'].iloc[i]
-        f_oud = test_data['Fast'].iloc[i-1]
-        s_nu = test_data['Slow'].iloc[i]
-        s_oud = test_data['Slow'].iloc[i-1]
-        prijs = float(test_data['Close'].iloc[i])
+def bereken_bt(df, inzet, s, t):
+    # Bolero tarieven Euronext Parijs
+    VASTE_KOST = 7.50 
+    BEURSTAKS_BE = 0.0035 # Belgische TOB (0,35%)
+    FRANSE_FTT = 0.0040   # Franse Transactietaks (0,4% enkel bij aankoop)
+    
+    data = df.iloc[-252:].copy()
+    data['F'], data['S'] = data['Close'].rolling(s).mean(), data['Close'].rolling(t).mean()
+    
+    pos, k, saldo = False, 0, inzet
+    for i in range(1, len(data)):
+        # Signaal check
+        f_nu, f_oud = data['F'].iloc[i], data['F'].iloc[i-1]
+        s_nu, s_oud = data['S'].iloc[i], data['S'].iloc[i-1]
+        prijs = float(data['Close'].iloc[i])
 
-        if not positie and f_nu > s_nu and f_oud <= s_oud:
-            koop_prijs = prijs
-            positie = True
-            aantal_trades += 1
-
-        elif positie and f_nu < s_nu and f_oud >= s_oud:
-            bruto_waarde = inzet * (prijs / koop_prijs)
-            kosten = (VASTE_KOST + (inzet * BEURSTAKS_PCT)) + (VASTE_KOST + (bruto_waarde * BEURSTAKS_PCT))
-            winst = bruto_waarde - inzet - kosten
-            tax = winst * MEERWAARDE_TAX_PCT if winst > 0 else 0
-            huidig_saldo = bruto_waarde - (VASTE_KOST + (bruto_waarde * BEURSTAKS_PCT)) - (VASTE_KOST + (inzet * BEURSTAKS_PCT)) - tax
-            positie = False
-            aantal_trades += 1
-
-    if positie:
-        laatste_prijs = float(test_data['Close'].iloc[-1])
-        huidig_saldo = (inzet * (laatste_prijs / koop_prijs)) - 35
-        
-    return huidig_saldo, aantal_trades
+        if not pos and f_nu > s_nu and f_oud <= s_oud:
+            # Aankoop: Inclusief Bolero-kost, TOB en Franse FTT
+            kosten_aankoop = VASTE_KOST + (inzet * BEURSTAKS_BE) + (inzet * FRANSE_FTT)
+            k, pos = prijs, True
+            # We trekken de kosten direct van het saldo af voor de simulatie
+            saldo -= kosten_aankoop
+        elif pos and f_nu < s_nu and f_oud >= s_oud:
+            # Verkoop: Enkel Bolero-kost en TOB (Geen FTT bij verkoop)
+            bruto_opbrengst = inzet * (prijs / k)
+            kosten_verkoop = VASTE_KOST + (bruto_opbrengst * BEURSTAKS_BE)
+            saldo += (bruto_opbrengst - inzet) - kosten_verkoop
+            pos = False
+    return saldo
 
 def main():
-    # Duidelijke startmelding voor Parijs
-    stuur_telegram("🗼 *START ANALYSE: EURONEXT PARIJS (FR)*\n_Bezig met berekenen van de 2 strategieën op de CAC 40..._")
+    stuur_telegram("🇫🇷 *START ANALYSE: EURONEXT PARIJS (CAC 40)*")
     
-    start_kapitaal = 50000
-    inzet_per_aandeel = 2500
-    
-    try:
-        with open('tickers_parijs.txt', 'r') as f:
-            content = f.read()
-            tickers = [t.strip() for t in content.split(',') if t.strip()]
-    except:
-        tickers = ['MC.PA', 'OR.PA', 'TTE.PA', 'SAN.PA', 'AIR.PA']
+    start_kapitaal = 100000
+    inzet = 2500
+    with open('tickers_parijs.txt', 'r') as f:
+        tickers = [t.strip() for t in f.read().split(',') if t.strip()]
 
-    bot1_totaal = start_kapitaal - (len(tickers) * inzet_per_aandeel)
-    bot2_totaal = start_kapitaal - (len(tickers) * inzet_per_aandeel)
-    bot1_trades = 0
-    bot2_trades = 0
+    b1_t, b2_t = start_kapitaal, start_kapitaal
+    live = []
 
     for t in tickers:
-        print(f"Analyseert Parijs: {t}")
         try:
-            df = yf.download(t, period="2y", interval="1d", progress=False)
+            df = yf.download(t, period="2y", progress=False)
             if df.empty or len(df) < 200: continue
             
-            res1, trades1 = bereken_strategie(df, inzet_per_aandeel, 50, 200)
-            bot1_totaal += res1
-            bot1_trades += trades1
+            b1_t += (bereken_bt(df, inzet, 50, 200) - inzet)
+            b2_t += (bereken_bt(df, inzet, 20, 50) - inzet)
             
-            res2, trades2 = bereken_strategie(df, inzet_per_aandeel, 20, 50)
-            bot2_totaal += res2
-            bot2_trades += trades2
-        except:
-            print(f"Fout bij ophalen {t}")
+            s1 = check_live_signaal(df, 50, 200, t)
+            s2 = check_live_signaal(df, 20, 50, t)
+            if s1: live.append(f"• `{t}` (B1): {s1}")
+            if s2: live.append(f"• `{t}` (B2): {s2}")
+        except: pass
 
-    # Rapportage met Parijs branding
-    winnaar = "BOT 1 (50/200)" if bot1_totaal > bot2_totaal else "BOT 2 (20/50)"
+    rapport = f"🇫🇷 *EINDRAPPORT PARIJS*\n"
+    rapport += f"💰 Portefeuille: €{start_kapitaal:,.0f} (€{inzet} p/t)\n"
+    rapport += f"----------------------------------\n"
+    rapport += f"🤖 *Bot 1 (50/200):* €{b1_t:,.0f}\n"
+    rapport += f"🤖 *Bot 2 (20/50):* €{b2_t:,.0f}\n"
+    rapport += f"----------------------------------\n"
     
-    rapport = f"🇫🇷 *EINDRAPPORT EURONEXT PARIJS*\n"
-    rapport += f"📅 Periode: Laatste 12 maanden\n"
-    rapport += f"💰 Startkapitaal: €{start_kapitaal:,.2f}\n"
-    rapport += f"----------------------------------\n\n"
-    rapport += f"🤖 *BOT 1 (Trend: 50/200 SMA)*\n"
-    rapport += f"   • Eindstand: €{bot1_totaal:,.2f}\n"
-    rapport += f"   • Totaal trades: {bot1_trades}\n\n"
-    rapport += f"🤖 *BOT 2 (Actief: 20/50 SMA)*\n"
-    rapport += f"   • Eindstand: €{bot2_totaal:,.2f}\n"
-    rapport += f"   • Totaal trades: {bot2_trades}\n\n"
-    rapport += f"🏆 *Winnaar Parijs:* {winnaar}"
-    
+    if live:
+        rapport += "🎯 *SIGNALEER & CHECK OP BOLERO:*\n" + "\n".join(live)
+    else:
+        rapport += "😴 *Geen actie vereist in Parijs.*"
+
     stuur_telegram(rapport)
 
 if __name__ == "__main__":
