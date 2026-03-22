@@ -1,0 +1,24 @@
+name: "Bot: Defensie Global (Elke 2 uur)"
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Draait elke 2 uur (om :05 over het hele uur) op werkdagen
+    - cron: '5 */2 * * 1-5'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Installeren
+        run: pip install yfinance pandas requests python-dotenv
+      - name: Voer Defensie Analyse uit
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_defensie.py
