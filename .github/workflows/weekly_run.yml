@@ -1,0 +1,20 @@
+name: Weekly Report
+on:
+  schedule:
+    - cron: '0 22 * * 5' # Elke vrijdag om 22:00 UTC (na sluiting Wall Street)
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install yfinance pandas requests python-dotenv
+      - name: Run Report
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python weekly_report.py
