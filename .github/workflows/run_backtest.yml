@@ -17,7 +17,8 @@ jobs:
 
       - name: Bibliotheken installeren
         run: |
-          pip install yfinance pandas
+          python -m pip install --upgrade pip
+          pip install yfinance pandas requests python-dotenv
 
       - name: Voer Backtest uit
         env:
