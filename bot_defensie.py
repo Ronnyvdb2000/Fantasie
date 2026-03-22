@@ -4,7 +4,9 @@ import os
 import requests
 from dotenv import load_dotenv
 import warnings
+from datetime import datetime
 
+# Onderdruk waarschuwingen
 warnings.simplefilter(action='ignore', category=FutureWarning)
 load_dotenv()
 
@@ -14,32 +16,49 @@ CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"})
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=10)
+    except:
+        print("Telegram verzenden mislukt.")
 
-def bereken_strategie(df, inzet, snelle_ma, trage_ma):
-    VASTE_KOST = 15.00
-    BEURSTAKS_PCT = 0.0035
-    df = df.copy()
+def check_live_signaal(df, snelle_ma, trage_ma):
+    """Checkt of er VANDAAG een kruising is"""
     df['Fast'] = df['Close'].rolling(window=snelle_ma).mean()
     df['Slow'] = df['Close'].rolling(window=trage_ma).mean()
+    
+    nu_f, oud_f = df['Fast'].iloc[-1], df['Fast'].iloc[-2]
+    nu_s, oud_s = df['Slow'].iloc[-1], df['Slow'].iloc[-2]
+    
+    if nu_f > nu_s and oud_f <= oud_s:
+        return "🚀 GOLDEN CROSS (KOOP)"
+    elif nu_f < nu_s and oud_f >= oud_s:
+        return "💀 DEATH CROSS (VERKOOP)"
+    return None
+
+def bereken_backtest(df, inzet, snelle_ma, trage_ma):
+    """Berekent rendement over het laatste jaar (inclusief kosten)"""
+    VASTE_KOST = 15.00
+    BEURSTAKS_PCT = 0.0035
+    
     test_data = df.iloc[-252:].copy()
+    test_data['Fast'] = test_data['Close'].rolling(window=snelle_ma).mean()
+    test_data['Slow'] = test_data['Close'].rolling(window=trage_ma).mean()
     
     positie = False
     koop_prijs = 0
     huidig_saldo = inzet
-    
+
     for i in range(1, len(test_data)):
         f_nu, f_oud = test_data['Fast'].iloc[i], test_data['Fast'].iloc[i-1]
         s_nu, s_oud = test_data['Slow'].iloc[i], test_data['Slow'].iloc[i-1]
         prijs = float(test_data['Close'].iloc[i])
 
         if not positie and f_nu > s_nu and f_oud <= s_oud:
-            koop_prijs = prijs
-            positie = True
+            koop_prijs, positie = prijs, True
         elif positie and f_nu < s_nu and f_oud >= s_oud:
-            rendement = prijs / koop_prijs
-            bruto = inzet * rendement
-            huidig_saldo = bruto - (VASTE_KOST * 2) - (inzet * BEURSTAKS_PCT * 2)
+            bruto = inzet * (prijs / koop_prijs)
+            kosten = (VASTE_KOST * 2) + (inzet * BEURSTAKS_PCT) + (bruto * BEURSTAKS_PCT)
+            huidig_saldo = bruto - kosten
             positie = False
 
     if positie:
@@ -47,32 +66,57 @@ def bereken_strategie(df, inzet, snelle_ma, trage_ma):
     return huidig_saldo
 
 def main():
-    stuur_telegram("🦈 *START: DEFENSIE SCAN (INCL. KLEINE VISSEN)*")
+    # 1. Startmelding (Zelfde stijl als Parijs/Benelux)
+    stuur_telegram("🛡️ *START ANALYSE: GLOBALE DEFENSIE*\n_Bezig met scannen van 25+ tickers (VS, EU, CA, IL)..._")
     
-    try:
-        with open('tickers_defensie.txt', 'r') as f:
-            tickers = [t.strip() for t in f.read().split(',') if t.strip()]
-    except:
-        tickers = ['LMT', 'AVAV', 'PLTR', 'RHM.DE']
+    start_kapitaal = 100000
+    inzet_per_aandeel = 2500
+    
+    with open('tickers_defensie.txt', 'r') as f:
+        tickers = [t.strip() for t in f.read().split(',') if t.strip()]
 
-    resultaten = []
+    bot1_totaal = start_kapitaal - (len(tickers) * inzet_per_aandeel)
+    bot2_totaal = start_kapitaal - (len(tickers) * inzet_per_aandeel)
+    live_meldingen = []
 
     for t in tickers:
-        print(f"Scannen: {t}")
-        df = yf.download(t, period="2y", progress=False)
-        if df.empty or len(df) < 200: continue
-        
-        r1 = bereken_strategie(df, 2500, 50, 200)
-        r2 = bereken_strategie(df, 2500, 20, 50)
-        
-        # Welke bot wint voor DIT specifiek aandeel?
-        fav = "🤖1" if r1 > r2 else "🤖2"
-        resultaten.append(f"`{t.split('.')[0]:<6}`: {fav} (Best: €{max(r1, r2):.0f})")
+        print(f"Analyseert Defensie: {t}")
+        try:
+            df = yf.download(t, period="2y", progress=False)
+            if df.empty or len(df) < 200: continue
+            
+            # Backtest
+            bot1_totaal += bereken_backtest(df, inzet_per_aandeel, 50, 200)
+            bot2_totaal += bereken_backtest(df, inzet_per_aandeel, 20, 50)
+            
+            # Live Signalen
+            sig1 = check_live_signaal(df, 50, 200)
+            sig2 = check_live_signaal(df, 20, 50)
+            if sig1: live_meldingen.append(f"• `{t}` (B1): {sig1}")
+            if sig2: live_meldingen.append(f"• `{t}` (B2): {sig2}")
+        except:
+            print(f"Fout bij {t}")
 
-    # Splits resultaten in blokken van 10 voor leesbaarheid in Telegram
-    for i in range(0, len(resultaten), 10):
-        bericht = "📊 *Check per aandeel:*\n" + "\n".join(resultaten[i:i+10])
-        stuur_telegram(bericht)
+    # 2. Eindrapport (Zelfde layout als de rest)
+    winnaar = "BOT 1 (50/200)" if bot1_totaal > bot2_totaal else "BOT 2 (20/50)"
+    vandaag = datetime.now().strftime('%d-%m-%Y %H:%M')
+
+    rapport = f"🛡️ *EINDRAPPORT GLOBALE DEFENSIE*\n"
+    rapport += f"📅 Datum: {vandaag}\n"
+    rapport += f"💰 Startkapitaal: €{start_kapitaal:,.2f}\n"
+    rapport += f"----------------------------------\n\n"
+    rapport += f"🤖 *BOT 1 (Trend: 50/200 SMA)*\n"
+    rapport += f"   • Eindstand: €{bot1_totaal:,.2f}\n\n"
+    rapport += f"🤖 *BOT 2 (Actief: 20/50 SMA)*\n"
+    rapport += f"   • Eindstand: €{bot2_totaal:,.2f}\n\n"
+    rapport += f"🏆 *Beste strategie:* {winnaar}\n\n"
+    
+    if live_meldingen:
+        rapport += "🎯 *LIVE SIGNALEN NU:*\n" + "\n".join(live_meldingen)
+    else:
+        rapport += "😴 *Geen nieuwe signalen op dit moment.*"
+
+    stuur_telegram(rapport)
 
 if __name__ == "__main__":
     main()
