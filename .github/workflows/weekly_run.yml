@@ -2,6 +2,7 @@ name: Weekly Report
 on:
   schedule:
     - cron: '0 22 * * 5' # Elke vrijdag om 22:00 UTC (na sluiting Wall Street)
+  workflow_dispatch:  # <--- VOEG DEZE REGEL TOE
 jobs:
   report:
     runs-on: ubuntu-latest
