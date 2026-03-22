@@ -1,0 +1,23 @@
+name: Backtest Strategie
+
+on:
+  workflow_dispatch: # Dit zorgt ervoor dat je hem handmatig kunt starten
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Bibliotheken installeren
+        run: |
+          pip install yfinance pandas
+
+      - name: Voer Backtest uit
+        run: python backtest.py
