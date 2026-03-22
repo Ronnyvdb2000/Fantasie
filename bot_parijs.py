@@ -31,7 +31,7 @@ def bereken_strategie(df, inzet, snelle_ma, trage_ma):
     df['Fast'] = df['Close'].rolling(window=snelle_ma).mean()
     df['Slow'] = df['Close'].rolling(window=trage_ma).mean()
     
-    # We testen op het laatste jaar (ca. 252 handelsdagen)
+    # Test op het laatste jaar
     test_data = df.iloc[-252:].copy()
     
     positie = False
@@ -46,46 +46,38 @@ def bereken_strategie(df, inzet, snelle_ma, trage_ma):
         s_oud = test_data['Slow'].iloc[i-1]
         prijs = float(test_data['Close'].iloc[i])
 
-        # KOOP SIGNAAL
         if not positie and f_nu > s_nu and f_oud <= s_oud:
             koop_prijs = prijs
             positie = True
             aantal_trades += 1
 
-        # VERKOOP SIGNAAL
         elif positie and f_nu < s_nu and f_oud >= s_oud:
             bruto_waarde = inzet * (prijs / koop_prijs)
-            # Kosten berekenen (Aankoop + Verkoop)
             kosten = (VASTE_KOST + (inzet * BEURSTAKS_PCT)) + (VASTE_KOST + (bruto_waarde * BEURSTAKS_PCT))
             winst = bruto_waarde - inzet - kosten
-            
-            # 10% belasting op winst (indien van toepassing)
             tax = winst * MEERWAARDE_TAX_PCT if winst > 0 else 0
-            
             huidig_saldo = bruto_waarde - (VASTE_KOST + (bruto_waarde * BEURSTAKS_PCT)) - (VASTE_KOST + (inzet * BEURSTAKS_PCT)) - tax
             positie = False
             aantal_trades += 1
 
-    # Als we aan het eind nog een aandeel vasthebben, rekenen we de actuele waarde
     if positie:
         laatste_prijs = float(test_data['Close'].iloc[-1])
-        huidig_saldo = (inzet * (laatste_prijs / koop_prijs)) - 35 # Geschatte exit kosten
+        huidig_saldo = (inzet * (laatste_prijs / koop_prijs)) - 35
         
     return huidig_saldo, aantal_trades
 
 def main():
-    stuur_telegram("🇫🇷 *Start Analyse: Euronext Parijs (CAC 40)*\nBezig met berekenen van Dual Strategie...")
+    # Duidelijke startmelding voor Parijs
+    stuur_telegram("🗼 *START ANALYSE: EURONEXT PARIJS (FR)*\n_Bezig met berekenen van de 2 strategieën op de CAC 40..._")
     
     start_kapitaal = 50000
     inzet_per_aandeel = 2500
     
-    # Inlezen van de Parijs tickers
     try:
         with open('tickers_parijs.txt', 'r') as f:
             content = f.read()
             tickers = [t.strip() for t in content.split(',') if t.strip()]
     except:
-        # Fallback voor als het bestand ontbreekt
         tickers = ['MC.PA', 'OR.PA', 'TTE.PA', 'SAN.PA', 'AIR.PA']
 
     bot1_totaal = start_kapitaal - (len(tickers) * inzet_per_aandeel)
@@ -96,34 +88,33 @@ def main():
     for t in tickers:
         print(f"Analyseert Parijs: {t}")
         try:
-            # Haal 2 jaar data op voor stabiele SMA berekening
             df = yf.download(t, period="2y", interval="1d", progress=False)
             if df.empty or len(df) < 200: continue
             
-            # Run Bot 1 (Klassiek 50/200)
             res1, trades1 = bereken_strategie(df, inzet_per_aandeel, 50, 200)
             bot1_totaal += res1
             bot1_trades += trades1
             
-            # Run Bot 2 (Actief 20/50)
             res2, trades2 = bereken_strategie(df, inzet_per_aandeel, 20, 50)
             bot2_totaal += res2
             bot2_trades += trades2
         except:
             print(f"Fout bij ophalen {t}")
 
-    # Rapportage
+    # Rapportage met Parijs branding
     winnaar = "BOT 1 (50/200)" if bot1_totaal > bot2_totaal else "BOT 2 (20/50)"
     
-    rapport = f"📊 *RESULTAAT PARIJS (1 JAAR)*\n"
-    rapport += f"💰 Startkapitaal: €{start_kapitaal:,.2f}\n\n"
-    rapport += f"🤖 *Bot 1 (Klassiek 50/200)*\n"
+    rapport = f"🇫🇷 *EINDRAPPORT EURONEXT PARIJS*\n"
+    rapport += f"📅 Periode: Laatste 12 maanden\n"
+    rapport += f"💰 Startkapitaal: €{start_kapitaal:,.2f}\n"
+    rapport += f"----------------------------------\n\n"
+    rapport += f"🤖 *BOT 1 (Trend: 50/200 SMA)*\n"
     rapport += f"   • Eindstand: €{bot1_totaal:,.2f}\n"
-    rapport += f"   • Aantal trades: {bot1_trades}\n\n"
-    rapport += f"🤖 *Bot 2 (Actief 20/50)*\n"
+    rapport += f"   • Totaal trades: {bot1_trades}\n\n"
+    rapport += f"🤖 *BOT 2 (Actief: 20/50 SMA)*\n"
     rapport += f"   • Eindstand: €{bot2_totaal:,.2f}\n"
-    rapport += f"   • Aantal trades: {bot2_trades}\n\n"
-    rapport += f"🏆 *Beste strategie:* {winnaar}"
+    rapport += f"   • Totaal trades: {bot2_trades}\n\n"
+    rapport += f"🏆 *Winnaar Parijs:* {winnaar}"
     
     stuur_telegram(rapport)
 
