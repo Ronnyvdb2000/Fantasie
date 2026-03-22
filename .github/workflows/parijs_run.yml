@@ -1,0 +1,26 @@
+name: "Bot: Parijs (CAC 40)"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run_parijs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Bibliotheken installeren
+        run: |
+          pip install yfinance pandas requests python-dotenv
+
+      - name: Voer Parijs Analyse uit
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_parijs.py
