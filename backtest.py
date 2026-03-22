@@ -1,90 +1,99 @@
 import yfinance as yf
 import pandas as pd
+import os
+import requests
+from dotenv import load_dotenv
 
-def voer_backtest_uit(ticker, start_kapitaal=1000):
-    print(f"--- Analyse van {ticker} ---")
-    
-    # Haal data op (2 jaar om SMA200 direct te kunnen berekenen voor het laatste jaar)
+# --- SETUP ---
+load_dotenv()
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
+def stuur_telegram(bericht):
+    if not TOKEN or not CHAT_ID: return
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    # We splitsen lange berichten op als ze de Telegram limiet overschrijden
+    if len(bericht) > 4000:
+        for i in range(0, len(bericht), 4000):
+            requests.post(url, data={"chat_id": CHAT_ID, "text": bericht[i:i+4000], "parse_mode": "Markdown"})
+    else:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"})
+
+def voer_backtest_uit(ticker, inzet=2500, kost_pct=0.02):
     df = yf.download(ticker, period="2y", interval="1d", progress=False)
-    
-    if df.empty or len(df) < 200:
-        print(f"⚠️ Te weinig data voor {ticker}\n")
-        return None
+    if df.empty or len(df) < 200: return None, []
 
-    # Indicatoren berekenen
-    df['SMA50'] = df['Close'].rolling(window=50).mean()
-    df['SMA200'] = df['Close'].rolling(window=200).mean()
-    
-    # Focus op het afgelopen jaar (ca. 252 handelsdagen)
-    df = df.iloc[-252:].copy() 
+    df['SMA50'] = df['Close'].rolling(50).mean()
+    df['SMA200'] = df['Close'].rolling(200).mean()
+    df = df.iloc[-252:].copy() # Laatste jaar
 
+    trades = []
     positie = False
-    instap_prijs = 0
-    huidig_kapitaal = start_kapitaal
-    aantal_trades = 0
+    koop_prijs = 0
+    huidig_waarde = inzet
 
     for i in range(1, len(df)):
-        sma50_nu = df['SMA50'].iloc[i]
-        sma200_nu = df['SMA200'].iloc[i]
-        sma50_oud = df['SMA50'].iloc[i-1]
-        sma200_oud = df['SMA200'].iloc[i-1]
+        s50_nu, s50_oud = df['SMA50'].iloc[i], df['SMA50'].iloc[i-1]
+        s200_nu, s200_oud = df['SMA200'].iloc[i], df['SMA200'].iloc[i-1]
         prijs = float(df['Close'].iloc[i])
+        datum = df.index[i].strftime('%Y-%m-%d')
 
-        # KOOP SIGNAAL (Golden Cross)
-        if not positie and sma50_nu > sma200_nu and sma50_oud <= sma200_oud:
+        # KOOP (Golden Cross)
+        if not positie and s50_nu > s200_nu and s50_oud <= s200_oud:
+            kosten = inzet * kost_pct
+            koop_prijs = prijs
             positie = True
-            instap_prijs = prijs
-            aantal_trades += 1
-            print(f"  [KOOP]  Dag {i}: ${prijs:.2f}")
+            trades.append(f"🔵 *{ticker} KOOP*: {datum} op ${prijs:.2f} (Kost: €{kosten:.2f})")
 
-        # VERKOOP SIGNAAL (Death Cross)
-        elif positie and sma50_nu < sma200_nu and sma50_oud >= sma200_oud:
+        # VERKOOP (Death Cross)
+        elif positie and s50_nu < s200_nu and s50_oud >= s200_oud:
+            rendement = prijs / koop_prijs
+            bruto_waarde = inzet * rendement
+            verkoop_kosten = bruto_waarde * kost_pct
+            netto_resultaat = bruto_waarde - verkoop_kosten - (inzet * kost_pct) # Resultaat na alle kosten
+            
+            winst_euro = netto_resultaat - inzet
+            huidig_waarde = netto_resultaat
+            trades.append(f"🔴 *{ticker} VERKOOP*: {datum} op ${prijs:.2f} (Winst/Verlies: €{winst_euro:.2f})")
             positie = False
-            rendement = prijs / instap_prijs
-            huidig_kapitaal *= rendement
-            print(f"  [VERKOOP] Dag {i}: ${prijs:.2f} | Trade winst: {((rendement-1)*100):.2f}%")
 
-    # Als we nog in een trade zitten aan het einde van het jaar
-    if positie:
-        laatste_prijs = float(df['Close'].iloc[-1])
-        huidig_kapitaal *= (laatste_prijs / instap_prijs)
-
-    # Vergelijking met simpelweg vasthouden (Buy & Hold)
-    b_h_rendement = float(df['Close'].iloc[-1]) / float(df['Close'].iloc[0])
-    b_h_eindbedrag = start_kapitaal * b_h_rendement
-    
-    print(f"\nEindstand {ticker}:")
-    print(f"• Trades gedaan: {aantal_trades}")
-    print(f"• Jouw eindbedrag: €{huidig_kapitaal:.2f}")
-    print(f"• Buy & Hold eindbedrag: €{b_h_eindbedrag:.2f}")
-    print("-" * 30 + "\n")
-    
-    return {
-        'ticker': ticker,
-        'bot_result': huidig_kapitaal,
-        'bh_result': b_h_eindbedrag
-    }
+    return huidig_waarde, trades
 
 def main():
+    start_kapitaal = 50000
+    inzet_per_aandeel = 2500
+    makelaar_kost = 0.02
+    
     try:
         with open('aandelen.txt', 'r') as f:
             tickers = [line.strip() for line in f if line.strip()]
     except:
-        tickers = ['AAPL', 'NVDA', 'TSLA'] # Fallback
-    
-    totaal_overzicht = []
+        tickers = ['AAPL', 'NVDA', 'TSLA']
+
+    totaal_trades_lijst = []
+    eindwaarde_portfolio = start_kapitaal - (len(tickers) * inzet_per_aandeel)
+
     for t in tickers:
-        res = voer_backtest_uit(t)
-        if res:
-            totaal_overzicht.append(res)
+        eind_waarde, trade_history = voer_backtest_uit(t, inzet_per_aandeel, makelaar_kost)
+        if eind_waarde:
+            eindwaarde_portfolio += eind_waarde
+            totaal_trades_lijst.extend(trade_history)
+
+    # Rapport opmaken
+    rapport = "📊 *BACKTEST RAPPORT (1 JAAR)*\n"
+    rapport += f"Startkapitaal: €{start_kapitaal:,.2f}\n"
+    rapport += f"Inzet per trade: €{inzet_per_aandeel:,.2f}\n"
+    rapport += f"Makelaarscourtage: {makelaar_kost*100}%\n\n"
     
-    # Eindtabel printen
-    if totaal_overzicht:
-        print("======= TOTAAL OVERZICHT PORTFOLIO (START €1000 PER AANDEEL) =======")
-        for r in totaal_overzicht:
-            winst = r['bot_result'] - 1000
-            print(f"{r['ticker']}: €{r['bot_result']:.2f} (Winst/Verlies: €{winst:.2f})")
-        print("====================================================================")
+    rapport += "*TRADE HISTORIE:*\n"
+    rapport += "\n".join(totaal_trades_lijst) if totaal_trades_lijst else "Geen trades gevonden."
+    
+    rapport += f"\n\n🏁 *EINDBEDRAG PORTFOLIO: €{eindwaarde_portfolio:,.2f}*"
+    rendement = ((eindwaarde_portfolio / start_kapitaal) - 1) * 100
+    rapport += f"\nTotaal Rendement: {rendement:.2f}%"
+
+    print(rapport)
+    stuur_telegram(rapport)
 
 if __name__ == "__main__":
     main()
