@@ -97,24 +97,22 @@ def main():
     try:
         with open('aandelen.txt', 'r') as f:
             tickers = [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        print("Fout: aandelen.txt niet gevonden!")
-        return
-    
-    belangrijke_signalen = []
-    
+    except:
+        print("aandelen.txt niet gevonden!"); return
+
+    signalen = []
     for t in tickers:
-        resultaat = analyseer_aandeel(t)
-        
-        # Check of resultaat niet None is voordat we 'in' gebruiken
-        if resultaat and ("KOOP" in resultaat or "VERKOOP" in resultaat or "SHARP" in resultaat):
-            belangrijke_signalen.append(resultaat)
+        res = analyseer(t)
+        if res:
+            signalen.append(res)
     
-    if belangrijke_signalen:
-        volledig_bericht = "🚨 *Handels Signalen Gevonden!*\n\n" + "\n".join(belangrijke_signalen)
-        stuur_telegram(volledig_bericht)
+    # OUTPUT LOGICA
+    if signalen:
+        # Stuur alle koop/verkoop signalen
+        stuur_telegram("🚨 *Nieuwe Signalen!*\n\n" + "\n\n".join(signalen))
     else:
-        stuur_telegram("🤖 *Daily Check:* De bot heeft de scan voltooid. Alles is stabiel.")
+        # Alleen een korte bevestiging dat de bot gedraaid heeft
+        stuur_telegram("🤖 *Bot Status:* Scan voltooid. Geen nieuwe signalen gevonden.")
 
 if __name__ == "__main__":
     main()
