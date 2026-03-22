@@ -27,11 +27,11 @@ def voer_backtest_uit(ticker, inzet=2500):
     df = yf.download(ticker, period="2y", interval="1d", progress=False)
     if df.empty or len(df) < 200: return None, []
 
-    # Bereken SMA's over de HELE periode
+    # Bereken SMA's
     df['SMA50'] = df['Close'].rolling(window=50).mean()
     df['SMA200'] = df['Close'].rolling(window=200).mean()
 
-    # Pak nu de laatste 365 dagen voor de test
+    # Pak de laatste 252 handelsdagen
     test_periode = df.iloc[-252:].copy()
 
     positie = False
@@ -40,22 +40,23 @@ def voer_backtest_uit(ticker, inzet=2500):
     trades_log = []
 
     for i in range(1, len(test_periode)):
-        # We kijken naar de data van de test_periode, maar de SMA's zijn al berekend
-        rij_nu = test_periode.iloc[i]
-        rij_oud = test_periode.iloc[i-1]
-        
-        prijs = float(rij_nu['Close'])
+        # Gebruik .item() om zeker te zijn dat we een enkel getal vergelijken
+        s50_nu = test_periode['SMA50'].iloc[i]
+        s200_nu = test_periode['SMA200'].iloc[i]
+        s50_oud = test_periode['SMA50'].iloc[i-1]
+        s200_oud = test_periode['SMA200'].iloc[i-1]
+        prijs = float(test_periode['Close'].iloc[i])
         datum = test_periode.index[i].strftime('%d-%m-%Y')
 
         # Check voor Golden Cross (Koop)
-        if not positie and rij_nu['SMA50'] > rij_nu['SMA200'] and rij_oud['SMA50'] <= rij_oud['SMA200']:
-            aankoop_kosten = VASTE_KOST + (inzet * BEURSTAKS_PCT)
+        if not positie and s50_nu > s200_nu and s50_oud <= s200_oud:
+            kosten_koop = VASTE_KOST + (inzet * BEURSTAKS_PCT)
             koop_prijs = prijs
             positie = True
             trades_log.append(f"🔵 *{ticker} KOOP*: {datum} | ${prijs:.2f}")
 
         # Check voor Death Cross (Verkoop)
-        elif positie and rij_nu['SMA50'] < rij_nu['SMA200'] and rij_oud['SMA50'] >= rij_oud['SMA200']:
+        elif positie and s50_nu < s200_nu and s50_oud >= s200_oud:
             bruto_waarde = inzet * (prijs / koop_prijs)
             verkoop_kosten = VASTE_KOST + (bruto_waarde * BEURSTAKS_PCT)
             aankoop_kosten = VASTE_KOST + (inzet * BEURSTAKS_PCT)
@@ -68,7 +69,6 @@ def voer_backtest_uit(ticker, inzet=2500):
             trades_log.append(f"🔴 *{ticker} VERK*: {datum} | ${prijs:.2f} | Netto: €{netto:.2f}")
             positie = False
 
-    # Fictieve eindwaarde berekenen als we nog een open positie hebben
     if positie:
         laatste_prijs = float(test_periode['Close'].iloc[-1])
         bruto = inzet * (laatste_prijs / koop_prijs)
@@ -86,24 +86,27 @@ def main():
         with open('aandelen.txt', 'r') as f:
             tickers = [line.strip() for line in f if line.strip()]
     except:
-        tickers = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'META']
+        tickers = ['AAPL', 'NVDA', 'TSLA']
 
     alle_trades = []
     totaal_netto_resultaat = 0
 
     for t in tickers:
-        print(f"Bezig met {t}...")
-        eind_waarde, trade_history = voer_backtest_uit(t, inzet_per_aandeel)
-        if eind_waarde is not None:
-            totaal_netto_resultaat += (eind_waarde - inzet_per_aandeel)
-            alle_trades.extend(trade_history)
+        print(f"Analyseert: {t}")
+        try:
+            eind_waarde, trade_history = voer_backtest_uit(t, inzet_per_aandeel)
+            if eind_waarde is not None:
+                totaal_netto_resultaat += (eind_waarde - inzet_per_aandeel)
+                alle_trades.extend(trade_history)
+        except Exception as e:
+            print(f"Fout bij aandeel {t}: {e}")
 
     eind_totaal = start_kapitaal + totaal_netto_resultaat
     
     rapport = f"📊 *RESULTAAT LAATSTE 12 MAANDEN*\n"
     rapport += f"💰 Start: €{start_kapitaal:,.2f}\n"
-    rapport += f"🏦 Kosten: €15 + 0.35% | 🏛️ Tax: 10%\n\n"
-    rapport += "*TRADES:*\n" + ("\n".join(alle_trades) if alle_trades else "_Geen kruisingen gevonden in deze periode._")
+    rapport += f"🏦 Kost: €15 + 0.35% | 🏛️ Tax: 10%\n\n"
+    rapport += "*TRADES:*\n" + ("\n".join(alle_trades) if alle_trades else "_Geen trades gevonden._")
     rapport += f"\n\n🏁 *EINDSTAND: €{eind_totaal:,.2f}*"
     rapport += f"\n📈 Rendement: {((eind_totaal/start_kapitaal)-1)*100:.2f}%"
     
