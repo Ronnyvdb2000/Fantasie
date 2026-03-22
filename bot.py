@@ -102,7 +102,7 @@ def main():
     belangrijke_signalen = []
     
     for t in tickers:
-        resultaat = get_analysis(t) # Dit roept jouw analyse-functie aan
+        resultaat = analyseer_aandeel(t) # CORRECTE NAAM
         
         # Alleen toevoegen als het GEEN "NEUTRAAL" is
         if "KOOP" in resultaat or "VERKOOP" in resultaat:
