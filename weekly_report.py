@@ -4,42 +4,74 @@ import os
 import requests
 from dotenv import load_dotenv
 
+# Laad omgevingsvariabelen
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 def stuur_telegram(bericht):
-    if not TOKEN or not CHAT_ID: return
+    if not TOKEN or not CHAT_ID:
+        print("Telegram configuratie ontbreekt.")
+        return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"})
+    payload = {"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}
+    try:
+        requests.post(url, data=payload)
+    except Exception as e:
+        print(f"Telegram fout: {e}")
 
 def haal_week_performance(ticker_list):
     results = []
     for t in ticker_list:
         try:
+            # Haal 5 dagen aan data op
             df = yf.download(t, period="5d", progress=False)
-            if len(df) < 2: continue
-            start_prijs = df['Close'].iloc[0]
-            eind_prijs = df['Close'].iloc[-1]
-            perc = ((eind_prijs - start_prijs) / start_prijs) * 100
-            results.append({'ticker': t, 'perf': perc})
-        except: pass
+            if df.empty or len(df) < 2:
+                continue
+            
+            # Voorkom 'identically-labeled' fout door om te zetten naar pure getallen
+            start_prijs = float(df['Close'].iloc[0])
+            eind_prijs = float(df['Close'].iloc[-1])
+            
+            if start_prijs > 0:
+                perc = ((eind_prijs - start_prijs) / start_prijs) * 100
+                results.append({'ticker': t, 'perf': float(perc)})
+        except Exception as e:
+            print(f"Fout bij ticker {t}: {e}")
     return results
 
 def main():
-    all_files = ['tickers_benelux.txt', 'tickers_parijs.txt', 'tickers_defensie.txt', 'tickers_power.txt', 'tickers_metalen.txt']
+    # Lijst met al je tickerbestanden
+    all_files = [
+        'tickers_benelux.txt', 
+        'tickers_parijs.txt', 
+        'tickers_defensie.txt', 
+        'tickers_power.txt', 
+        'tickers_metalen.txt'
+    ]
+    
     alle_data = []
 
     for f_name in all_files:
         if os.path.exists(f_name):
             with open(f_name, 'r') as f:
+                # Lees tickers en maak ze schoon
                 tickers = [t.strip() for t in f.read().split(',') if t.strip()]
-                alle_data.extend(haal_week_performance(tickers))
+                if tickers:
+                    print(f"Scannen van {f_name}...")
+                    alle_data.extend(haal_week_performance(tickers))
+        else:
+            print(f"Bestand {f_name} niet gevonden, overslaan.")
 
-    if not alle_data: return
+    if not alle_data:
+        stuur_telegram("📊 *Wekelijks Rapport:* Geen data gevonden om te analyseren.")
+        return
 
-    # Sorteren op performance
-    df_res = pd.DataFrame(alle_data).sort_values(by='perf', ascending=False)
+    # Maak DataFrame en sorteer
+    df_res = pd.DataFrame(alle_data)
+    
+    # Sorteer op 'perf' kolom (simpele numerieke sortering)
+    df_res = df_res.sort_values(by='perf', ascending=False)
     
     top_3 = df_res.head(3)
     bottom_3 = df_res.tail(3)
@@ -55,9 +87,10 @@ def main():
     for _, row in bottom_3.iterrows():
         rapport += f"• `{row['ticker']}` : {row['perf']:.2f}%\n"
 
-    rapport += "\n💡 *Tip:* Kijk of de stijgers een 'Golden Cross' naderen op de dagelijkse grafiek!"
+    rapport += "\n💡 *Tip:* Check of de stijgers een RSI-oververhitting vertonen voordat je actie onderneemt op Bolero!"
     
     stuur_telegram(rapport)
+    print("Rapport verzonden naar Telegram.")
 
 if __name__ == "__main__":
     main()
