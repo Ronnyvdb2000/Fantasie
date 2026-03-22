@@ -1,29 +1,108 @@
-name: Backtest Strategie
+import yfinance as yf
+import pandas as pd
+import os
+import requests
+from dotenv import load_dotenv
 
-on:
-  workflow_dispatch:
+# --- SETUP ---
+load_dotenv()
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-jobs:
-  backtest:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Code ophalen
-        uses: actions/checkout@v4
+def stuur_telegram(bericht):
+    if not TOKEN or not CHAT_ID:
+        print("FOUT: Telegram Secrets niet gevonden!")
+        return False
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    try:
+        res = requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=10)
+        if res.status_code == 200:
+            return True
+        else:
+            print(f"Telegram Fout: {res.text}")
+            return False
+    except Exception as e:
+        print(f"Verbindingsfout: {e}")
+        return False
 
-      - name: Python instellen
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
+def voer_backtest_uit(ticker, inzet=2500):
+    VASTE_KOST = 15.00
+    BEURSTAKS_PCT = 0.0035
+    MEERWAARDE_TAX_PCT = 0.10
 
-      - name: Bibliotheken installeren
-        run: |
-          pip install yfinance pandas requests python-dotenv
+    df = yf.download(ticker, period="2y", interval="1d", progress=False)
+    if df.empty or len(df) < 200: return None, []
 
-      - name: Voer Backtest uit
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python test_verbinding.py
-        run: python backtest.py
-        
+    df['SMA50'] = df['Close'].rolling(50).mean()
+    df['SMA200'] = df['Close'].rolling(200).mean()
+    df = df.iloc[-252:].copy()
+
+    positie = False
+    koop_prijs = 0
+    huidig_saldo = inzet
+    trades_log = []
+
+    for i in range(1, len(df)):
+        s50_nu, s50_oud = df['SMA50'].iloc[i], df['SMA50'].iloc[i-1]
+        s200_nu, s200_oud = df['SMA200'].iloc[i], df['SMA200'].iloc[i-1]
+        prijs = float(df['Close'].iloc[i])
+        datum = df.index[i].strftime('%d-%m-%Y')
+
+        if not positie and s50_nu > s200_nu and s50_oud <= s200_oud:
+            kosten_koop = VASTE_KOST + (inzet * BEURSTAKS_PCT)
+            koop_prijs = prijs
+            positie = True
+            trades_log.append(f"🔵 *{ticker} KOOP*: {datum} | ${prijs:.2f}")
+
+        elif positie and s50_nu < s200_nu and s50_oud >= s200_oud:
+            bruto_waarde = inzet * (prijs / koop_prijs)
+            kosten_verkoop = VASTE_KOST + (bruto_waarde * BEURSTAKS_PCT)
+            aankoop_kosten = VASTE_KOST + (inzet * BEURSTAKS_PCT)
+            
+            winst = bruto_waarde - inzet - aankoop_kosten - kosten_verkoop
+            belasting = winst * MEERWAARDE_TAX_PCT if winst > 0 else 0
+            
+            netto = bruto_waarde - kosten_verkoop - aankoop_kosten - belasting
+            huidig_saldo = netto
+            trades_log.append(f"🔴 *{ticker} VERKOOP*: {datum} | ${prijs:.2f} | Netto: €{netto:.2f}")
+            positie = False
+
+    return huidig_saldo, trades_log
+
+def main():
+    # STAP 1: VERBINDINGSTEST
+    print("Verbinding testen...")
+    if not stuur_telegram("🔄 *Backtest gestart:* Verbindingstest geslaagd. Berekeningen worden nu uitgevoerd..."):
+        print("STOP: Kan geen bericht sturen naar Telegram. Check je Secrets!")
+        return
+
+    # STAP 2: BACKTEST UITVOEREN
+    start_kapitaal = 50000
+    inzet_per_aandeel = 2500
     
+    try:
+        with open('aandelen.txt', 'r') as f:
+            tickers = [line.strip() for line in f if line.strip()]
+    except:
+        tickers = ['AAPL', 'NVDA', 'TSLA']
+
+    alle_trades = []
+    eindwaarde_portfolio = start_kapitaal - (len(tickers) * inzet_per_aandeel)
+
+    for t in tickers:
+        eind_waarde, trade_history = voer_backtest_uit(t, inzet_per_aandeel)
+        if eind_waarde is not None:
+            eindwaarde_portfolio += eind_waarde
+            alle_trades.extend(trade_history)
+
+    # STAP 3: EINDRAPPORT STUREN
+    rapport = f"📊 *BACKTEST VOLTOOID*\n💰 Start: €{start_kapitaal:,.2f}\n"
+    rapport += "🏦 Kosten: €15 + 0.35% | 🏛️ Tax: 10%\n\n"
+    rapport += "*TRADES:*\n" + ("\n".join(alle_trades) if alle_trades else "Geen trades.")
+    rapport += f"\n\n🏁 *EINDSTAND: €{eindwaarde_portfolio:,.2f}*"
+    
+    stuur_telegram(rapport)
+    print("Klaar! Check Telegram.")
+
+if __name__ == "__main__":
+    main()
