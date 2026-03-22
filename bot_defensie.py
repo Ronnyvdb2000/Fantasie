@@ -4,105 +4,92 @@ import os
 import requests
 from dotenv import load_dotenv
 import warnings
-from datetime import datetime
 
-# Instellingen
 warnings.simplefilter(action='ignore', category=FutureWarning)
 load_dotenv()
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
+def bereken_rsi(data, window=14):
+    delta = data.diff()
+    up = delta.clip(lower=0)
+    down = -1 * delta.clip(upper=0)
+    ema_up = up.ewm(com=window-1, adjust=False).mean()
+    ema_down = down.ewm(com=window-1, adjust=False).mean()
+    rs = ema_up / (ema_down + 1e-10)
+    return 100 - (100 / (1 + rs))
+
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    try:
-        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=10)
-    except:
-        print("Telegram verzenden mislukt.")
+    requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"})
 
-def check_live_signaal(df, snelle_ma, trage_ma, ticker):
-    """Checkt op kruising en genereert een directe analyse-link"""
+def check_live_signaal(df, s, t, ticker):
     df = df.copy()
-    df['Fast'] = df['Close'].rolling(window=snelle_ma).mean()
-    df['Slow'] = df['Close'].rolling(window=trage_ma).mean()
+    df['F'] = df['Close'].rolling(window=s).mean()
+    df['S'] = df['Close'].rolling(window=t).mean()
+    df['RSI'] = bereken_rsi(df['Close'])
     
-    nu_f, oud_f = df['Fast'].iloc[-1], df['Fast'].iloc[-2]
-    nu_s, oud_s = df['Slow'].iloc[-1], df['Slow'].iloc[-2]
-    
-    # Maak Yahoo Finance link (handig voor Bolero check)
+    rsi_nu = round(df['RSI'].iloc[-1], 1)
     link = f"https://finance.yahoo.com/quote/{ticker}"
     
-    if nu_f > nu_s and oud_f <= oud_s:
-        return f"🚀 *KOOP* ([Grafiek]({link}))"
-    elif nu_f < nu_s and oud_f >= oud_s:
-        return f"💀 *VERKOOP* ([Grafiek]({link}))"
+    # Status labels voor defensie-momentum
+    status = "🔥 OVERVERHIT" if rsi_nu > 72 else "✅ TREND GEZOND"
+    if rsi_nu < 35: status = "💎 ONDERGEWAARDEERD"
+    elif rsi_nu > 60 and rsi_nu <= 72: status = "⚡ STERK MOMENTUM"
+
+    if df['F'].iloc[-1] > df['S'].iloc[-1] and df['F'].iloc[-2] <= df['S'].iloc[-2]:
+        return f"🚀 *KOOP* | RSI: {rsi_nu} ({status}) | [Grafiek]({link})"
+    elif df['F'].iloc[-1] < df['S'].iloc[-1] and df['F'].iloc[-2] >= df['S'].iloc[-2]:
+        return f"💀 *VERKOOP* | RSI: {rsi_nu} | [Grafiek]({link})"
     return None
 
-def bereken_backtest(df, inzet, snelle_ma, trage_ma):
-    VASTE_KOST = 15.00 # Bolero gemiddelde
-    BEURSTAKS_PCT = 0.0035
+def bereken_bt(df, inzet, s, t):
+    # Bolero tarieven buitenlandse defensie-aandelen (NYSE/XETRA)
+    VASTE_KOST = 15.00 
+    BEURSTAKS = 0.0035 
     
-    test_data = df.iloc[-252:].copy()
-    test_data['Fast'] = test_data['Close'].rolling(window=snelle_ma).mean()
-    test_data['Slow'] = test_data['Close'].rolling(window=trage_ma).mean()
+    data = df.iloc[-252:].copy()
+    data['F'], data['S'] = data['Close'].rolling(s).mean(), data['Close'].rolling(t).mean()
     
-    positie, koop_prijs, saldo = False, 0, inzet
-    for i in range(1, len(test_data)):
-        f_nu, f_oud = test_data['Fast'].iloc[i], test_data['Fast'].iloc[i-1]
-        s_nu, s_oud = test_data['Slow'].iloc[i], test_data['Slow'].iloc[i-1]
-        prijs = float(test_data['Close'].iloc[i])
+    pos, k, saldo = False, 0, inzet
+    for i in range(1, len(data)):
+        f_nu, f_oud = data['F'].iloc[i], data['F'].iloc[i-1]
+        s_nu, s_oud = data['S'].iloc[i], data['S'].iloc[i-1]
+        prijs = float(data['Close'].iloc[i])
 
-        if not positie and f_nu > s_nu and f_oud <= s_oud:
-            koop_prijs, positie = prijs, True
-        elif positie and f_nu < s_nu and f_oud >= s_oud:
-            bruto = inzet * (prijs / koop_prijs)
-            kosten = (VASTE_KOST * 2) + (inzet * BEURSTAKS_PCT) + (bruto * BEURSTAKS_PCT)
-            saldo = bruto - kosten
-            positie = False
-    if positie:
-        saldo = (inzet * (float(test_data['Close'].iloc[-1]) / koop_prijs)) - 35
+        if not pos and f_nu > s_nu and f_oud <= s_oud:
+            k, pos = prijs, True
+            saldo -= (VASTE_KOST + (inzet * BEURSTAKS))
+        elif pos and f_nu < s_nu and f_oud >= s_oud:
+            bruto = inzet * (prijs / k)
+            saldo += (bruto - inzet) - (VASTE_KOST + (bruto * BEURSTAKS))
+            pos = False
     return saldo
 
 def main():
-    stuur_telegram("🛡️ *START ANALYSE: DEFENSIE (BOLERO READY)*")
-    
-    start_kapitaal = 100000
-    inzet = 2500
+    stuur_telegram("🛡️ *DEFENSIE: SCAN INCLUSIEF RSI-STRATEGIE*")
     with open('tickers_defensie.txt', 'r') as f:
         tickers = [t.strip() for t in f.read().split(',') if t.strip()]
 
-    b1_totaal, b2_totaal = start_kapitaal - (len(tickers)*inzet), start_kapitaal - (len(tickers)*inzet)
-    live_meldingen = []
+    start_kap, inzet = 100000, 2500
+    b1, b2, live = start_kap, start_kap, []
 
     for t in tickers:
         try:
             df = yf.download(t, period="2y", progress=False)
             if df.empty or len(df) < 200: continue
-            
-            b1_totaal += bereken_backtest(df, inzet, 50, 200)
-            b2_totaal += bereken_backtest(df, inzet, 20, 50)
-            
-            # Live Signalen met link
-            sig1 = check_live_signaal(df, 50, 200, t)
-            sig2 = check_live_signaal(df, 20, 50, t)
-            if sig1: live_meldingen.append(f"• `{t}` (Bot 1): {sig1}")
-            if sig2: live_meldingen.append(f"• `{t}` (Bot 2): {sig2}")
+            b1 += (bereken_bt(df, inzet, 50, 200) - inzet)
+            b2 += (bereken_bt(df, inzet, 20, 50) - inzet)
+            s1, s2 = check_live_signaal(df, 50, 200, t), check_live_signaal(df, 20, 50, t)
+            if s1: live.append(f"• `{t}` (B1): {s1}")
+            if s2: live.append(f"• `{t}` (B2): {s2}")
         except: pass
 
-    rapport = f"🛡️ *EINDRAPPORT DEFENSIE*\n"
-    rapport += f"💰 Startkapitaal: €{start_kapitaal:,.0f}\n"
-    rapport += f"----------------------------------\n"
-    rapport += f"🤖 *Bot 1 (50/200):* €{b1_totaal:,.0f}\n"
-    rapport += f"🤖 *Bot 2 (20/50):* €{b2_totaal:,.0f}\n"
-    rapport += f"----------------------------------\n"
-    
-    if live_meldingen:
-        rapport += "🎯 *SIGNALEER & CHECK OP BOLERO:*\n" + "\n".join(live_meldingen)
-    else:
-        rapport += "😴 *Geen actie vereist op dit moment.*"
-
+    rapport = f"🛡️ *RENDEMENTSRAPPORT DEFENSIE*\n----------------------------------\n"
+    rapport += f"🤖 *Bot 1 (50/200):* €{b1:,.0f}\n🤖 *Bot 2 (20/50):* €{b2:,.0f}\n"
+    rapport += "\n🎯 *LIVE SIGNALEN:*\n" + ("\n".join(live) if live else "😴 Geen actie.")
     stuur_telegram(rapport)
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
