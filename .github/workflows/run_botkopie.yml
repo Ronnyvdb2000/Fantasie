@@ -1,4 +1,4 @@
-name: Ronny Dual Strategy Bot
+name: Ronny Dual Strategy Botkopie
 
 on:
   workflow_dispatch:
