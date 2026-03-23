@@ -73,7 +73,7 @@ def main():
     stuur_telegram("🤖 *MASTER BOT: VOLLEDIGE SCAN GESTART*")
     
     # Laad je tickers (pas de bestandsnaam aan indien nodig)
-    ticker_file = 'tickers.txt' 
+    ticker_file = 'aandelen.txt' 
     if not os.path.exists(ticker_file):
         stuur_telegram("❌ Fout: `tickers.txt` niet gevonden.")
         return
