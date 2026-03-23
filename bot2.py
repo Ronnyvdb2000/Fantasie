@@ -72,7 +72,7 @@ def bereken_bt(df, inzet, s, t):
 def main():
     stuur_telegram("⚡ *BOT 2: SNELLE MOMENTUM SCAN (20/50)*")
     
-    ticker_file = 'tickers.txt'
+    ticker_file = 'aandelen.txt'
     if not os.path.exists(ticker_file):
         stuur_telegram("❌ `tickers.txt` mist.")
         return
