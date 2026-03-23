@@ -1,7 +1,11 @@
 name: "Bot: Benelux (BEL20 & AEX)"
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Handmatige startknop
+  schedule:
+    # Draait elke 2 uur op werkdagen (om :35 over het uur)
+    # Bijv: 08:25, 10:25, 12:25, etc.
+    - cron: '35 */2 * * 1-5'
 
 jobs:
   run_benelux:
