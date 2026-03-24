@@ -97,7 +97,7 @@ def voer_backtest_uit(ticker, inzet=2500):
     return netto_winst_totaal, trades_log
 
 def main():
-    print("🚀 Backtest gestart...")
+    print("🚀 Backtest upgrade gestart...")
     start_kapitaal = 50000
     inzet_per_aandeel = 2500 # Hoeveel we per signaal inleggen
     
