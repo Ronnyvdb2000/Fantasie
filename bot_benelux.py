@@ -40,7 +40,7 @@ def check_live_signaal(df, s, t, ticker):
     elif rsi_nu > 65 and rsi_nu <= 70: status = "⚡ WARM"
 
     if df['F'].iloc[-1] > df['S'].iloc[-1] and df['F'].iloc[-2] <= df['S'].iloc[-2]:
-        return f"🚀 *KOOP* | RSI: {rsi_nu} ({status}) | [Grafiek]({link})"
+        return f"🚀 *KOOOOP* | RSI: {rsi_nu} ({status}) | [Grafiek]({link})"
     elif df['F'].iloc[-1] < df['S'].iloc[-1] and df['F'].iloc[-2] >= df['S'].iloc[-2]:
         return f"💀 *VERKOOP* | RSI: {rsi_nu} | [Grafiek]({link})"
     return None
