@@ -125,7 +125,7 @@ def main():
     eind_stand = start_kapitaal + totaal_netto_resultaat
     rendement_pct = ((eind_stand / start_kapitaal) - 1) * 100
     
-    rapport = f"📊 *RESULTAAT BACKTEST (12 MAANDEN)*\n"
+    rapport = f"📊 *RESULTAAT BACKTEST upgrade (12 MAANDEN)*\n"
     rapport += f"───────────────────\n"
     rapport += f"💰 Startkapitaal: €{start_kapitaal:,.2f}\n"
     rapport += f"🏁 Eindstand: €{eind_stand:,.2f}\n"
