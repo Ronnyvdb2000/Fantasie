@@ -1,0 +1,33 @@
+name: "Bot: Hyper Analyse"
+
+on:
+  workflow_dispatch: # Handmatige startknop
+  schedule:
+    # Draait elke 2 uur op werkdagen (om :35 over het uur)
+    # Bijv: 08:35, 10:35, 12:35, etc.
+    - cron: '35 */2 * * 1-5'
+
+jobs:
+  run_hyper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip' # Versnelt de installatie bij volgende runs
+
+      - name: Bibliotheken installeren
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas requests python-dotenv
+
+      - name: Voer Hyper Analyse uit
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        # Hier wordt het specifieke bestand aangeroepen
+        run: python run_hyper.py
