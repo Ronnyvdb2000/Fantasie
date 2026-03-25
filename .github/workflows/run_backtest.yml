@@ -1,7 +1,7 @@
 name: Backtest Strategie
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Hiermee kun je de backtest handmatig starten via de 'Actions' tab
 
 jobs:
   backtest:
@@ -14,13 +14,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+          cache: 'pip' # Versnelt toekomstige runs
 
       - name: Bibliotheken installeren
         run: |
+          python -m pip install --upgrade pip
           pip install yfinance pandas requests python-dotenv
 
       - name: Voer Backtest uit
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python backtest.py
+        run: python backtstbeter.py
