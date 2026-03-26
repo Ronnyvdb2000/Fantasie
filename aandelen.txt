@@ -99,5 +99,5 @@ RIG
 GLO
 BTU
 TPZ
-jAG
+JAG
 BTG
