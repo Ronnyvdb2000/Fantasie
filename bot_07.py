@@ -88,7 +88,7 @@ def main():
             if s2: live.append(f"• `{t}` (Snel): {s2}")
         except: pass
 
-    rapport = f"🥇🥈🥉 *RENDEMENTSRAPPORT BOT Metalen*\n----------------------------------\n"
+    rapport = f"🥇🥈🥉 *RENDEMENTSRAPPORT Metalen*\n----------------------------------\n"
     rapport += f"🐢 *Bot Traag (50/200):* €{b_traag:,.0f}\n⚡ *Bot Snel (20/50):* €{b_snel:,.0f}\n"
     rapport += "\n🎯 *LIVE SIGNALEN:*\n" + ("\n".join(live) if live else "😴 Geen actie.")
     stuur_telegram(rapport)
