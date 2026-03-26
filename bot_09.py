@@ -70,7 +70,7 @@ def bereken_bt(df, inzet, s, t):
 
 def main():
     # Naam gewijzigd naar Bot 09
-    stuur_telegram("🛡️ *BOT 09: SCANNER GEACTIVEERD*")
+    stuur_telegram("🛡️ *BOT Diverse: SCANNER GEACTIVEERD*")
     
     # Gebruik van lijst tickers_09.txt
     file_path = 'tickers_09.txt'
@@ -101,7 +101,7 @@ def main():
             print(f"Fout bij ticker {t}: {e}")
 
     # Rapportage met gewijzigde namen
-    rapport = f"📊 *RENDEMENTSRAPPORT BOT 09*\n----------------------------------\n"
+    rapport = f"📊 *RENDEMENTSRAPPORT Diverse*\n----------------------------------\n"
     rapport += f"🐢 *Bot Traag (50/200):* €{b_traag:,.0f}\n⚡ *Bot Snel (20/50):* €{b_snel:,.0f}\n"
     rapport += "\n🎯 *LIVE SIGNALEN:*\n" + ("\n".join(live) if live else "😴 Geen actie vereist.")
     stuur_telegram(rapport)
