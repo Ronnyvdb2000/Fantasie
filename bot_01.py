@@ -99,7 +99,7 @@ def main():
             print(f"Fout bij ticker {t}: {e}")
 
     # Rapportage
-    rapport = f"📊 *RENDEMENTSRAPPORT BOT 01*\n----------------------------------\n"
+    rapport = f"📊 *RENDEMENTSRAPPORT Hoogland*\n----------------------------------\n"
     rapport += f"🐢 *Bot Traag (50/200):* €{b_traag:,.0f}\n⚡ *Bot Snel (20/50):* €{b_snel:,.0f}\n"
     rapport += "\n🎯 *LIVE SIGNALEN:*\n" + ("\n".join(live) if live else "😴 Geen actie vereist.")
     stuur_telegram(rapport)
