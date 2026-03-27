@@ -70,7 +70,7 @@ def bereken_bt(df, inzet, s, t):
     return saldo
 
 def main():
-    stuur_telegram("🇧🇪🇳🇱 *BENELUX: SCAN INCLUSIEF RSI-FILTERS*")
+    stuur_telegram("BOT BENELUX: SCAN INCLUSIEF RSI-FILTERS*")
     with open('tickers_benelux.txt', 'r') as f:
         tickers = [t.strip() for t in f.read().split(',') if t.strip()]
 
