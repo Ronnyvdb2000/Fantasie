@@ -60,7 +60,7 @@ def bereken_bt(df, inzet, s, t):
     return saldo
 
 def main():
-    stuur_telegram("🤖 *BOT 06: POWER & AI SCANNER*")
+    stuur_telegram("🤖 *BOT POWER & AI SCANNER*")
     with open('tickers_power.txt', 'r') as f:
         tickers = [t.strip() for t in f.read().split(',') if t.strip()]
 
