@@ -70,7 +70,7 @@ def bereken_bt(df, inzet, s, t):
     return saldo
 
 def main():
-    stuur_telegram("🇫🇷 *PARIJS: SCAN INCLUSIEF RSI & FRANSE TAX*")
+    stuur_telegram("BOT PARIJS: SCAN INCLUSIEF RSI & FRANSE TAX*")
     with open('tickers_parijs.txt', 'r') as f:
         tickers = [t.strip() for t in f.read().split(',') if t.strip()]
 
