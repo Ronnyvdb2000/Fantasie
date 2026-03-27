@@ -69,7 +69,7 @@ def bereken_bt(df, inzet, s, t):
     return saldo
 
 def main():
-    stuur_telegram("🛡️ *BOT 01: SCANNER GEACTIVEERD*")
+    stuur_telegram("🛡️ *BOT Hoogland SCANNER GEACTIVEERD*")
     
     # Gebruik van de gevraagde lijst tickers_01.txt
     if not os.path.exists('tickers_01.txt'):
