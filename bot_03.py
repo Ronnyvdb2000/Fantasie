@@ -70,7 +70,7 @@ def bereken_bt(df, inzet, s, t):
 
 def main():
     # Gewijzigd naar Bot 03
-    stuur_telegram("🛡️ *BOT 03: SCANNER GEACTIVEERD*")
+    stuur_telegram("🛡️ *BOT BeursBrink SCANNER GEACTIVEERD*")
     
     # Gebruik van lijst tickers_03.txt
     file_path = 'tickers_03.txt'
