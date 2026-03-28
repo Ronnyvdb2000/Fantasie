@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # Draait elke 2 uur (om :05 over het hele uur) op werkdagen
-    - cron: '5 */2 * * 1-5'
+    # - cron: '5 */2 * * 1-5'
 
 jobs:
   run:
