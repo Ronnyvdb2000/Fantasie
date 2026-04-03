@@ -28,4 +28,4 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         # Let op: zorg dat de naam hieronder exact gelijk is aan je .py bestand
-        run: python bot_04.py
+        run: python bot_05.py
