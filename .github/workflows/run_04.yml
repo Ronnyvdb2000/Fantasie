@@ -8,7 +8,7 @@ on:
     - cron: '40 */2 * * 1-5'
 
 jobs:
-  run_05_parijs:
+  run_04_benelux:
     runs-on: ubuntu-latest
     steps:
       - name: Code ophalen
