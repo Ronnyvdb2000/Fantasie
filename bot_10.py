@@ -43,9 +43,9 @@ def check_live_signaal(df, s, t, ticker, is_ema=False):
     ema200_nu = round(float(df['EMA200'].iloc[-1]), 2)
     link = f"https://finance.yahoo.com/quote/{ticker}"
     
-    status = "🔥 OVERVERHIT" if rsi_nu > 72 else "✅ TREND GEZOND"
-    if rsi_nu < 35: status = "💎 ONDERGEWAARDEERD"
-    elif rsi_nu > 60 and rsi_nu <= 72: status = "⚡ STERK MOMENTUM"
+    status = "✅ TREND GEZOND"
+    if rsi_nu > 72: status = "🔥 OVERVERHIT"
+    elif rsi_nu < 35: status = "💎 ONDERGEWAARDEERD"
 
     details = f"€{prijs_nu} | RSI: {rsi_nu} | EMA200: €{ema200_nu} ({status}) [Grafiek]({link})"
 
@@ -80,7 +80,6 @@ def bereken_bt(df, inzet, s, t, is_ema=False):
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
-    stuur_telegram(f"🛡️ *HOOGLAND SCANNER V2*\n_Gestart op {nu}_")
     
     if not os.path.exists('tickers_01.txt'):
         stuur_telegram("❌ Fout: `tickers_01.txt` ontbreekt.")
@@ -89,25 +88,28 @@ def main():
     with open('tickers_01.txt', 'r') as f:
         tickers = [t.strip() for t in f.read().split(',') if t.strip()]
 
-    start_kap, inzet = 100000.0, 2500.0
+    # Kapitaalinstellingen
+    start_kap = 100000.0
+    inzet = 2500.0
     b_traag, b_snel, b_hyper = start_kap, start_kap, start_kap
     live_traag, live_snel, live_hyper = [], [], []
 
     for t in tickers:
         try:
+            # We downloaden extra data om fouten bij berekening te voorkomen
             df = yf.download(t, period="3y", progress=False)
             if df.empty or len(df) < 200: continue
             
-            # Rendementen berekenen
-            res_traag = bereken_bt(df, inzet, 50, 200, is_ema=False)
-            res_snel = bereken_bt(df, inzet, 20, 50, is_ema=False)
-            res_hyper = bereken_bt(df, inzet, 9, 21, is_ema=True)
+            # Berekeningen uitvoeren
+            res_t = bereken_bt(df, inzet, 50, 200, is_ema=False)
+            res_s = bereken_bt(df, inzet, 20, 50, is_ema=False)
+            res_h = bereken_bt(df, inzet, 9, 21, is_ema=True)
             
-            b_traag += (res_traag - inzet)
-            b_snel += (res_snel - inzet)
-            b_hyper += (res_hyper - inzet)
+            b_traag += (res_t - inzet)
+            b_snel += (res_s - inzet)
+            b_hyper += (res_h - inzet)
             
-            # Signalen checken
+            # Signalen ophalen
             s_t = check_live_signaal(df, 50, 200, t, is_ema=False)
             s_s = check_live_signaal(df, 20, 50, t, is_ema=False)
             s_h = check_live_signaal(df, 9, 21, t, is_ema=True)
@@ -119,25 +121,27 @@ def main():
         except Exception as e:
             print(f"Fout bij {t}: {e}")
 
-    # --- HET RAPPORT ---
-    # We bouwen het rapport nu stap voor stap op om fouten te voorkomen
-    kop = "📊 *RENDEMENTSRAPPORT HOOGLAND*\n----------------------------------\n"
-    r_traag = f"🐢 *Bot Traag (50/200 SMA):* €{b_traag:,.0f}\n"
-    r_snel = f"⚡ *Bot Snel (20/50 SMA):* €{b_snel:,.0f}\n"
-    r_hyper = f"🚀 *Bot Hyper (9/21 EMA):* €{b_hyper:,.0f}\n"
+    # --- HET RAPPORT SAMENSTELLEN (STAP VOOR STAP) ---
+    rapport_lijnen = [
+        "📊 *RENDEMENTSRAPPORT HOOGLAND*",
+        f"_{nu}_",
+        "----------------------------------",
+        f"🐢 *Bot Traag (50/200 SMA):* €{b_traag:,.0f}",
+        f"⚡ *Bot Snel (20/50 SMA):* €{b_snel:,.0f}",
+        f"🚀 *Bot Hyper (9/21 EMA):* €{b_hyper:,.0f}",
+        "",
+        "🛡️ *SIGNALEN TRAAG (50/200):*",
+        "\n".join(live_traag) if live_traag else "_Geen actuele kruisingen_",
+        "",
+        "🎯 *SIGNALEN SNEL (20/50):*",
+        "\n".join(live_snel) if live_snel else "_Geen actuele kruisingen_",
+        "",
+        "🔥 *SIGNALEN HYPER (9/21 EMA):*",
+        "\n".join(live_hyper) if live_hyper else "_Geen actuele kruisingen_"
+    ]
     
-    sig_kop_t = f"\n🛡️ *SIGNALEN TRAAG (50/200):*\n"
-    sig_t = "\n".join(live_traag) if live_traag else "_Geen actuele kruisingen_"
-    
-    sig_kop_s = f"\n\n🎯 *SIGNALEN SNEL (20/50):*\n"
-    sig_s = "\n".join(live_snel) if live_snel else "_Geen actuele kruisingen_"
-    
-    sig_kop_h = f"\n\n🔥 *SIGNALEN HYPER (9/21 EMA):*\n"
-    sig_h = "\n".join(live_hyper) if live_hyper else "_Geen actuele kruisingen_"
-    
-    volledig_bericht = kop + r_traag + r_snel + r_hyper + sig_kop_t + sig_t + sig_kop_s + sig_s + sig_kop_h + sig_h
-    
-    stuur_telegram(volledig_bericht)
+    final_bericht = "\n".join(rapport_lijnen)
+    stuur_telegram(final_bericht)
 
 if __name__ == "__main__":
     main()
