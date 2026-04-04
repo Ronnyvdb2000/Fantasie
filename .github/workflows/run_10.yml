@@ -1,4 +1,4 @@
-name: "Bot 01: Hoogland Scanner (Traag & Snel & Hyper)"
+name: "Bot 10: Hoogland Scanner (Traag & Snel & Hyper)"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
@@ -8,7 +8,7 @@ on:
     - cron: '40 */2 * * 1-5'
 
 jobs:
-  run_01_Hoogland:
+  run_10_Hoogland:
     runs-on: ubuntu-latest
     steps:
       - name: Code ophalen
