@@ -49,6 +49,7 @@ def check_live_signaal(df, s, t, ticker, is_ema=False):
 
     details = f"€{prijs_nu} | RSI: {rsi_nu} | EMA200: €{ema200_nu} ({status}) [Grafiek]({link})"
 
+    # Een signaal wordt ALLEEN getriggerd op de dag van de kruising (vandaag vs gisteren)
     if df['F'].iloc[-1] > df['S'].iloc[-1] and df['F'].iloc[-2] <= df['S'].iloc[-2]:
         return f"🚀 *KOOP* | {details}"
     elif df['F'].iloc[-1] < df['S'].iloc[-1] and df['F'].iloc[-2] >= df['S'].iloc[-2]:
@@ -57,6 +58,7 @@ def check_live_signaal(df, s, t, ticker, is_ema=False):
 
 def bereken_bt(df, inzet, s, t, is_ema=False):
     VASTE_KOST, BEURSTAKS = 15.00, 0.0035
+    # Backtest over het laatste jaar (252 handelsdagen)
     data = df.iloc[-252:].copy()
     if is_ema:
         data['F'] = data['Close'].ewm(span=s, adjust=False).mean()
@@ -88,7 +90,6 @@ def main():
     with open('tickers_01.txt', 'r') as f:
         tickers = [t.strip() for t in f.read().split(',') if t.strip()]
 
-    # Kapitaalinstellingen
     start_kap = 100000.0
     inzet = 2500.0
     b_traag, b_snel, b_hyper = start_kap, start_kap, start_kap
@@ -96,20 +97,16 @@ def main():
 
     for t in tickers:
         try:
-            # We downloaden extra data om fouten bij berekening te voorkomen
-            df = yf.download(t, period="3y", progress=False)
+            # GEWIJZIGD: period naar 5y voor meer historische context
+            df = yf.download(t, period="5y", progress=False)
             if df.empty or len(df) < 200: continue
             
-            # Berekeningen uitvoeren
-            res_t = bereken_bt(df, inzet, 50, 200, is_ema=False)
-            res_s = bereken_bt(df, inzet, 20, 50, is_ema=False)
-            res_h = bereken_bt(df, inzet, 9, 21, is_ema=True)
+            # Rendementen (Backtest laatste 252 dagen)
+            b_traag += (bereken_bt(df, inzet, 50, 200, is_ema=False) - inzet)
+            b_snel += (bereken_bt(df, inzet, 20, 50, is_ema=False) - inzet)
+            b_hyper += (bereken_bt(df, inzet, 9, 21, is_ema=True) - inzet)
             
-            b_traag += (res_t - inzet)
-            b_snel += (res_s - inzet)
-            b_hyper += (res_h - inzet)
-            
-            # Signalen ophalen
+            # Live Signalen (vandaag checken)
             s_t = check_live_signaal(df, 50, 200, t, is_ema=False)
             s_s = check_live_signaal(df, 20, 50, t, is_ema=False)
             s_h = check_live_signaal(df, 9, 21, t, is_ema=True)
@@ -121,7 +118,7 @@ def main():
         except Exception as e:
             print(f"Fout bij {t}: {e}")
 
-    # --- HET RAPPORT SAMENSTELLEN (STAP VOOR STAP) ---
+    # Rapport opbouw
     rapport_lijnen = [
         "📊 *RENDEMENTSRAPPORT HOOGLAND*",
         f"_{nu}_",
@@ -140,8 +137,7 @@ def main():
         "\n".join(live_hyper) if live_hyper else "_Geen actuele kruisingen_"
     ]
     
-    final_bericht = "\n".join(rapport_lijnen)
-    stuur_telegram(final_bericht)
+    stuur_telegram("\n".join(rapport_lijnen))
 
 if __name__ == "__main__":
     main()
