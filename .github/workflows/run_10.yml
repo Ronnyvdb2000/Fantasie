@@ -1,0 +1,27 @@
+name: Beleggingsbot Run 10
+
+on:
+  schedule:
+    # Dit zorgt ervoor dat de bot elke 2 uur draait (op het hele uur)
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # Hiermee kun je de bot ook handmatig starten via de 'Actions' tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Installeer Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Installeer benodigde bibliotheken
+        run: |
+          pip install yfinance pandas
+
+      - name: Voer het script uit
+        run: python mijn_bot.py
