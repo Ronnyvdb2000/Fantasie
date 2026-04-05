@@ -2,7 +2,7 @@ name: "Bot: Goud, Zilver & Koper (2-uurs scan)"
 
 on:
   workflow_dispatch: # Handmatige startknop
-  schedule:
+    # schedule:
     # Draait elke 2 uur op werkdagen (om :25 over het uur)
     # Bijv: 08:25, 10:25, 12:25, etc.
     # - cron: '25 */2 * * 1-5'
