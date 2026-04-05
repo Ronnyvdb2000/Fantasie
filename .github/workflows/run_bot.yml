@@ -2,7 +2,7 @@ name: Ronny Dual Strategy Bot
 
 on:
   workflow_dispatch:
-  # schedule:
+    # schedule:
     # Deze cron zorgt dat de bot elke 2 uur draait op de even uren
     # - cron: "0 */2 * * *"
 jobs:
