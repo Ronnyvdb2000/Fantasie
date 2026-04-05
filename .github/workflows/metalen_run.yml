@@ -1,6 +1,6 @@
 name: "Bot: Goud, Zilver & Koper (2-uurs scan)"
 
-on:
+    # on:
     # workflow_dispatch: # Handmatige startknop
     # schedule:
     # Draait elke 2 uur op werkdagen (om :25 over het uur)
