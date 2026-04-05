@@ -100,7 +100,7 @@ def main():
     def get_sig(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *ELITE TRADING MASTER RAPPORT*",
+        "📊 *Hoogland RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
