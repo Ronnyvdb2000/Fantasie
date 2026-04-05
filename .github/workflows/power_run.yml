@@ -1,12 +1,13 @@
 name: "Bot: Power & AI (2-uurs scan)"
 
 on:
-  workflow_dispatch: # Hiermee kun je de bot handmatig starten met de knop
-  schedule:
-    # Draait elke 2 uur op werkdagen (om :15 over het uur)
-    # Voorbeeld: 08:15, 10:15, 12:15, etc.
-    # - cron: '15 */2 * * 1-5'
+  workflow_dispatch: # Handmatige startknop
 
+  # schedule:
+  #   # Draait elke 2 uur op werkdagen (om :25 over het uur)
+  #   # Bijv: 08:25, 10:25, 12:25, etc.
+  #   - cron: '25 */2 * * 1-5'
+  
 jobs:
   run_power:
     runs-on: ubuntu-latest
