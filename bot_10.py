@@ -16,12 +16,10 @@ def stuur_telegram(bericht):
     requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"})
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
-    """Berekent winst over 1 jaar en de huidige signalen incl. ATR."""
     try:
         df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
         
-        # Data extractie
         if isinstance(df.columns, pd.MultiIndex):
             p = df['Close'][ticker].dropna().astype(float)
             v = df['Volume'][ticker].dropna().astype(float)
@@ -45,12 +43,12 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
         adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
-        # --- DEEL 1: BACKTEST (Laatste jaar) ---
+        # --- BACKTEST ---
         p_bt, f_bt, s_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:]
         e_bt, v_bt, v_ma_bt = ema200.iloc[-252:], v.iloc[-252:], vol_ma.iloc[-252:]
         atr_bt, adx_bt = atr_series.iloc[-252:], adx.iloc[-252:]
         
-        profit, pos, instap, high_p, sl = 0, False, 0, 0, 0
+        profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
 
         for i in range(1, len(p_bt)):
@@ -59,25 +57,27 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
                 if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
                     if adx_bt.iloc[i] > 15 and v_bt.iloc[i] > (v_ma_bt.iloc[i] * 0.6):
                         if not use_trend_filter or cp > e_bt.iloc[i]:
-                            instap, high_p, sl, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
+                            instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
                             profit -= kosten
             else:
                 high_p = max(high_p, cp)
-                sl = max(sl, high_p - (2 * atr_bt.iloc[i]))
-                if cp < sl or f_bt.iloc[i] < s_bt.iloc[i]:
+                sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
+                if cp < sl_val or f_bt.iloc[i] < s_bt.iloc[i]:
                     profit += (inzet * (cp / instap) - inzet) - kosten
                     pos = False
 
-        # --- DEEL 2: SIGNAAL VANDAAG + ATR ---
+        # --- SIGNAAL VANDAAG ---
         signaal = None
-        huidige_atr = atr_series.iloc[-1]
+        curr_p = p.iloc[-1]
+        curr_atr = atr_series.iloc[-1]
+        curr_sl = curr_p - (2 * curr_atr)
         
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
-                if not use_trend_filter or p.iloc[-1] > ema200.iloc[-1]:
-                    signaal = f"🟢 *KOOP* | Prijs: {p.iloc[-1]:.2f} | ⚡ ATR: {huidige_atr:.2f}"
+                if not use_trend_filter or curr_p > ema200.iloc[-1]:
+                    signaal = f"🟢 *KOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} | 🛡️ SL: €{curr_sl:.2f}"
         elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
-            signaal = f"🔴 *VERKOOP* | Prijs: {p.iloc[-1]:.2f} | ⚡ ATR: {huidige_atr:.2f}"
+            signaal = f"🔴 *VERKOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} | 🛡️ SL: €{curr_sl:.2f}"
 
         return profit, signaal
     except:
@@ -101,7 +101,7 @@ def main():
     def get_sig(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *ELITE TRADING MASTER RAPPORT v18*",
+        "📊 *ELITE TRADING MASTER RAPPORT v19*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
@@ -117,7 +117,7 @@ def main():
         "",
         "⚡ *SIGNALEN HYPER SCALP:*", get_sig(sig["HS"]),
         "",
-        "💡 _De ATR (⚡) toont de gemiddelde dagelijkse beweging._"
+        "💡 _ATR = Dagelijkse schommeling. SL = Jouw 'Safety Net' Stop Loss._"
     ]
     stuur_telegram("\n".join(rapport))
 
