@@ -2,107 +2,143 @@ import yfinance as yf
 import pandas as pd
 import os
 import requests
+import numpy as np
 from dotenv import load_dotenv
-import warnings
+from datetime import datetime
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
+# Laad omgevingsvariabelen voor Telegram
 load_dotenv()
-
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-
-def bereken_rsi(data, window=14):
-    delta = data.diff()
-    up = delta.clip(lower=0)
-    down = -1 * delta.clip(upper=0)
-    ema_up = up.ewm(com=window-1, adjust=False).mean()
-    ema_down = down.ewm(com=window-1, adjust=False).mean()
-    rs = ema_up / (ema_down + 1e-10)
-    return 100 - (100 / (1 + rs))
 
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"})
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=15)
+    except:
+        pass
 
-def check_live_signaal(df, s, t, ticker):
-    df = df.copy()
-    df['F'] = df['Close'].rolling(window=s).mean()
-    df['S'] = df['Close'].rolling(window=t).mean()
-    df['RSI'] = bereken_rsi(df['Close'])
-    
-    rsi_nu = round(df['RSI'].iloc[-1], 1)
-    # Haalt de meest recente prijs op uit de dataframe
-    prijs_nu = round(df['Close'].iloc[-1], 2) 
-    link = f"https://finance.yahoo.com/quote/{ticker}"
-    
-    status = "🔥 OVERVERHIT" if rsi_nu > 72 else "✅ TREND GEZOND"
-    if rsi_nu < 35: status = "💎 ONDERGEWAARDEERD"
-    elif rsi_nu > 60 and rsi_nu <= 72: status = "⚡ STERK MOMENTUM"
+def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
+    """
+    Core Engine van de MacroTrends Bot:
+    Berekent rendement over 1 jaar en genereert signalen incl. ATR en Stop Loss.
+    """
+    try:
+        # Download data (5 jaar nodig voor stabiele EMA200)
+        df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
+        if df.empty or len(df) < 260: return 0, None
+        
+        # Data isolatie voor robuustheid
+        if isinstance(df.columns, pd.MultiIndex):
+            p = df['Close'][ticker].dropna().astype(float)
+            v = df['Volume'][ticker].dropna().astype(float)
+            h = df['High'][ticker].dropna().astype(float)
+            l = df['Low'][ticker].dropna().astype(float)
+        else:
+            p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
 
-    if df['F'].iloc[-1] > df['S'].iloc[-1] and df['F'].iloc[-2] <= df['S'].iloc[-2]:
-        return f"🚀 *KOOP* | Prijs: €{prijs_nu} | RSI: {rsi_nu} ({status}) | [Grafiek]({link})"
-    elif df['F'].iloc[-1] < df['S'].iloc[-1] and df['F'].iloc[-2] >= df['S'].iloc[-2]:
-        return f"💀 *VERKOOP* | Prijs: €{prijs_nu} | RSI: {rsi_nu} | [Grafiek]({link})"
-    return None
+        # Berekening Moving Averages
+        f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
+        s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
+        ema200 = p.ewm(span=200, adjust=False).mean()
+        vol_ma = v.rolling(window=20).mean()
+        
+        # ATR (Volatiliteit) & ADX (Trendsterkte)
+        tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
+        atr_series = tr.rolling(14).mean()
+        up, down = h.diff().clip(lower=0), (-l.diff()).clip(lower=0)
+        tr14 = tr.rolling(14).sum()
+        plus_di = 100 * (up.rolling(14).sum() / (tr14 + 1e-10))
+        minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
+        adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
-def bereken_bt(df, inzet, s, t):
-    VASTE_KOST = 15.00 
-    BEURSTAKS = 0.0035 
-    
-    data = df.iloc[-252:].copy()
-    data['F'], data['S'] = data['Close'].rolling(s).mean(), data['Close'].rolling(t).mean()
-    
-    pos, k, saldo = False, 0, inzet
-    for i in range(1, len(data)):
-        f_nu, f_oud = data['F'].iloc[i], data['F'].iloc[i-1]
-        s_nu, s_oud = data['S'].iloc[i], data['S'].iloc[i-1]
-        prijs = float(data['Close'].iloc[i])
+        # --- DEEL 1: BACKTEST (Laatste 252 handelsdagen) ---
+        p_bt, f_bt, s_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:]
+        e_bt, v_bt, v_ma_bt = ema200.iloc[-252:], v.iloc[-252:], vol_ma.iloc[-252:]
+        atr_bt, adx_bt = atr_series.iloc[-252:], adx.iloc[-252:]
+        
+        profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
+        kosten = 15.0 + (inzet * 0.0035)
 
-        if not pos and f_nu > s_nu and f_oud <= s_oud:
-            k, pos = prijs, True
-            saldo -= (VASTE_KOST + (inzet * BEURSTAKS))
-        elif pos and f_nu < s_nu and f_oud >= s_oud:
-            bruto = inzet * (prijs / k)
-            saldo += (bruto - inzet) - (VASTE_KOST + (bruto * BEURSTAKS))
-            pos = False
-    return saldo
+        for i in range(1, len(p_bt)):
+            cp = p_bt.iloc[i]
+            if not pos:
+                # Koop-logica met Elite Filters
+                if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
+                    if adx_bt.iloc[i] > 15 and v_bt.iloc[i] > (v_ma_bt.iloc[i] * 0.6):
+                        if not use_trend_filter or cp > e_bt.iloc[i]:
+                            instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
+                            profit -= kosten
+            else:
+                # Trailing Stop & Exit
+                high_p = max(high_p, cp)
+                sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
+                if cp < sl_val or f_bt.iloc[i] < s_bt.iloc[i]:
+                    profit += (inzet * (cp / instap) - inzet) - kosten
+                    pos = False
+
+        # --- DEEL 2: LIVE SIGNAAL VANDAAG ---
+        signaal = None
+        curr_p = p.iloc[-1]
+        curr_atr = atr_series.iloc[-1]
+        curr_sl = curr_p - (2 * curr_atr)
+        
+        if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
+            if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
+                if not use_trend_filter or curr_p > ema200.iloc[-1]:
+                    signaal = f"🟢 *KOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} | 🛡️ SL: €{curr_sl:.2f}"
+        elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
+            signaal = f"🔴 *VERKOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} | 🛡️ SL: €{curr_sl:.2f}"
+
+        return profit, signaal
+    except:
+        return 0, None
 
 def main():
-    stuur_telegram("🛡️ *BOT Macrotrends SCANNER GEACTIVEERD*")
+    nu = datetime.now().strftime("%d/%m/%Y %H:%M")
+    ticker_file = 'tickers_02.txt'
     
-    # Gebruik van de gevraagde lijst tickers_02.txt
-    if not os.path.exists('tickers_02.txt'):
-        stuur_telegram("❌ Fout: `tickers_02.txt` niet gevonden.")
+    if not os.path.exists(ticker_file):
+        print(f"Fout: {ticker_file} niet gevonden.")
         return
 
-    with open('tickers_02.txt', 'r') as f:
-        tickers = [t.strip() for t in f.read().split(',') if t.strip()]
+    with open(ticker_file, 'r') as f:
+        tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
-    start_kap, inzet = 100000, 2500
-    b_traag, b_snel, live = start_kap, start_kap, []
+    inzet = 2500.0
+    res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
+    sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for t in tickers:
-        try:
-            df = yf.download(t, period="2y", progress=False)
-            if df.empty or len(df) < 200: continue
-            
-            # Rendementsberekening voor Bot Traag en Bot Snel
-            b_traag += (bereken_bt(df, inzet, 50, 200) - inzet)
-            b_snel += (bereken_bt(df, inzet, 20, 50) - inzet)
-            
-            # Signaal check
-            s1, s2 = check_live_signaal(df, 50, 200, t), check_live_signaal(df, 20, 50, t)
-            if s1: live.append(f"• `{t}` (Traag): {s1}")
-            if s2: live.append(f"• `{t}` (Snel): {s2}")
-        except Exception as e:
-            print(f"Fout bij ticker {t}: {e}")
+        # T=Traag, S=Snel, HT=Hyper Trend, HS=Hyper Scalp
+        for key, params in [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]:
+            p, s = bereken_alles(t, inzet, params[0], params[1], params[2])
+            res[key] += p
+            if s: sig[key].append(f"• `{t}`: {s}")
 
-    # Rapportage
-    rapport = f"📊 *RENDEMENTSRAPPORT Macrotrends*\n----------------------------------\n"
-    rapport += f"🐢 *Bot Traag (50/200):* €{b_traag:,.0f}\n⚡ *Bot Snel (20/50):* €{b_snel:,.0f}\n"
-    rapport += "\n🎯 *LIVE SIGNALEN:*\n" + ("\n".join(live) if live else "😴 Geen actie vereist.")
-    stuur_telegram(rapport)
+    def get_sig(lst): return "\n".join(lst) if lst else "Geen actie"
+
+    rapport = [
+        "🌐 *MACROTRENDS STRATEGY RAPPORT*",
+        f"_{nu}_",
+        "----------------------------------",
+        f"🐢 *Traag (50/200 SMA):* €{100000 + res['T']:,.0f}",
+        f"⚡ *Snel (20/50 SMA):* €{100000 + res['S']:,.0f}",
+        f"🚀 *Hyper Trend (9/21 EMA+200):* €{100000 + res['HT']:,.0f}",
+        f"🔥 *Hyper Scalp (9/21 EMA):* €{100000 + res['HS']:,.0f}",
+        "",
+        "🛡️ *SIGNALEN TRAAG:*", get_sig(sig["T"]),
+        "",
+        "🎯 *SIGNALEN SNEL:*", get_sig(sig["S"]),
+        "",
+        "📈 *SIGNALEN HYPER TREND:*", get_sig(sig["HT"]),
+        "",
+        "⚡ *SIGNALEN HYPER SCALP:*", get_sig(sig["HS"]),
+        "",
+        "⚙️ _Bron: tickers_02.txt | Filters: ADX, Vol, ATR Stop Loss active_"
+    ]
+    stuur_telegram("\n".join(rapport))
 
 if __name__ == "__main__":
     main()
