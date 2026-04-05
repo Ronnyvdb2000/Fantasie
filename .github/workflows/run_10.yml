@@ -1,4 +1,4 @@
-name: "Bot 10: Hoogland Scanner (Traag & Snel & Hyper)"
+name: "Bot 10: Hoogland Scanner (4 regimes)"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
