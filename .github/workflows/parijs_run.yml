@@ -2,10 +2,11 @@ name: "Bot: Parijs (CAC 40)"
 
 on:
   workflow_dispatch: # Handmatige startknop
-  schedule:
-    # Draait elke 2 uur op werkdagen (om :40 over het uur)
-    # Bijv: 08:40, 10:40, 12:40, etc.
-    # - cron: '40 */2 * * 1-5'
+
+  # schedule:
+  #   # Draait elke 2 uur op werkdagen (om :25 over het uur)
+  #   # Bijv: 08:25, 10:25, 12:25, etc.
+  #   - cron: '25 */2 * * 1-5'
 
 jobs:
   run_parijs:
