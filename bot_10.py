@@ -13,9 +13,7 @@ load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# --- TECHNISCHE INDICATOREN ---
 def bereken_adx(df, n=14):
-    """Trendsterkte filter: ADX > 20 geeft aan dat er een duidelijke trend is."""
     df = df.copy()
     high, low, close = df['High'], df['Low'], df['Close']
     plus_dm = high.diff().clip(lower=0)
@@ -28,12 +26,10 @@ def bereken_adx(df, n=14):
     return dx.rolling(n).mean()
 
 def bereken_atr(df, n=14):
-    """Meet de volatiliteit om de Stop-Loss afstand te bepalen."""
     high, low, close = df['High'], df['Low'], df['Close']
     tr = pd.concat([high - low, abs(high - close.shift()), abs(low - close.shift())], axis=1).max(axis=1)
     return tr.rolling(n).mean()
 
-# --- SIGNALEN LOGICA ---
 def check_elite_signaal(df, s, t, ticker, is_ema=False, use_ema200=True):
     df = df.copy()
     if is_ema:
@@ -56,27 +52,23 @@ def check_elite_signaal(df, s, t, ticker, is_ema=False, use_ema200=True):
     atr_nu = df['ATR'].iloc[-1]
     ema200_nu = df['EMA200'].iloc[-1]
 
-    # Filters voor kwaliteit
-    is_trending = adx_nu > 20
-    vol_confirm = vol_nu > vol_ma
+    # VERSOEPELDE FILTERS
+    is_trending = adx_nu > 15 
+    vol_confirm = vol_nu > (vol_ma * 0.6) # Volume eis op 60%
     trend_filter = c_nu > ema200_nu if use_ema200 else True
 
-    # KOOP (Crossover + Filters)
     if f_nu > s_nu and f_oud <= s_oud:
         if is_trending and vol_confirm and trend_filter:
             sl = c_nu - (2 * atr_nu)
             return f"🚀 *KOOP* | €{c_nu:.2f} | SL: €{sl:.2f} (ADX: {adx_nu:.1f})"
-    
-    # VERKOOP (Cross-back)
     elif f_nu < s_nu and f_oud >= s_oud:
         return f"💀 *VERKOOP* | €{c_nu:.2f}"
-    
     return None
 
-# --- BACKTEST LOGICA (MET TRAILING STOP) ---
 def bereken_bt_elite(df, inzet, s, t, is_ema=False, use_ema200=True):
     VASTE_KOST, BEURSTAKS = 15.00, 0.0035
-    data = df.iloc[-252:].copy()
+    # BACKTEST NAAR 2 JAAR (504 dagen)
+    data = df.iloc[-504:].copy()
     
     if is_ema:
         data['F'] = data['Close'].ewm(span=s, adjust=False).mean()
@@ -97,7 +89,8 @@ def bereken_bt_elite(df, inzet, s, t, is_ema=False, use_ema200=True):
         s_nu, s_oud = data['S'].iloc[i], data['S'].iloc[i-1]
         
         if not pos:
-            if f_nu > s_nu and f_oud <= s_oud and data['ADX'].iloc[i] > 20:
+            # ADX 15 check voor de backtest
+            if f_nu > s_nu and f_oud <= s_oud and data['ADX'].iloc[i] > 15:
                 if not use_ema200 or p > data['EMA200'].iloc[i]:
                     k, pos, high_p = p, True, p
                     sl = p - (2 * data['ATR'].iloc[i])
@@ -133,25 +126,29 @@ def main():
             df = yf.download(t, period="5y", progress=False)
             if df.empty or len(df) < 200: continue
 
-            # Backtests
             scores["T"] += (bereken_bt_elite(df, inzet, 50, 200, False, True) - inzet)
             scores["S"] += (bereken_bt_elite(df, inzet, 20, 50, False, True) - inzet)
             scores["HT"] += (bereken_bt_elite(df, inzet, 9, 21, True, True) - inzet)
             scores["HS"] += (bereken_bt_elite(df, inzet, 9, 21, True, False) - inzet)
 
-            # Live Signalen
-            signals["T"].append(f"• `{t}`: {check_elite_signaal(df, 50, 200, t, False, True)}")
-            signals["S"].append(f"• `{t}`: {check_elite_signaal(df, 20, 50, t, False, True)}")
-            signals["HT"].append(f"• `{t}`: {check_elite_signaal(df, 9, 21, t, True, True)}")
-            signals["HS"].append(f"• `{t}`: {check_elite_signaal(df, 9, 21, t, True, False)}")
+            st = check_elite_signaal(df, 50, 200, t, False, True)
+            ss = check_elite_signaal(df, 20, 50, t, False, True)
+            sht = check_elite_signaal(df, 9, 21, t, True, True)
+            shs = check_elite_signaal(df, 9, 21, t, True, False)
+
+            if st: signals["T"].append(f"• `{t}`: {st}")
+            if ss: signals["S"].append(f"• `{t}`: {ss}")
+            if sht: signals["HT"].append(f"• `{t}`: {sht}")
+            if shs: signals["HS"].append(f"• `{t}`: {shs}")
 
         except Exception as e: print(f"Fout {t}: {e}")
 
-    # Rapport samenstellen (Alleen lijnen met signalen tonen)
-    def clean(lst): return "\n".join([s for s in lst if "None" not in s]) if [s for s in lst if "None" not in s] else "_Geen actie_"
+    def clean(lst): 
+        res = [s for s in lst if s is not None]
+        return "\n".join(res) if res else "_Geen actie_"
 
     rapport = [
-        "📊 *ELITE TRADING RAPPORT*",
+        "📊 *ELITE TRADING RAPPORT (OPTIMAL)*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200 SMA):* €{scores['T']:,.0f}",
