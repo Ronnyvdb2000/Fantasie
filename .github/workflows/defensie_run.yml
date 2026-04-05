@@ -1,10 +1,12 @@
 name: "Bot: Defensie Global (Elke 2 uur)"
 
 on:
-  workflow_dispatch:
-  schedule:
-    # Draait elke 2 uur (om :05 over het hele uur) op werkdagen
-    # - cron: '5 */2 * * 1-5'
+  workflow_dispatch: # Handmatige startknop
+
+  # schedule:
+  #   # Draait elke 2 uur op werkdagen (om :25 over het uur)
+  #   # Bijv: 08:25, 10:25, 12:25, etc.
+  #   - cron: '25 */2 * * 1-5'
 
 jobs:
   run:
