@@ -16,7 +16,7 @@ def stuur_telegram(bericht):
     requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"})
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
-    """Berekent zowel de historische winst als het signaal voor vandaag."""
+    """Berekent winst over 1 jaar en de huidige signalen incl. ATR."""
     try:
         df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
@@ -38,7 +38,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         
         # ATR & ADX
         tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
-        atr = tr.rolling(14).mean()
+        atr_series = tr.rolling(14).mean()
         up, down = h.diff().clip(lower=0), (-l.diff()).clip(lower=0)
         tr14 = tr.rolling(14).sum()
         plus_di = 100 * (up.rolling(14).sum() / (tr14 + 1e-10))
@@ -48,7 +48,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         # --- DEEL 1: BACKTEST (Laatste jaar) ---
         p_bt, f_bt, s_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:]
         e_bt, v_bt, v_ma_bt = ema200.iloc[-252:], v.iloc[-252:], vol_ma.iloc[-252:]
-        atr_bt, adx_bt = atr.iloc[-252:], adx.iloc[-252:]
+        atr_bt, adx_bt = atr_series.iloc[-252:], adx.iloc[-252:]
         
         profit, pos, instap, high_p, sl = 0, False, 0, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
@@ -68,14 +68,16 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
                     profit += (inzet * (cp / instap) - inzet) - kosten
                     pos = False
 
-        # --- DEEL 2: SIGNAAL VANDAAG ---
+        # --- DEEL 2: SIGNAAL VANDAAG + ATR ---
         signaal = None
+        huidige_atr = atr_series.iloc[-1]
+        
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
                 if not use_trend_filter or p.iloc[-1] > ema200.iloc[-1]:
-                    signaal = f"🟢 *KOOP* | €{p.iloc[-1]:.2f}"
+                    signaal = f"🟢 *KOOP* | Prijs: {p.iloc[-1]:.2f} | ⚡ ATR: {huidige_atr:.2f}"
         elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
-            signaal = f"🔴 *VERKOOP* | €{p.iloc[-1]:.2f}"
+            signaal = f"🔴 *VERKOOP* | Prijs: {p.iloc[-1]:.2f} | ⚡ ATR: {huidige_atr:.2f}"
 
         return profit, signaal
     except:
@@ -91,7 +93,6 @@ def main():
     sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for t in tickers:
-        # Berekening per bot
         for key, params in [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]:
             p, s = bereken_alles(t, inzet, params[0], params[1], params[2])
             res[key] += p
@@ -100,7 +101,7 @@ def main():
     def get_sig(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Hoogland RAPPORT*",
+        "📊 *ELITE TRADING MASTER RAPPORT v18*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
@@ -116,7 +117,7 @@ def main():
         "",
         "⚡ *SIGNALEN HYPER SCALP:*", get_sig(sig["HS"]),
         "",
-        "⚙️ _ADX > 15 | Vol > 60% | Trailing Stop actief_"
+        "💡 _De ATR (⚡) toont de gemiddelde dagelijkse beweging._"
     ]
     stuur_telegram("\n".join(rapport))
 
