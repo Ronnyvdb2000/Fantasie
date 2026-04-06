@@ -13,7 +13,8 @@ CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"})
+    # disable_web_page_preview zorgt ervoor dat de chat compact blijft ondanks de vele links
+    requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True})
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
     try:
@@ -28,12 +29,19 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         else:
             p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
 
-        # Indicatoren
+        # Moving Averages & Trend
         f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
         s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
         ema200 = p.ewm(span=200, adjust=False).mean()
         vol_ma = v.rolling(window=20).mean()
         
+        # RSI Berekening (14 dagen)
+        delta = p.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / (loss + 1e-10)
+        rsi = 100 - (100 / (1 + rs))
+
         # ATR & ADX
         tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
         atr_series = tr.rolling(14).mean()
@@ -70,14 +78,19 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         signaal = None
         curr_p = p.iloc[-1]
         curr_atr = atr_series.iloc[-1]
+        curr_rsi = rsi.iloc[-1]
         curr_sl = curr_p - (2 * curr_atr)
+        atr_pct = (curr_atr / curr_p) * 100
         
+        # Yahoo Finance Chart Link
+        y_link = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
                 if not use_trend_filter or curr_p > ema200.iloc[-1]:
-                    signaal = f"🟢 *KOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} | 🛡️ SL: €{curr_sl:.2f}"
+                    signaal = f"🟢 *KOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
         elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
-            signaal = f"🔴 *VERKOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} | 🛡️ SL: €{curr_sl:.2f}"
+            signaal = f"🔴 *VERKOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
 
         return profit, signaal
     except:
@@ -85,6 +98,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
+    # Gebruikt weer tickers_01.txt
     with open('tickers_01.txt', 'r') as f:
         tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
@@ -101,25 +115,7 @@ def main():
     def get_sig(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Hoogland RAPPORT*",
+        "📊 *Hoogland RAPPORT v21*",
         f"_{nu}_",
         "----------------------------------",
-        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
-        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
-        f"🚀 *Hyper Trend (9/21+200):* €{100000 + res['HT']:,.0f}",
-        f"🔥 *Hyper Scalp (9/21):* €{100000 + res['HS']:,.0f}",
-        "",
-        "🛡️ *SIGNALEN TRAAG:*", get_sig(sig["T"]),
-        "",
-        "🎯 *SIGNALEN SNEL:*", get_sig(sig["S"]),
-        "",
-        "📈 *SIGNALEN HYPER TREND:*", get_sig(sig["HT"]),
-        "",
-        "⚡ *SIGNALEN HYPER SCALP:*", get_sig(sig["HS"]),
-        "",
-        "💡 _ATR = Dagelijkse schommeling. SL = Jouw 'Safety Net' Stop Loss._"
-    ]
-    stuur_telegram("\n".join(rapport))
-
-if __name__ == "__main__":
-    main()
+        f"🐢 *
