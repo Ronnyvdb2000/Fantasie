@@ -5,7 +5,6 @@ import requests
 import numpy as np
 from dotenv import load_dotenv
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -15,11 +14,11 @@ def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     try:
-        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=15)
-    except: pass
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True})
+    except:
+        pass
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
-    """Deze functie is nu weer 1-op-1 gelijk aan de v22 die voor jou werkte."""
     try:
         df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
@@ -38,12 +37,14 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         ema200 = p.ewm(span=200, adjust=False).mean()
         vol_ma = v.rolling(window=20).mean()
         
+        # RSI
         delta = p.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / (loss + 1e-10)
         rsi = 100 - (100 / (1 + rs))
 
+        # ATR & ADX
         tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
         atr_series = tr.rolling(14).mean()
         up, down = h.diff().clip(lower=0), (-l.diff()).clip(lower=0)
@@ -82,28 +83,18 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         curr_rsi = rsi.iloc[-1]
         curr_sl = curr_p - (2 * curr_atr)
         atr_pct = (curr_atr / curr_p) * 100
-        y_link = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+        y_link = f"[Chart](https://finance.yahoo.com/quote/{ticker})"
 
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
                 if not use_trend_filter or curr_p > ema200.iloc[-1]:
-                    signaal = f"🟢 *KOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
+                    signaal = f"🟢 KOOP | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
         elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
-            signaal = f"🔴 *VERKOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
+            signaal = f"🔴 VERKOOP | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
 
         return profit, signaal
-    except: return 0, None
-
-def task(t, inzet):
-    # Voer alle 4 berekeningen uit voor één ticker
-    res = {}
-    sigs = {}
-    configs = [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]
-    for k, prm in configs:
-        p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
-        res[k] = p
-        sigs[k] = s
-    return t, res, sigs
+    except:
+        return 0, None
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -111,38 +102,33 @@ def main():
         tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
     inzet = 2500.0
-    tot_res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
-    tot_sig = {"T": [], "S": [], "HT": [], "HS": []}
+    res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
+    sig = {"T": [], "S": [], "HT": [], "HS": []}
 
-    # Parallelle uitvoering
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        results = list(executor.map(lambda t: task(t, inzet), tickers))
-
-    # Resultaten verzamelen (Precies zoals v22)
-    for t, res_map, sig_map in results:
-        for k in tot_res:
-            tot_res[k] += res_map[k]
-            if sig_map[k]:
-                tot_sig[k].append(f"• `{t}`: {sig_map[k]}")
+    for t in tickers:
+        for k, prm in [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]:
+            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
+            res[k] += p
+            if s: sig[k].append(f"• `{t}`: {s}")
 
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Hoogland RAPPORT v26*",
+        "📊 *Hoogland RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
-        f"🐢 *Traag (50/200):* €{100000 + tot_res['T']:,.0f}",
-        f"⚡ *Snel (20/50):* €{100000 + tot_res['S']:,.0f}",
-        f"🚀 *Hyper Trend:* €{100000 + tot_res['HT']:,.0f}",
-        f"🔥 *Hyper Scalp:* €{100000 + tot_res['HS']:,.0f}",
+        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
+        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
+        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
         "",
-        "🛡️ *SIGNALEN TRAAG:*", get_s(tot_sig["T"]),
+        "🛡️ *SIGNALEN TRAAG:*", get_s(sig["T"]),
         "",
-        "🎯 *SIGNALEN SNEL:*", get_s(tot_sig["S"]),
+        "🎯 *SIGNALEN SNEL:*", get_s(sig["S"]),
         "",
-        "📈 *SIGNALEN HYPER TREND:*", get_s(tot_sig["HT"]),
+        "📈 *SIGNALEN HYPER TREND:*", get_s(sig["HT"]),
         "",
-        "⚡ *SIGNALEN HYPER SCALP:*", get_s(tot_sig["HS"]),
+        "⚡ *SIGNALEN HYPER SCALP:*", get_s(sig["HS"]),
         "",
         "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold._"
     ]
