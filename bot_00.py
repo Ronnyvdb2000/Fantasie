@@ -127,7 +127,7 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
         "",
         "⚡ *SIGNALEN HYPER SCALP:*", get_s(sig["HS"]),
         "",
-        "💡 _ATR %: <2% laag, >5% hoog._"
+        "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbougt, <30 oversold_"
     ]
     stuur_telegram("\n".join(rapport))
 
