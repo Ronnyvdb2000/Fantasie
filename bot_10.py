@@ -19,6 +19,7 @@ def stuur_telegram(bericht):
     except: pass
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
+    """Deze functie is nu weer 1-op-1 gelijk aan de v22 die voor jou werkte."""
     try:
         df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
@@ -38,9 +39,10 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         vol_ma = v.rolling(window=20).mean()
         
         delta = p.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rsi = 100 - (100 / (1 + (gain / (loss + 1e-10))))
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / (loss + 1e-10)
+        rsi = 100 - (100 / (1 + rs))
 
         tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
         atr_series = tr.rolling(14).mean()
@@ -92,13 +94,16 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         return profit, signaal
     except: return 0, None
 
-def verwerk_ticker(t, inzet):
-    # Verwerkt alle 4 strategieën voor 1 ticker
-    r_t, s_t = bereken_alles(t, inzet, 50, 200, True)
-    r_s, s_s = bereken_alles(t, inzet, 20, 50, True)
-    r_ht, s_ht = bereken_alles(t, inzet, 9, 21, True)
-    r_hs, s_hs = bereken_alles(t, inzet, 9, 21, False)
-    return {"res": {"T":r_t,"S":r_s,"HT":r_ht,"HS":r_hs}, "sig": {"T":s_t,"S":s_s,"HT":s_ht,"HS":s_hs}}
+def task(t, inzet):
+    # Voer alle 4 berekeningen uit voor één ticker
+    res = {}
+    sigs = {}
+    configs = [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]
+    for k, prm in configs:
+        p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
+        res[k] = p
+        sigs[k] = s
+    return t, res, sigs
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -109,21 +114,21 @@ def main():
     tot_res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
     tot_sig = {"T": [], "S": [], "HT": [], "HS": []}
 
+    # Parallelle uitvoering
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(verwerk_ticker, t, inzet): t for t in tickers}
-        for future in futures:
-            t = futures[future]
-            res_data = future.result()
-            if res_data:
-                for k in tot_res: tot_res[k] += res_data["res"][k]
-                for k in tot_sig:
-                    if res_data["sig"][k]:
-                        tot_sig[k].append(f"• `{t}`: {res_data['sig'][k]}")
+        results = list(executor.map(lambda t: task(t, inzet), tickers))
 
-    def get_sig(lst): return "\n".join(lst) if lst else "Geen actie"
+    # Resultaten verzamelen (Precies zoals v22)
+    for t, res_map, sig_map in results:
+        for k in tot_res:
+            tot_res[k] += res_map[k]
+            if sig_map[k]:
+                tot_sig[k].append(f"• `{t}`: {sig_map[k]}")
+
+    def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Hoogland RAPPORT v25*",
+        "📊 *Hoogland RAPPORT v26*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + tot_res['T']:,.0f}",
@@ -131,13 +136,13 @@ def main():
         f"🚀 *Hyper Trend:* €{100000 + tot_res['HT']:,.0f}",
         f"🔥 *Hyper Scalp:* €{100000 + tot_res['HS']:,.0f}",
         "",
-        "🛡️ *SIGNALEN TRAAG:*", get_sig(tot_sig["T"]),
+        "🛡️ *SIGNALEN TRAAG:*", get_s(tot_sig["T"]),
         "",
-        "🎯 *SIGNALEN SNEL:*", get_sig(tot_sig["S"]),
+        "🎯 *SIGNALEN SNEL:*", get_s(tot_sig["S"]),
         "",
-        "📈 *SIGNALEN HYPER TREND:*", get_sig(tot_sig["HT"]),
+        "📈 *SIGNALEN HYPER TREND:*", get_s(tot_sig["HT"]),
         "",
-        "⚡ *SIGNALEN HYPER SCALP:*", get_sig(tot_sig["HS"]),
+        "⚡ *SIGNALEN HYPER SCALP:*", get_s(tot_sig["HS"]),
         "",
         "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold._"
     ]
