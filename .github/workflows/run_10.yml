@@ -1,4 +1,4 @@
-name: "Bot 10: 03 Scanner (4 regimes)"
+name: "Bot 04: xx Scanner (4 regimes)"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
@@ -8,7 +8,7 @@ on:
     - cron: '40 */2 * * 1-5'
 
 jobs:
-  run_10:
+  run_04:
     runs-on: ubuntu-latest
     steps:
       - name: Code ophalen
@@ -23,9 +23,9 @@ jobs:
         run: |
           pip install yfinance pandas requests python-dotenv
 
-      - name: Voer Bot 10 uit
+      - name: Voer Bot 04 uit
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         # Let op: zorg dat de naam hieronder exact gelijk is aan je .py bestand
-        run: python bot_10.py
+        run: python bot_04.py
