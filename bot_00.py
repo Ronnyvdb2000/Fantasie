@@ -15,11 +15,9 @@ def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     try:
-        # Timeout en pauze om Telegram-blokkades te voorkomen
         requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=20)
-        time.sleep(2) 
-    except Exception as e:
-        print(f"Fout bij versturen: {e}")
+        time.sleep(1.5) 
+    except: pass
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
     try:
@@ -93,9 +91,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
     except: return 0, None
 
 def voer_lijst_uit(bestandsnaam, label):
-    if not os.path.exists(bestandsnaam):
-        print(f"Overslaan: {bestandsnaam} niet gevonden.")
-        return
+    if not os.path.exists(bestandsnaam): return
 
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
     with open(bestandsnaam, 'r') as f:
@@ -115,26 +111,32 @@ def voer_lijst_uit(bestandsnaam, label):
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        f"📊 *FULL Rapport {label}*",
+        f"📊 *Hoogland RAPPORT {label}*",
         f"_{nu}_",
         "----------------------------------",
-        f"🐢 T: €{100000+res['T']:,.0f} | ⚡ S: €{100000+res['S']:,.0f}",
-        f"🚀 HT: €{100000+res['HT']:,.0f} | 🔥 HS: €{100000+res['HS']:,.0f}",
-        "", "🛡️ *TRAAG:*", get_s(sig["T"]),
-        "", "🎯 *SNEL:*", get_s(sig["S"]),
-        "", "📈 *HYPER TREND:*", get_s(sig["HT"]),
-        "", "⚡ *HYPER SCALP:*", get_s(sig["HS"])
+        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
+        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
+        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
+        "",
+        "🛡️ *SIGNALEN TRAAG:*", get_s(sig["T"]),
+        "",
+        "🎯 *SIGNALEN SNEL:*", get_s(sig["S"]),
+        "",
+        "📈 *SIGNALEN HYPER TREND:*", get_s(sig["HT"]),
+        "",
+        "⚡ *SIGNALEN HYPER SCALP:*", get_s(sig["HS"]),
+        "",
+        "💡 _ATR %: <2% laag, >5% hoog._"
     ]
     stuur_telegram("\n".join(rapport))
 
 def main():
-    # Loop van 01 t/m 09
     for i in range(1, 10):
         nr = f"{i:02d}"
         bestandsnaam = f"tickers_{nr}.txt"
-        print(f"Bezig met lijst {nr}...")
         voer_lijst_uit(bestandsnaam, nr)
-        time.sleep(3) # 10 seconden pauze tussen de lijsten
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
