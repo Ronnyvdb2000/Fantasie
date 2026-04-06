@@ -1,4 +1,4 @@
-name: "00 FULL Scanner (01-09)"
+name: "BOT 00 FULL Scanner (01-09)"
 
 on:
   workflow_dispatch: # Handmatige start
