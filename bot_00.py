@@ -19,11 +19,12 @@ def send_telegram_message(message):
 
 def get_signal(ticker):
     try:
+        # Download data
         df = yf.download(ticker, period="1y", interval="1d", progress=False)
         if df.empty or len(df) < 200:
             return None
 
-        # --- ORIGINELE INDICATOREN ---
+        # Berekeningen (SMA50, SMA200)
         df['SMA50'] = df['Close'].rolling(window=50).mean()
         df['SMA200'] = df['Close'].rolling(window=200).mean()
         
@@ -34,33 +35,35 @@ def get_signal(ticker):
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
 
+        # Laatste waarden
         cp = df['Close'].iloc[-1]
         s50 = df['SMA50'].iloc[-1]
         s200 = df['SMA200'].iloc[-1]
         rsi = df['RSI'].iloc[-1]
 
-        # --- ORIGINELE REGIMES LOGICA ---
-        # Regime 1: BUY (Bullish & Oversold)
+        # --- DE 4 REGIMES (ORIGINEEL) ---
+        # BUY (Bullish & Oversold)
         if cp > s50 > s200 and rsi < 40:
             return f"🟢 *BUY*: {ticker} (RSI: {rsi:.1f})"
         
-        # Regime 2: HOLD (Trend is sterk)
+        # HOLD (Trend is sterk)
         elif cp > s50 > s200:
             return f"🔵 *HOLD*: {ticker}"
         
-        # Regime 3: SELL (Bearish trend bevestigd)
+        # SELL (Bearish trend)
         elif cp < s50 < s200:
             return f"🔴 *SELL*: {ticker}"
         
-        # Regime 4: WAIT (Onzeker / Transitie)
+        # WAIT (Transitie/Onzeker)
         else:
             return f"🟡 *WAIT*: {ticker}"
 
-    except:
+    except Exception:
         return None
 
 def voer_lijst_uit(bestandsnaam, rapport_naam, rapport_nr):
     if not os.path.exists(bestandsnaam):
+        print(f"Overslaan: {bestandsnaam} niet gevonden.")
         return
 
     with open(bestandsnaam, 'r') as f:
@@ -73,12 +76,14 @@ def voer_lijst_uit(bestandsnaam, rapport_naam, rapport_nr):
             resultaten.append(res)
         time.sleep(0.1)
 
-    # Rapport opmaken met de juiste naam
+    # Rapport opbouw met jouw specifieke namen
     bericht = f"📊 *{rapport_nr} {rapport_naam} RAPPORT*\n"
     bericht += f"Datum: {datetime.now().strftime('%d-%m %H:%M')}\n"
     bericht += "----------------------------------\n"
     
     if resultaten:
+        # Sorteer resultaten zodat BUY bovenaan staat
+        resultaten.sort() 
         bericht += "\n".join(resultaten)
     else:
         bericht += "Geen data beschikbaar voor deze lijst."
@@ -86,7 +91,7 @@ def voer_lijst_uit(bestandsnaam, rapport_naam, rapport_nr):
     send_telegram_message(bericht)
 
 def main():
-    # De originele indeling
+    # De exacte namen per deelrapport zoals gevraagd
     rapporten = {
         "01": "Hoogland",
         "02": "Macrotrends",
@@ -99,10 +104,11 @@ def main():
         "09": "Varia"
     }
 
+    # Loop door de 9 rapporten
     for nr, naam in rapporten.items():
         bestandsnaam = f"tickers_{nr}.txt"
         voer_lijst_uit(bestandsnaam, naam, int(nr))
-        time.sleep(3) # Rustpauze tussen rapporten
+        time.sleep(3) # Pauze om Telegram/Yahoo niet te overbelasten
 
 if __name__ == "__main__":
     main()
