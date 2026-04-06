@@ -98,7 +98,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
-    with open('tickers_02.txt', 'r') as f:
+    with open('tickers_03.txt', 'r') as f:
         tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
     inzet = 2500.0
@@ -114,7 +114,7 @@ def main():
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Macrotrends RAPPORT*",
+        "📊 *Beursbrink RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
