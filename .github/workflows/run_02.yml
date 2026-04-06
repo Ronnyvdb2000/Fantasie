@@ -1,4 +1,4 @@
-name: "Bot 02: Scanner (Traag & Snel)"
+name: "Bot 02: Macrotrends Scanner (4 regimes)"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
@@ -8,7 +8,7 @@ on:
     - cron: '40 */2 * * 1-5'
 
 jobs:
-  run_bot_02:
+  run_02:
     runs-on: ubuntu-latest
     steps:
       - name: Code ophalen
@@ -23,9 +23,9 @@ jobs:
         run: |
           pip install yfinance pandas requests python-dotenv
 
-      - name: Voer Bot 02 Analyse uit
+      - name: Voer Bot 02 uit
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        # Zorg dat je Python-bestand in de repo ook exact bot_02.py heet
+        # Let op: zorg dat de naam hieronder exact gelijk is aan je .py bestand
         run: python bot_02.py
