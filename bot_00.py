@@ -1,3 +1,5 @@
+import yfinance as yf
+import pandas as pd
 import os
 import requests
 import numpy as np
@@ -14,7 +16,7 @@ def stuur_telegram(bericht):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     try:
         requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=20)
-        time.sleep(2) 
+        time.sleep(1) 
     except: pass
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
@@ -48,7 +50,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
         adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
-        # BACKTEST
+        # BACKTEST LOGICA
         p_bt, f_bt, s_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:]
         e_bt, v_bt, v_ma_bt = ema200.iloc[-252:], v.iloc[-252:], vol_ma.iloc[-252:]
         atr_bt = atr_series.iloc[-252:]
@@ -71,7 +73,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
                     profit += (inzet * (cp / instap) - inzet) - kosten
                     pos = False
 
-        # SIGNAAL
+        # SIGNAAL GENERATIE
         signaal = None
         cp, catr, crsi = p.iloc[-1], atr_series.iloc[-1], rsi.iloc[-1]
         ap = (catr / cp) * 100
@@ -80,14 +82,14 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
                 if not use_trend_filter or cp > ema200.iloc[-1]:
-                    signaal = f"🟢 *KOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | 🧠 RSI: {crsi:.0f} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+                    signaal = f"🟢 *KOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
         elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
-            signaal = f"🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | 🧠 RSI: {crsi:.0f} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+            signaal = f"🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
 
         return profit, signaal
     except: return 0, None
 
-def voer_lijst_uit(bestandsnaam, label):
+def voer_lijst_uit(bestandsnaam, label, naam_sector):
     if not os.path.exists(bestandsnaam): return
 
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -100,6 +102,7 @@ def voer_lijst_uit(bestandsnaam, label):
     sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for t in tickers:
+        # De 4 strategieën (Traag, Snel, Hyper Trend, Hyper Scalp)
         for k, prm in [("T",(50,200,True)), ("S",(20,50,True)), ("HT",(9,21,True)), ("HS",(9,21,False))]:
             p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
             res[k] += p
@@ -107,9 +110,8 @@ def voer_lijst_uit(bestandsnaam, label):
 
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
-    # Rapportage met herstelde namen
     rapport = [
-        f"📊 *Hoogland RAPPORT {label}*",
+        f"📊 *{label} {naam_sector} RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
@@ -130,11 +132,23 @@ def voer_lijst_uit(bestandsnaam, label):
     stuur_telegram("\n".join(rapport))
 
 def main():
-    for i in range(1, 10):
-        nr = f"{i:02d}"
+    # De 9 sectoren gekoppeld aan de bestanden
+    sectoren = {
+        "01": "Hoogland",
+        "02": "Macrotrends",
+        "03": "Beursbrink",
+        "04": "Benelux",
+        "05": "Parijs",
+        "06": "Power & AI",
+        "07": "Metalen",
+        "08": "Defensie",
+        "09": "Varia"
+    }
+
+    for nr, naam in sectoren.items():
         bestandsnaam = f"tickers_{nr}.txt"
-        print(f"Start lijst {nr}...")
-        voer_lijst_uit(bestandsnaam, nr)
+        print(f"Start scan: {naam} ({bestandsnaam})...")
+        voer_lijst_uit(bestandsnaam, int(nr), naam)
         time.sleep(5)
 
 if __name__ == "__main__":
