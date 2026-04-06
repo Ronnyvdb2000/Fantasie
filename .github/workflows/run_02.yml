@@ -2,10 +2,10 @@ name: "Bot 02: Macrotrends Scanner (4 regimes)"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
-  schedule:
+    # schedule:
     # Draait elke 2 uur op werkdagen (ma-vr) om 40 over het uur
     # Bijv: 08:40, 10:40, 12:40, 14:40, 16:40, 18:40 UTC
-    - cron: '40 */2 * * 1-5'
+    # - cron: '40 */2 * * 1-5'
 
 jobs:
   run_02:
