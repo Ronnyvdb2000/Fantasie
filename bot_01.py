@@ -114,7 +114,7 @@ def main():
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Hoogland RAPPORT v22*",
+        "📊 *Hoogland RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
