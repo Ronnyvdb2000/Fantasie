@@ -1,4 +1,4 @@
-name: "Bot 10: Hoogland Scanner (4 regimes)"
+name: "Bot 10: xx Scanner (4 regimes)"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
@@ -23,7 +23,7 @@ jobs:
         run: |
           pip install yfinance pandas requests python-dotenv
 
-      - name: Voer Bot 10 Hoogland uit
+      - name: Voer Bot 10 xx uit
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
