@@ -8,7 +8,7 @@ on:
     - cron: '40 */2 * * 1-5'
 
 jobs:
-  run_10_Hoogland:
+  run_10:
     runs-on: ubuntu-latest
     steps:
       - name: Code ophalen
