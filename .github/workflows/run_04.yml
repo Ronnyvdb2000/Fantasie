@@ -1,4 +1,4 @@
-name: "Bot 04: Benelux Scanner (Traag & Snel)"
+name: "Bot Benelux Scanner (4 regimes)"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
@@ -8,7 +8,7 @@ on:
     - cron: '40 */2 * * 1-5'
 
 jobs:
-  run_04_benelux:
+  run_04:
     runs-on: ubuntu-latest
     steps:
       - name: Code ophalen
@@ -23,7 +23,7 @@ jobs:
         run: |
           pip install yfinance pandas requests python-dotenv
 
-      - name: Voer Bot 04 Analyse uit
+      - name: Voer Bot 04 uit
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
