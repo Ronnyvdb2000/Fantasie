@@ -13,8 +13,10 @@ CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    # disable_web_page_preview zorgt ervoor dat de chat compact blijft ondanks de vele links
-    requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True})
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True})
+    except:
+        pass
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
     try:
@@ -29,13 +31,13 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         else:
             p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
 
-        # Moving Averages & Trend
+        # Indicatoren
         f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
         s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
         ema200 = p.ewm(span=200, adjust=False).mean()
         vol_ma = v.rolling(window=20).mean()
         
-        # RSI Berekening (14 dagen)
+        # RSI
         delta = p.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -51,7 +53,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
         adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
-        # --- BACKTEST ---
+        # BACKTEST
         p_bt, f_bt, s_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:]
         e_bt, v_bt, v_ma_bt = ema200.iloc[-252:], v.iloc[-252:], vol_ma.iloc[-252:]
         atr_bt, adx_bt = atr_series.iloc[-252:], adx.iloc[-252:]
@@ -74,23 +76,21 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
                     profit += (inzet * (cp / instap) - inzet) - kosten
                     pos = False
 
-        # --- SIGNAAL VANDAAG ---
+        # SIGNAAL VANDAAG
         signaal = None
         curr_p = p.iloc[-1]
         curr_atr = atr_series.iloc[-1]
         curr_rsi = rsi.iloc[-1]
         curr_sl = curr_p - (2 * curr_atr)
         atr_pct = (curr_atr / curr_p) * 100
-        
-        # Yahoo Finance Chart Link
-        y_link = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+        y_link = f"[Chart](https://finance.yahoo.com/quote/{ticker})"
 
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
                 if not use_trend_filter or curr_p > ema200.iloc[-1]:
-                    signaal = f"🟢 *KOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
+                    signaal = f"🟢 KOOP | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
         elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
-            signaal = f"🔴 *VERKOOP* | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
+            signaal = f"🔴 VERKOOP | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
 
         return profit, signaal
     except:
@@ -98,7 +98,6 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
-    # Gebruikt weer tickers_01.txt
     with open('tickers_01.txt', 'r') as f:
         tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
@@ -107,15 +106,33 @@ def main():
     sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for t in tickers:
-        for key, params in [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]:
-            p, s = bereken_alles(t, inzet, params[0], params[1], params[2])
-            res[key] += p
-            if s: sig[key].append(f"• `{t}`: {s}")
+        for k, prm in [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]:
+            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
+            res[k] += p
+            if s: sig[k].append(f"• `{t}`: {s}")
 
-    def get_sig(lst): return "\n".join(lst) if lst else "Geen actie"
+    def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Hoogland RAPPORT v21*",
+        "📊 *Hoogland RAPPORT v22*",
         f"_{nu}_",
         "----------------------------------",
-        f"🐢 *
+        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
+        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
+        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
+        "",
+        "🛡️ *SIGNALEN TRAAG:*", get_s(sig["T"]),
+        "",
+        "🎯 *SIGNALEN SNEL:*", get_s(sig["S"]),
+        "",
+        "📈 *SIGNALEN HYPER TREND:*", get_s(sig["HT"]),
+        "",
+        "⚡ *SIGNALEN HYPER SCALP:*", get_s(sig["HS"]),
+        "",
+        "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold._"
+    ]
+    stuur_telegram("\n".join(rapport))
+
+if __name__ == "__main__":
+    main()
