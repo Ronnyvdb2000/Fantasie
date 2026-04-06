@@ -115,7 +115,7 @@ def voer_lijst_uit(bestandsnaam, label):
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        f"📊 *Hoogland TOTAAL Rapport {label}*",
+        f"📊 *FULL Rapport {label}*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 T: €{100000+res['T']:,.0f} | ⚡ S: €{100000+res['S']:,.0f}",
