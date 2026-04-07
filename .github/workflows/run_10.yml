@@ -1,4 +1,4 @@
-name: "Bot 10: Dagelijks 22u"
+name: "Bot 10: Dagelijks 22u bericht en mail"
 
 on:
   workflow_dispatch:
