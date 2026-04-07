@@ -3,8 +3,8 @@ name: "Bot 00: FULL Scanner (01-09)"
 on:
   workflow_dispatch: # Handmatige start
   schedule:
-    # Draait elke 3 uur op werkdagen (ma-vr) op het 40ste minuut
-    - cron: '40 */3 * * 1-5'
+    # Draait elke 3 uur op werkdagen (ma-vr) op de 1ste minuut
+    - cron: '01 */3 * * 1-6'
 
 jobs:
   run_global:
