@@ -1,0 +1,212 @@
+import yfinance as yf
+import pandas as pd
+import os
+import requests
+import smtplib
+import numpy as np
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+from datetime import datetime
+import time
+
+# Laden van omgevingsvariabelen (.env of GitHub Secrets)
+load_dotenv()
+
+# --- CONFIGURATIE ---
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+EMAIL_USER = os.getenv('EMAIL_USER')
+EMAIL_PASS = os.getenv('EMAIL_PASS')
+EMAIL_RECEIVER = os.getenv('EMAIL_RECEIVER')
+
+def stuur_telegram(bericht):
+    """Stuurt een onmiddellijke update naar Telegram per gescande sector."""
+    if not TOKEN or not CHAT_ID: return
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    try:
+        requests.post(url, data={
+            "chat_id": CHAT_ID, 
+            "text": bericht, 
+            "parse_mode": "Markdown", 
+            "disable_web_page_preview": True
+        }, timeout=20)
+        time.sleep(1) # Voorkom Telegram flood limits
+    except Exception as e:
+        print(f"Telegram Fout: {e}")
+
+def stuur_mail(onderwerp, inhoud_tekst):
+    """Verstuurt het volledige verzamelrapport aan het einde van de run."""
+    if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
+        print("⚠️ E-mail niet volledig geconfigureerd in Secrets.")
+        return
+    
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_USER
+    msg['To'] = EMAIL_RECEIVER
+    msg['Subject'] = onderwerp
+
+    # Markdown opschonen voor e-mail leesbaarheid
+    schone_inhoud = inhoud_tekst.replace('*', '').replace('`', '').replace('•', '-')
+    msg.attach(MIMEText(schone_inhoud, 'plain'))
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.send_message(msg)
+        server.quit()
+        print(f"✅ E-mail succesvol verzonden naar {EMAIL_RECEIVER}")
+    except Exception as e:
+        print(f"❌ E-mail fout: {e}")
+
+def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
+    """Kernlogica: berekent indicatoren, backtest-rendement en huidige signalen."""
+    try:
+        df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
+        if df.empty or len(df) < 260: return 0, None
+        
+        # Data extractie
+        if isinstance(df.columns, pd.MultiIndex):
+            p = df['Close'][ticker].dropna().astype(float)
+            v = df['Volume'][ticker].dropna().astype(float)
+            h = df['High'][ticker].dropna().astype(float)
+            l = df['Low'][ticker].dropna().astype(float)
+        else:
+            p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
+
+        # Moving Averages & Filters
+        f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
+        s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
+        ema200 = p.ewm(span=200, adjust=False).mean()
+        vol_ma = v.rolling(window=20).mean()
+        
+        # RSI berekening
+        delta = p.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        rsi = 100 - (100 / (1 + (gain / (loss + 1e-10))))
+
+        # ADX & ATR berekening
+        tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
+        atr_series = tr.rolling(14).mean()
+        up, down = h.diff().clip(lower=0), (-l.diff()).clip(lower=0)
+        tr14 = tr.rolling(14).sum()
+        plus_di = 100 * (up.rolling(14).sum() / (tr14 + 1e-10))
+        minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
+        adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
+
+        # BACKTEST (Laatste 252 handelsdagen)
+        p_bt, f_bt, s_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:]
+        e_bt, v_bt, v_ma_bt = ema200.iloc[-252:], v.iloc[-252:], vol_ma.iloc[-252:]
+        atr_bt = atr_series.iloc[-252:]
+        
+        profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
+        kosten = 15.0 + (inzet * 0.0035)
+
+        for i in range(1, len(p_bt)):
+            cp = p_bt.iloc[i]
+            if not pos:
+                if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
+                    if adx.iloc[i] > 15 and v_bt.iloc[i] > (v_ma_bt.iloc[i] * 0.6):
+                        if not use_trend_filter or cp > e_bt.iloc[i]:
+                            instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
+                            profit -= kosten
+            else:
+                high_p = max(high_p, cp)
+                sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
+                if cp < sl_val or f_bt.iloc[i] < s_bt.iloc[i]:
+                    profit += (inzet * (cp / instap) - inzet) - kosten
+                    pos = False
+
+        # SIGNAAL GENERATIE (Vandaag)
+        signaal = None
+        cp, catr, crsi = p.iloc[-1], atr_series.iloc[-1], rsi.iloc[-1]
+        ap = (catr / cp) * 100
+        y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+
+        # Koop condities
+        if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
+            if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
+                if not use_trend_filter or cp > ema200.iloc[-1]:
+                    signaal = f"🟢 *KOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+        
+        # Verkoop condities
+        elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
+            signaal = f"🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+
+        return profit, signaal
+    except: return 0, None
+
+def voer_lijst_uit(bestandsnaam, label, naam_sector):
+    """Verwerkt een specifieke tickers_XX.txt lijst."""
+    if not os.path.exists(bestandsnaam): return ""
+
+    with open(bestandsnaam, 'r') as f:
+        content = f.read().replace('\n', ',').replace('$', '')
+        tickers = sorted(list(set([t.strip().upper() for t in content.split(',') if t.strip()])))
+
+    inzet = 2500.0
+    res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
+    sig = {"T": [], "S": [], "HT": [], "HS": []}
+
+    for t in tickers:
+        # Definieer de 4 strategie-varianten
+        strats = [
+            ("T",  (50, 200, True)),  # Traag (SMA50/200 + Trend filter)
+            ("S",  (20, 50,  True)),  # Snel (SMA20/50 + Trend filter)
+            ("HT", (9, 21,   True)),  # Hyper Trend (EMA9/21 + Trend filter)
+            ("HS", (9, 21,   False))  # Hyper Scalp (EMA9/21 zonder trend filter)
+        ]
+        for k, prm in strats:
+            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
+            res[k] += p
+            if s: sig[k].append(f"• `{t}`: {s}")
+
+    def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
+    
+    nu = datetime.now().strftime("%d/%m/%Y %H:%M")
+    rapport = [
+        f"📊 *{label} {naam_sector} RAPPORT*",
+        f"_{nu}_",
+        "----------------------------------",
+        f"🐢 *Traag:* €{100000 + res['T']:,.0f} | ⚡ *Snel:* €{100000 + res['S']:,.0f}",
+        f"🚀 *HT:* €{100000 + res['HT']:,.0f} | 🔥 *HS:* €{100000 + res['HS']:,.0f}",
+        "",
+        "🛡️ *SIGNALEN TRAAG:*", get_s(sig["T"]),
+        "🎯 *SIGNALEN SNEL:*", get_s(sig["S"]),
+        "📈 *SIGNALEN HYPER TREND:*", get_s(sig["HT"]),
+        "⚡ *SIGNALEN HYPER SCALP:*", get_s(sig["HS"]),
+        ""
+    ]
+    
+    volledige_tekst = "\n".join(rapport)
+    stuur_telegram(volledige_tekst) # Verzend onmiddellijk naar Telegram per sector
+    return volledige_tekst + "\n\n" + "="*40 + "\n\n"
+
+def main():
+    """Hoofdprogramma: loopt door alle sectoren en stuurt e-mail na afloop."""
+    sectoren = {
+        "01": "Hoogland", "02": "Macrotrends", "03": "Beursbrink",
+        "04": "Benelux", "05": "Parijs", "06": "Power & AI",
+        "07": "Metalen", "08": "Defensie", "09": "Varia"
+    }
+
+    verzamel_rapport = "🚀 *FULL GLOBAL SCAN COLLECTIVE REPORT*\n" + "="*30 + "\n\n"
+    
+    print(f"[{datetime.now()}] Start globale scan...")
+    
+    for nr, naam in sectoren.items():
+        print(f"Bezig met sector: {naam}...")
+        sector_bericht = voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
+        verzamel_rapport += sector_bericht
+        time.sleep(2) # Korte pauze tussen sectoren voor stabiliteit
+
+    # Verzend de verzamelde data per e-mail
+    datum_vandaag = datetime.now().strftime("%d-%m-%Y")
+    stuur_mail(f"Trading Rapport: {datum_vandaag}", verzamel_rapport)
+    
+    print(f"[{datetime.now()}] Klaar! Telegrams verzonden en e-mail verstuurd naar {EMAIL_RECEIVER}.")
+
+if __name__ == "__main__":
+    main()
