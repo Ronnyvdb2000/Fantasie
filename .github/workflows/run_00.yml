@@ -1,14 +1,22 @@
 name: "Bot 00: FULL Scanner (01-09)"
 
 on:
-  workflow_dispatch: # Handmatige start
+  workflow_dispatch: # Handmatige start mogelijk via GitHub UI
   schedule:
-    # Draait elke 3 uur op werkdagen (ma-vr) op de 1ste minuut
+    # Draait elke 3 uur (00, 03, 06, 09, 12, 15, 18, 21) 
+    # Op de 1ste minuut van het uur
+    # Van maandag (1) t/m zaterdag (6)
     - cron: '01 */3 * * 1-6'
 
 jobs:
   run_global:
     runs-on: ubuntu-latest
+    
+    # Voorkom dat meerdere runs tegelijk draaien als de vorige nog bezig is
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
     steps:
       - name: Code ophalen
         uses: actions/checkout@v4
@@ -17,6 +25,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+          cache: 'pip' # Versnelt de installatie bij volgende runs
 
       - name: Bibliotheken installeren
         run: |
