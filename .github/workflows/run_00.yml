@@ -4,9 +4,9 @@ on:
   workflow_dispatch: # Handmatige start mogelijk via GitHub UI
   schedule:
     # Draait elke 3 uur (00, 03, 06, 09, 12, 15, 18, 21) 
-    # Op de 1ste minuut van het uur
-    # Van maandag (0) t/m zaterdag (6)
-    - cron: '00 */3 * * 1-6'
+    # Op de 5de minuut van het uur
+    # Van maandag (1) t/m zaterdag (6)
+    - cron: '05 */3 * * 1-6'
 
 jobs:
   run_global:
