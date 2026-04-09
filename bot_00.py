@@ -90,7 +90,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
     except: return 0, None
 
 def voer_lijst_uit(bestandsnaam, label, naam_sector):
-    if not os.path.exists(bestandsnaam): return
+    if not os.path.exists(bestandsnaam): return ""
 
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
     with open(bestandsnaam, 'r') as f:
@@ -102,7 +102,6 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
     sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for t in tickers:
-        # De 4 strategieën (Traag, Snel, Hyper Trend, Hyper Scalp)
         for k, prm in [("T",(50,200,True)), ("S",(20,50,True)), ("HT",(9,21,True)), ("HS",(9,21,False))]:
             p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
             res[k] += p
@@ -110,7 +109,7 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
 
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
-    rapport = [
+    rapport_lijst = [
         f"📊 *{label} {naam_sector} RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
@@ -129,57 +128,33 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
         "",
         "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbougt, <30 oversold_"
     ]
-    stuur_telegram("\n".join(rapport))
+    rapport_tekst = "\n".join(rapport_lijst)
+    stuur_telegram(rapport_tekst)
+    return rapport_tekst + "\n\n" # Geeft nu de tekst terug aan main() om de None-error te voorkomen
 
 def main():
-    # De 9 sectoren gekoppeld aan de bestanden
     sectoren = {
-        "01": "Hoogland",
-        "02": "Macrotrends",
-        "03": "Beursbrink",
-        "04": "Benelux",
-        "05": "Parijs",
-        "06": "Power & AI",
-        "07": "Metalen",
-        "08": "Defensie",
-        "09": "Varia"
+        "01": "Hoogland", "02": "Macrotrends", "03": "Beursbrink",
+        "04": "Benelux", "05": "Parijs", "06": "Power & AI",
+        "07": "Metalen", "08": "Defensie", "09": "Varia"
     }
 
     print(f"[{datetime.now()}] Start globale scan van {len(sectoren)} sectoren...")
-    verzamel_rapport = "🚀 FULL SCAN COLLECTIVE REPORT\n" + "="*35 + "\n\n"
     
-    # Loop door alle sectoren
     for nr, naam in sectoren.items():
         bestandsnaam = f"tickers_{nr}.txt"
         print(f"--- Bezig met: {naam} ({bestandsnaam}) ---")
         
         try:
-            # We voeren de scan uit en voegen de tekst toe aan het verzamelrapport
-            sector_bericht = voer_lijst_uit(bestandsnaam, nr, naam)
-            verzamel_rapport += sector_bericht
+            # Voert de lijst uit en verstuurt per sector naar Telegram
+            voer_lijst_uit(bestandsnaam, nr, naam)
             print(f"✅ Sector {naam} succesvol afgerond.")
         except Exception as e:
             print(f"❌ Fout opgetreden in sector {naam}: {e}")
         
-        # Korte pauze om te voorkomen dat Yahoo of Telegram ons blokkeert
         time.sleep(2)
 
-    print("\n" + "="*40)
-    print("🏁 Alle scans zijn voltooid.")
-    print("📧 Bezig met het verzenden van de verzamelmail...")
-    print("="*40 + "\n")
-
-    # Verzend de mail met alle verzamelde resultaten
-    datum_vandaag = datetime.now().strftime("%d-%m-%Y")
-    onderwerp = f"Trading Rapport: {datum_vandaag}"
-    
-    try:
-        stuur_mail(onderwerp, verzamel_rapport)
-        print(f"✅ Mail succesvol doorgegeven aan SMTP server.")
-    except Exception as e:
-        print(f"❌ KRITIEKE FOUT bij verzenden mail: {e}")
-
-    print(f"\n[{datetime.now()}] Script volledig beëindigd.")
+    print(f"\n[{datetime.now()}] Alle Telegram berichten verzonden. Script voltooid.")
 
 if __name__ == "__main__":
     main()
