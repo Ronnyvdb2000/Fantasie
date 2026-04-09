@@ -4,9 +4,9 @@ on:
   workflow_dispatch: # Handmatige start mogelijk via GitHub UI
   schedule:
     # Draait elke 3 uur (00, 03, 06, 09, 12, 15, 18, 21) 
-    # Op de 5de minuut van het uur
+    # Op de 17de minuut van het uur
     # Van maandag (1) t/m zaterdag (6)
-    - cron: '05 */3 * * 1-6'
+    - cron: '17 */3 * * 1-6'
 
 jobs:
   run_global:
@@ -14,9 +14,8 @@ jobs:
     
     # Voorkom dat meerdere runs tegelijk draaien als de vorige nog bezig is
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-
+      group: scanner-run
+      cancel-in-progress: false
     steps:
       - name: Code ophalen
         uses: actions/checkout@v4
