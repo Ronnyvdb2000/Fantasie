@@ -145,11 +145,41 @@ def main():
         "09": "Varia"
     }
 
+    print(f"[{datetime.now()}] Start globale scan van {len(sectoren)} sectoren...")
+    verzamel_rapport = "🚀 FULL SCAN COLLECTIVE REPORT\n" + "="*35 + "\n\n"
+    
+    # Loop door alle sectoren
     for nr, naam in sectoren.items():
         bestandsnaam = f"tickers_{nr}.txt"
-        print(f"Start scan: {naam} ({bestandsnaam})...")
-        voer_lijst_uit(bestandsnaam, int(nr), naam)
-        time.sleep(5)
+        print(f"--- Bezig met: {naam} ({bestandsnaam}) ---")
+        
+        try:
+            # We voeren de scan uit en voegen de tekst toe aan het verzamelrapport
+            sector_bericht = voer_lijst_uit(bestandsnaam, nr, naam)
+            verzamel_rapport += sector_bericht
+            print(f"✅ Sector {naam} succesvol afgerond.")
+        except Exception as e:
+            print(f"❌ Fout opgetreden in sector {naam}: {e}")
+        
+        # Korte pauze om te voorkomen dat Yahoo of Telegram ons blokkeert
+        time.sleep(2)
+
+    print("\n" + "="*40)
+    print("🏁 Alle scans zijn voltooid.")
+    print("📧 Bezig met het verzenden van de verzamelmail...")
+    print("="*40 + "\n")
+
+    # Verzend de mail met alle verzamelde resultaten
+    datum_vandaag = datetime.now().strftime("%d-%m-%Y")
+    onderwerp = f"Trading Rapport: {datum_vandaag}"
+    
+    try:
+        stuur_mail(onderwerp, verzamel_rapport)
+        print(f"✅ Mail succesvol doorgegeven aan SMTP server.")
+    except Exception as e:
+        print(f"❌ KRITIEKE FOUT bij verzenden mail: {e}")
+
+    print(f"\n[{datetime.now()}] Script volledig beëindigd.")
 
 if __name__ == "__main__":
     main()
