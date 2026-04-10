@@ -26,4 +26,4 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         # LET OP: Exacte match met de naam in je screenshot
-        run: python Backtest.py
+        run: python backtest.py
