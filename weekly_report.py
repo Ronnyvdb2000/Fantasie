@@ -77,18 +77,18 @@ def main():
     # Sorteer op 'perf' kolom (simpele numerieke sortering)
     df_res = df_res.sort_values(by='perf', ascending=False)
     
-    top_3 = df_res.head(3)
-    bottom_3 = df_res.tail(3)
+    top_10 = df_res.head(10)
+    bottom_10 = df_res.tail(10)
 
     rapport = "🏆 *WEKELIJKSE HALL OF FAME & SHAME*\n"
     rapport += "----------------------------------\n\n"
     
     rapport += "🚀 *TOP PERFORMERS (DEZE WEEK):*\n"
-    for _, row in top_3.iterrows():
+    for _, row in top_10.iterrows():
         rapport += f"• `{row['ticker']}` : +{row['perf']:.2f}%\n"
 
     rapport += "\n🔻 *GROOTSTE DALERS (DEZE WEEK):*\n"
-    for _, row in bottom_3.iterrows():
+    for _, row in bottom_10.iterrows():
         rapport += f"• `{row['ticker']}` : {row['perf']:.2f}%\n"
 
     rapport += "\n💡 *Tip:* Check of de stijgers een RSI-oververhitting vertonen voordat je actie onderneemt op Bolero!"
