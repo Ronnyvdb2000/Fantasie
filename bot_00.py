@@ -19,7 +19,41 @@ def stuur_telegram(bericht):
         time.sleep(1) 
     except: pass
 
-def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
+def bereken_crsi(doc):
+    """Berekent de Connors RSI (CRSI)."""
+    # 1. RSI (3)
+    delta = doc.diff()
+    up = delta.clip(lower=0)
+    down = -1 * delta.clip(upper=0)
+    ma_up = up.rolling(3).mean()
+    ma_down = down.rolling(3).mean()
+    rsi3 = 100 - (100 / (1 + (ma_up / (ma_down + 1e-10))))
+
+    # 2. Streak RSI (2)
+    diff = doc.diff()
+    streak = pd.Series(0, index=diff.index)
+    count = 0
+    for i in range(1, len(diff)):
+        if diff.iloc[i] > 0:
+            count = count + 1 if count > 0 else 1
+        elif diff.iloc[i] < 0:
+            count = count - 1 if count < 0 else -1
+        else:
+            count = 0
+        streak.iloc[i] = count
+    
+    s_delta = streak.diff()
+    s_up = s_delta.clip(lower=0)
+    s_down = -1 * s_delta.clip(upper=0)
+    streak_rsi = 100 - (100 / (1 + (s_up.rolling(2).mean() / (s_down.rolling(2).mean() + 1e-10))))
+
+    # 3. Percent Rank (100)
+    returns = doc.diff()
+    perc_rank = returns.rolling(100).apply(lambda x: (x < x.iloc[-1]).sum() / 99.0 * 100, raw=False)
+
+    return (rsi3 + streak_rsi + perc_rank) / 3
+
+def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, mode="RSI"):
     try:
         df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
@@ -40,10 +74,11 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
         delta = p.diff()
         gain = (delta.where(delta > 0, 0)).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rsi = 100 - (100 / (1 + (gain / (loss + 1e-10))))
+        rsi14 = 100 - (100 / (1 + (gain / (loss + 1e-10))))
 
         tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
         atr_series = tr.rolling(14).mean()
+        
         up, down = h.diff().clip(lower=0), (-l.diff()).clip(lower=0)
         tr14 = tr.rolling(14).sum()
         plus_di = 100 * (up.rolling(14).sum() / (tr14 + 1e-10))
@@ -75,23 +110,31 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
 
         # SIGNAAL GENERATIE
         signaal = None
-        cp, catr, crsi = p.iloc[-1], atr_series.iloc[-1], rsi.iloc[-1]
+        cp, catr = p.iloc[-1], atr_series.iloc[-1]
+        
+        # Selectie tussen RSI en CRSI
+        if mode == "CRSI":
+            val_num = bereken_crsi(p).iloc[-1]
+            disp_val = f"💎 CRSI: {val_num:.1f}"
+        else:
+            val_num = rsi14.iloc[-1]
+            disp_val = f"📊 RSI: {val_num:.1f}"
+        
         ap = (catr / cp) * 100
         y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
 
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
                 if not use_trend_filter or cp > ema200.iloc[-1]:
-                    signaal = f"🟢 *KOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+                    signaal = f"🟢 *KOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | {disp_val} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
         elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
-            signaal = f"🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+            signaal = f"🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | {disp_val} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
 
         return profit, signaal
     except: return 0, None
 
 def voer_lijst_uit(bestandsnaam, label, naam_sector):
     if not os.path.exists(bestandsnaam): return ""
-
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
     with open(bestandsnaam, 'r') as f:
         content = f.read().replace('\n', ',').replace('$', '')
@@ -102,8 +145,9 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
     sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for t in tickers:
-        for k, prm in [("T",(50,200,True)), ("S",(20,50,True)), ("HT",(9,21,True)), ("HS",(9,21,False))]:
-            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
+        # T/S gebruiken RSI (14), HT/HS gebruiken CRSI
+        for k, prm in [("T",(50,200,True,"RSI")), ("S",(20,50,True,"RSI")), ("HT",(9,21,True,"CRSI")), ("HS",(9,21,False,"CRSI"))]:
+            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2], mode=prm[3])
             res[k] += p
             if s: sig[k].append(f"• `{t}`: {s}")
 
@@ -118,19 +162,19 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
         f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
         f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
         "",
-        "🛡️ *SIGNALEN TRAAG:*", get_s(sig["T"]),
+        "🛡️ *SIGNALEN TRAAG (RSI):*", get_s(sig["T"]),
         "",
-        "🎯 *SIGNALEN SNEL:*", get_s(sig["S"]),
+        "🎯 *SIGNALEN SNEL (RSI):*", get_s(sig["S"]),
         "",
-        "📈 *SIGNALEN HYPER TREND:*", get_s(sig["HT"]),
+        "📈 *SIGNALEN HYPER TREND (CRSI):*", get_s(sig["HT"]),
         "",
-        "⚡ *SIGNALEN HYPER SCALP:*", get_s(sig["HS"]),
+        "⚡ *SIGNALEN HYPER SCALP (CRSI):*", get_s(sig["HS"]),
         "",
-        "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbougt, <30 oversold_"
+        "💡 _ATR %: <2% laag. CRSI: >90 overbought, <10 oversold_"
     ]
     rapport_tekst = "\n".join(rapport_lijst)
     stuur_telegram(rapport_tekst)
-    return rapport_tekst + "\n\n" # Geeft nu de tekst terug aan main() om de None-error te voorkomen
+    return rapport_tekst + "\n\n"
 
 def main():
     sectoren = {
@@ -138,23 +182,11 @@ def main():
         "04": "Benelux", "05": "Parijs", "06": "Power & AI",
         "07": "Metalen", "08": "Defensie", "09": "Varia"
     }
-
-    print(f"[{datetime.now()}] Start globale scan van {len(sectoren)} sectoren...")
-    
     for nr, naam in sectoren.items():
-        bestandsnaam = f"tickers_{nr}.txt"
-        print(f"--- Bezig met: {naam} ({bestandsnaam}) ---")
-        
         try:
-            # Voert de lijst uit en verstuurt per sector naar Telegram
-            voer_lijst_uit(bestandsnaam, nr, naam)
-            print(f"✅ Sector {naam} succesvol afgerond.")
-        except Exception as e:
-            print(f"❌ Fout opgetreden in sector {naam}: {e}")
-        
+            voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
+        except: pass
         time.sleep(2)
-
-    print(f"\n[{datetime.now()}] Alle Telegram berichten verzonden. Script voltooid.")
 
 if __name__ == "__main__":
     main()
