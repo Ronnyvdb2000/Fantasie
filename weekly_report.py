@@ -43,11 +43,15 @@ def haal_week_performance(ticker_list):
 def main():
     # Lijst met al je tickerbestanden
     all_files = [
-        'tickers_benelux.txt', 
-        'tickers_parijs.txt', 
-        'tickers_defensie.txt', 
-        'tickers_power.txt', 
-        'tickers_metalen.txt'
+        'tickers_01.txt', 
+        'tickers_02.txt', 
+        'tickers_03.txt', 
+        'tickers_04.txt', 
+        'tickers_05.txt',
+        'tickers_06.txt',
+        'tickers_07.txt',
+        'tickers_08.txt',
+        'tickers_09.txt'
     ]
     
     alle_data = []
