@@ -19,41 +19,7 @@ def stuur_telegram(bericht):
         time.sleep(1) 
     except: pass
 
-def bereken_crsi(doc):
-    """Berekent de Connors RSI (CRSI)."""
-    # 1. RSI (3)
-    delta = doc.diff()
-    up = delta.clip(lower=0)
-    down = -1 * delta.clip(upper=0)
-    ma_up = up.rolling(3).mean()
-    ma_down = down.rolling(3).mean()
-    rsi3 = 100 - (100 / (1 + (ma_up / (ma_down + 1e-10))))
-
-    # 2. Streak RSI (2)
-    diff = doc.diff()
-    streak = pd.Series(0, index=diff.index)
-    count = 0
-    for i in range(1, len(diff)):
-        if diff.iloc[i] > 0:
-            count = count + 1 if count > 0 else 1
-        elif diff.iloc[i] < 0:
-            count = count - 1 if count < 0 else -1
-        else:
-            count = 0
-        streak.iloc[i] = count
-    
-    s_delta = streak.diff()
-    s_up = s_delta.clip(lower=0)
-    s_down = -1 * s_delta.clip(upper=0)
-    streak_rsi = 100 - (100 / (1 + (s_up.rolling(2).mean() / (s_down.rolling(2).mean() + 1e-10))))
-
-    # 3. Percent Rank (100)
-    returns = doc.diff()
-    perc_rank = returns.rolling(100).apply(lambda x: (x < x.iloc[-1]).sum() / 99.0 * 100, raw=False)
-
-    return (rsi3 + streak_rsi + perc_rank) / 3
-
-def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, mode="RSI"):
+def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False):
     try:
         df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
@@ -74,22 +40,35 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, mode="RSI"):
         delta = p.diff()
         gain = (delta.where(delta > 0, 0)).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rsi14 = 100 - (100 / (1 + (gain / (loss + 1e-10))))
+        rsi_val = 100 - (100 / (1 + (gain / (loss + 1e-10))))
+
+        # CRSI Logica toevoeging
+        if is_hyper:
+            rsi3_gain = (delta.where(delta > 0, 0)).rolling(3).mean()
+            rsi3_loss = (-delta.where(delta < 0, 0)).rolling(3).mean()
+            rsi3 = 100 - (100 / (1 + (rsi3_gain / (rsi3_loss + 1e-10))))
+            streak = pd.Series(0, index=p.index)
+            for i in range(1, len(p)):
+                if p.iloc[i] > p.iloc[i-1]: streak.iloc[i] = streak.iloc[i-1] + 1 if streak.iloc[i-1] > 0 else 1
+                elif p.iloc[i] < p.iloc[i-1]: streak.iloc[i] = streak.iloc[i-1] - 1 if streak.iloc[i-1] < 0 else -1
+            s_delta = streak.diff()
+            s_gain = (s_delta.where(s_delta > 0, 0)).rolling(2).mean()
+            s_loss = (-s_delta.where(s_delta < 0, 0)).rolling(2).mean()
+            streak_rsi = 100 - (100 / (1 + (s_gain / (s_loss + 1e-10))))
+            p_rank = delta.rolling(100).apply(lambda x: (x < x.iloc[-1]).sum() / 99.0 * 100, raw=False)
+            rsi_val = (rsi3 + streak_rsi + p_rank) / 3
 
         tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
         atr_series = tr.rolling(14).mean()
-        
         up, down = h.diff().clip(lower=0), (-l.diff()).clip(lower=0)
         tr14 = tr.rolling(14).sum()
         plus_di = 100 * (up.rolling(14).sum() / (tr14 + 1e-10))
         minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
         adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
-        # BACKTEST LOGICA
         p_bt, f_bt, s_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:]
         e_bt, v_bt, v_ma_bt = ema200.iloc[-252:], v.iloc[-252:], vol_ma.iloc[-252:]
         atr_bt = atr_series.iloc[-252:]
-        
         profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
 
@@ -108,27 +87,18 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, mode="RSI"):
                     profit += (inzet * (cp / instap) - inzet) - kosten
                     pos = False
 
-        # SIGNAAL GENERATIE
         signaal = None
-        cp, catr = p.iloc[-1], atr_series.iloc[-1]
-        
-        # Selectie tussen RSI en CRSI
-        if mode == "CRSI":
-            val_num = bereken_crsi(p).iloc[-1]
-            disp_val = f"💎 CRSI: {val_num:.1f}"
-        else:
-            val_num = rsi14.iloc[-1]
-            disp_val = f"📊 RSI: {val_num:.1f}"
-        
+        cp, catr, crsi = p.iloc[-1], atr_series.iloc[-1], rsi_val.iloc[-1]
         ap = (catr / cp) * 100
         y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+        label_rsi = "💎 CRSI" if is_hyper else "📊 RSI"
 
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
                 if not use_trend_filter or cp > ema200.iloc[-1]:
-                    signaal = f"🟢 *KOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | {disp_val} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+                    signaal = f"🟢 *KOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | {label_rsi}: {crsi:.1f} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
         elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
-            signaal = f"🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | {disp_val} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+            signaal = f"🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} ({ap:.1f}%) | {label_rsi}: {crsi:.1f} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
 
         return profit, signaal
     except: return 0, None
@@ -145,9 +115,9 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
     sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for t in tickers:
-        # T/S gebruiken RSI (14), HT/HS gebruiken CRSI
-        for k, prm in [("T",(50,200,True,"RSI")), ("S",(20,50,True,"RSI")), ("HT",(9,21,True,"CRSI")), ("HS",(9,21,False,"CRSI"))]:
-            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2], mode=prm[3])
+        # Hier wordt bepaald of we RSI of CRSI gebruiken
+        for k, prm in [("T",(50,200,True,False)), ("S",(20,50,True,False)), ("HT",(9,21,True,True)), ("HS",(9,21,False,True))]:
+            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2], is_hyper=prm[3])
             res[k] += p
             if s: sig[k].append(f"• `{t}`: {s}")
 
@@ -170,21 +140,16 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
         "",
         "⚡ *SIGNALEN HYPER SCALP (CRSI):*", get_s(sig["HS"]),
         "",
-        "💡 _ATR %: <2% laag. CRSI: >90 overbought, <10 oversold_"
+        "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold. CRSI: >90 overbought, <10 oversold_"
     ]
     rapport_tekst = "\n".join(rapport_lijst)
     stuur_telegram(rapport_tekst)
     return rapport_tekst + "\n\n"
 
 def main():
-    sectoren = {
-        "01": "Hoogland", "02": "Macrotrends", "03": "Beursbrink",
-        "04": "Benelux", "05": "Parijs", "06": "Power & AI",
-        "07": "Metalen", "08": "Defensie", "09": "Varia"
-    }
+    sectoren = {"01":"Hoogland","02":"Macrotrends","03":"Beursbrink","04":"Benelux","05":"Parijs","06":"Power & AI","07":"Metalen","08":"Defensie","09":"Varia"}
     for nr, naam in sectoren.items():
-        try:
-            voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
+        try: voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
         except: pass
         time.sleep(2)
 
