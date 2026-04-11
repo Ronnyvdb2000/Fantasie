@@ -67,10 +67,11 @@ def voer_backtest(ticker, s, t, use_trend, inzet=2500):
 
         for i in range(1, len(p_bt)):
             cp = float(p_bt.iloc[i])
-            datum = p_bt.index[i].strftime('%d-%m')
+            # Aangepast naar dd/mm/yy formaat
+            datum = p_bt.index[i].strftime('%d/%m/%y')
             
             if not pos:
-                # KOOP CONDITIES (Bot_00 logica)
+                # KOOP CONDITIES
                 if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
                     if adx_bt.iloc[i] > 15 and v_bt.iloc[i] > (vm_bt.iloc[i] * 0.6):
                         if not use_trend or cp > e_bt.iloc[i]:
