@@ -1,130 +1,109 @@
 import yfinance as yf
 import pandas as pd
 import os
-from dotenv import load_dotenv
 import requests
+import numpy as np
+from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# --- CONFIGURATIE ---
-START_KAPITAAL = 100000.0
-INZET_PER_TRADE = 2500.0
-COMMISSIE = 2.0
-BEURSTAKS = 0.0035
-BELASTING_OPT_IN = 0.10
-
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    try: requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=15)
-    except: pass
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True})
+    except:
+        pass
 
-def bereken_indicatoren_bulk(df_close):
-    """Berekent alle indicatoren voor alle tickers in één keer"""
-    # Trend MA's
-    sma50 = df_close.rolling(window=50).mean()
-    sma200 = df_close.rolling(window=200).mean()
-    sma20 = df_close.rolling(window=20).mean()
-    # Hyper EMA's
-    ema9 = df_close.ewm(span=9, adjust=False).mean()
-    ema21 = df_close.ewm(span=21, adjust=False).mean()
-    ema200_e = df_close.ewm(span=200, adjust=False).mean()
-    # MR Logica (RSI2)
-    delta = df_close.diff()
-    gain = delta.clip(lower=0).rolling(window=2).mean()
-    loss = (-delta.clip(upper=0)).rolling(window=2).mean()
-    rsi2 = 100 - (100 / (1 + (gain / (loss + 1e-10))))
-    ma5 = df_close.rolling(window=5).mean()
-    
-    return {
-        'p': df_close, 'sma50': sma50, 'sma200': sma200, 'sma20': sma20,
-        'ema9': ema9, 'ema21': ema21, 'ema200_e': ema200_e, 
-        'rsi2': rsi2, 'ma5': ma5
-    }
+def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
+    try:
+        # Exacte download en data-handling van Bot 2
+        df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
+        if df.empty or len(df) < 260: return 0, None
+        
+        if isinstance(df.columns, pd.MultiIndex):
+            p = df['Close'][ticker].dropna().astype(float)
+            v = df['Volume'][ticker].dropna().astype(float)
+            h = df['High'][ticker].dropna().astype(float)
+            l = df['Low'][ticker].dropna().astype(float)
+        else:
+            p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
 
-def run_geavanceerde_boekhouding(bestandsnaam):
-    with open(bestandsnaam, 'r') as f:
-        tickers = [t.strip().upper() for t in f.read().replace('\n', ',').split(',') if t.strip()]
+        # Exacte indicatoren van Bot 2
+        f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
+        s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
+        ema200 = p.ewm(span=200, adjust=False).mean()
+        vol_ma = v.rolling(window=20).mean()
+        
+        # RSI
+        delta = p.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / (loss + 1e-10)
+        rsi = 100 - (100 / (1 + rs))
 
-    stuur_telegram(f"🚀 Start simulatie voor {len(tickers)} tickers...")
+        # ATR & ADX
+        tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
+        atr_series = tr.rolling(14).mean()
+        up, down = h.diff().clip(lower=0), (-l.diff()).clip(lower=0)
+        tr14 = tr.rolling(14).sum()
+        plus_di = 100 * (up.rolling(14).sum() / (tr14 + 1e-10))
+        minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
+        adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
-    # STAP 1: Bulk download (Verhelpt de 35 minuten wachttijd)
-    data_raw = yf.download(tickers, period="2y", progress=False, auto_adjust=True)['Close']
-    ind = bereken_indicatoren_bulk(data_raw)
-    
-    cash = START_KAPITAAL
-    fiscale_reserve = 0.0
-    portefeuille = {} 
-    dagen = data_raw.index[-252:]
+        # BACKTEST (Exacte loop van Bot 2)
+        p_bt, f_bt, s_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:]
+        e_bt, v_bt, v_ma_bt = ema200.iloc[-252:], v.iloc[-252:], vol_ma.iloc[-252:]
+        atr_bt, adx_bt = atr_series.iloc[-252:], adx.iloc[-252:]
+        
+        profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
+        kosten = 15.0 + (inzet * 0.0035) # Terug naar Bot 2 kosten
 
-    # STAP 2: Simulatie loop
-    for d in dagen:
-        # VERKOOP
-        for t in list(portefeuille.keys()):
-            pos = portefeuille[t]
-            cp = ind['p'][t].loc[d]
-            
-            sell = False
-            if pos['type'] == 'T' and ind['sma50'][t].loc[d] < ind['sma200'][t].loc[d]: sell = True
-            elif pos['type'] == 'S' and ind['sma20'][t].loc[d] < ind['sma50'][t].loc[d]: sell = True
-            elif pos['type'] in ['HT', 'HS'] and ind['ema9'][t].loc[d] < ind['ema21'][t].loc[d]: sell = True
-            elif pos['type'] == 'MR' and cp > ind['ma5'][t].loc[d]: sell = True
-            
-            if sell or d == dagen[-1]:
-                bruto = pos['aantal'] * cp
-                netto = bruto - (COMMISSIE + (bruto * BEURSTAKS))
-                winst = netto - pos['instap_kost']
-                if winst > 0:
-                    fiscale_reserve += (winst * BELASTING_OPT_IN)
-                    winst *= (1 - BELASTING_OPT_IN)
-                cash += (pos['instap_kost'] + winst)
-                del portefeuille[t]
+        for i in range(1, len(p_bt)):
+            cp = p_bt.iloc[i]
+            if not pos:
+                if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
+                    if adx_bt.iloc[i] > 15 and v_bt.iloc[i] > (v_ma_bt.iloc[i] * 0.6):
+                        if not use_trend_filter or cp > e_bt.iloc[i]:
+                            instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
+                            profit -= kosten
+            else:
+                high_p = max(high_p, cp)
+                sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
+                if cp < sl_val or f_bt.iloc[i] < s_bt.iloc[i]:
+                    w = (inzet * (cp / instap) - inzet) - kosten
+                    if w > 0: w *= 0.9 # De 10% opt-in die je eerder wilde
+                    profit += w
+                    pos = False
 
-        # AANKOOP (Prioriteit: T > S > HT > HS > MR)
-        kost = INZET_PER_TRADE + COMMISSIE + (INZET_PER_TRADE * BEURSTAKS)
-        for strat in ['T', 'S', 'HT', 'HS', 'MR']:
-            for t in tickers:
-                if t in portefeuille or cash < kost or d not in ind['p'][t].index: continue
-                
-                cp = ind['p'][t].loc[d]
-                idx = ind['p'][t].index.get_loc(d)
-                if idx == 0: continue
-                
-                gekocht = False
-                # Traag
-                if strat == 'T' and ind['sma50'][t].iloc[idx] > ind['sma200'][t].iloc[idx] and ind['sma50'][t].iloc[idx-1] <= ind['sma200'][t].iloc[idx-1]:
-                    if cp > ind['ema200_e'][t].iloc[idx]: gekocht = True
-                # Snel
-                elif strat == 'S' and ind['sma20'][t].iloc[idx] > ind['sma50'][t].iloc[idx] and ind['sma20'][t].iloc[idx-1] <= ind['sma50'][t].iloc[idx-1]:
-                    if cp > ind['ema200_e'][t].iloc[idx]: gekocht = True
-                # Hyper T
-                elif strat == 'HT' and ind['ema9'][t].iloc[idx] > ind['ema21'][t].iloc[idx] and ind['ema9'][t].iloc[idx-1] <= ind['ema21'][t].iloc[idx-1]:
-                    if cp > ind['ema200_e'][t].iloc[idx]: gekocht = True
-                # Hyper S
-                elif strat == 'HS' and ind['ema9'][t].iloc[idx] > ind['ema21'][t].iloc[idx] and ind['ema9'][t].iloc[idx-1] <= ind['ema21'][t].iloc[idx-1]:
-                    gekocht = True
-                # Mean Reversion
-                elif strat == 'MR' and 0 < ind['rsi2'][t].iloc[idx] < 30:
-                    gekocht = True
+        # SIGNAAL VANDAAG
+        signaal = None
+        curr_p = p.iloc[-1]
+        if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
+            if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
+                if not use_trend_filter or curr_p > ema200.iloc[-1]:
+                    signaal = f"🟢 KOOP | €{curr_p:.2f}"
 
-                if gekocht:
-                    portefeuille[t] = {'aantal': INZET_PER_TRADE / cp, 'instap_kost': kost, 'type': strat}
-                    cash -= kost
+        return profit, signaal
+    except:
+        return 0, None
 
-    # FINALE BEREKENING
-    open_w = sum([p['aantal'] * data_raw[t].iloc[-1] for t, p in portefeuille.items()])
-    totaal = cash + open_w
-    
-    rapport = (
-        f"🏁 *SIMULATIE VOLTOOID*\n\n"
-        f"💰 Eindwaarde: *€{totaal:,.2f}*\n"
-        f"🏦 Reserve (10%): €{fiscale_reserve:,.2f}\n"
-        f"📈 Rendement: *{((totaal/START_KAPITAAL)-1)*100:.2f}%*\n"
-        f"💵 Cash over: €{cash:,.2f}"
-    )
-    stuur_telegram(rapport)
+def main():
+    nu = datetime.now().strftime("%d/%m/%Y %H:%M")
+    # Nu voor tickers_01.txt
+    with open('tickers_01.txt', 'r') as f:
+        tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
-if __name__ == "__main__":
-    run_geavanceerde_boekhouding("tickers_01.txt")
+    inzet = 2500.0
+    res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
+    sig = {"T": [], "S": [], "HT": [], "HS": []}
+
+    for t in tickers:
+        # De exacte 4 strategie-varianten uit Bot 2
+        for k, prm in [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]:
+            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
+            res[k] += p
+            if s: sig[k].append(f"• `{t}
