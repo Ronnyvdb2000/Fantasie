@@ -77,10 +77,18 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
 
         signaal = None
         curr_p = p.iloc[-1]
+        curr_atr = atr_series.iloc[-1]
+        curr_rsi = rsi.iloc[-1]
+        curr_sl = curr_p - (2 * curr_atr)
+        atr_pct = (curr_atr / curr_p) * 100
+        y_link = f"[Chart](https://finance.yahoo.com/quote/{ticker})"
+
         if f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
             if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
                 if not use_trend_filter or curr_p > ema200.iloc[-1]:
-                    signaal = f"🟢 KOOP | €{curr_p:.2f}"
+                    signaal = f"🟢 KOOP | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
+        elif f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2]:
+            signaal = f"🔴 VERKOOP | €{curr_p:.2f} | ⚡ ATR: {curr_atr:.2f} ({atr_pct:.1f}%) | 🧠 RSI: {curr_rsi:.0f} | 🛡️ SL: €{curr_sl:.2f} | {y_link}"
 
         return profit, signaal
     except:
@@ -101,19 +109,27 @@ def main():
             res[k] += p
             if s: sig[k].append(f"• `{t}`: {s}")
 
-    def get_s(lst): return "\n".join(lst) if lst else "Geen"
+    def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
+    # EXACTE WEERGAVE VAN BOT 2
     rapport = [
-        "📊 *RAPPORT TICKERS 01 (Bot 2 Logica)*",
+        "📊 *Macrotrends RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
-        f"🐢 *Traag:* €{100000 + res['T']:,.0f}",
-        f"⚡ *Snel:* €{100000 + res['S']:,.0f}",
+        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
         f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
         f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
         "",
-        "🎯 *SIGNALEN:*",
-        get_s(sig["T"] + sig["S"] + sig["HT"] + sig["HS"])
+        "🛡️ *SIGNALEN TRAAG:*", get_s(sig["T"]),
+        "",
+        "🎯 *SIGNALEN SNEL:*", get_s(sig["S"]),
+        "",
+        "📈 *SIGNALEN HYPER TREND:*", get_s(sig["HT"]),
+        "",
+        "⚡ *SIGNALEN HYPER SCALP:*", get_s(sig["HS"]),
+        "",
+        "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold._"
     ]
     stuur_telegram("\n".join(rapport))
 
