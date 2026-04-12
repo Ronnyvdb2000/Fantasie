@@ -1,0 +1,39 @@
+name: "Bot 11: HOURLY Market Scanner (01-09)"
+
+on:
+  workflow_dispatch: # Handmatige start mogelijk via GitHub UI
+  schedule:
+    # Draait elk uur op de 17de minuut
+    # Van 08:17 UTC tot 21:17 UTC (09:17 - 22:17 Belgische tijd)
+    # Van maandag (1) t/m vrijdag (5)
+    - cron: '17 8-21 * * 1-5'
+
+jobs:
+  run_global:
+    runs-on: ubuntu-latest
+    
+    # Voorkom dat meerdere runs tegelijk draaien
+    concurrency:
+      group: hourly-scanner-run
+      cancel-in-progress: false
+
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip' # Versnelt de installatie bij volgende runs
+
+      - name: Bibliotheken installeren
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas requests python-dotenv numpy
+
+      - name: Voer Globale Bot uit
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_11.py
