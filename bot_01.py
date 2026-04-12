@@ -16,7 +16,6 @@ def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     
-    # Splitsen bij te lange berichten
     if len(bericht) > 4000:
         parts = [bericht[i:i+4000] for i in range(0, len(bericht), 4000)]
     else:
@@ -54,19 +53,16 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         else:
             p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
 
-        # MA's
         f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
         s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
         ema200 = p.ewm(span=200, adjust=False).mean()
         vol_ma = v.rolling(window=20).mean()
         
-        # MACD
         exp1 = p.ewm(span=12, adjust=False).mean()
         exp2 = p.ewm(span=26, adjust=False).mean()
         macd_line = exp1 - exp2
         signal_line = macd_line.ewm(span=9, adjust=False).mean()
 
-        # RSI / CRSI
         delta = p.diff()
         gain = (delta.where(delta > 0, 0)).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -95,7 +91,6 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
         adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
-        # BACKTEST
         p_bt = p.iloc[-252:]
         f_bt, s_bt, e_bt = f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:]
         m_bt, sig_bt = macd_line.iloc[-252:], signal_line.iloc[-252:]
@@ -105,6 +100,4 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
 
-        for i in range(1, len(p_bt)):
-            cp = float(p_bt.iloc[i])
-            buy_trigger = (m_bt.iloc[i] > sig_bt.iloc[i] and m_bt.iloc[i-1] <= sig_bt.iloc[i-1]) if use_macd else (f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1])
+        for
