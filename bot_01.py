@@ -15,42 +15,30 @@ CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    if len(bericht) > 4000:
-        parts = [bericht[i:i+4000] for i in range(0, len(bericht), 4000)]
-    else:
-        parts = [bericht]
-    for part in parts:
-        try:
-            requests.post(url, data={"chat_id": CHAT_ID, "text": part, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=20)
-            time.sleep(0.5)
-        except: pass
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=20)
+    except: pass
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, use_mean_rev=False):
     try:
-        # Haal iets meer data op voor de indicatoren
         df = yf.download(ticker, period="3y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
         
         p = df['Close'].dropna().astype(float)
         if isinstance(p, pd.DataFrame): p = p.iloc[:, 0]
-        v = df['Volume'].dropna().astype(float)
-        if isinstance(v, pd.DataFrame): v = v.iloc[:, 0]
         h = df['High'].dropna().astype(float)
         if isinstance(h, pd.DataFrame): h = h.iloc[:, 0]
         l = df['Low'].dropna().astype(float)
         if isinstance(l, pd.DataFrame): l = l.iloc[:, 0]
 
         # Indicatoren
-        f_line = p.rolling(window=s).mean() if s > 0 else p
-        s_line = p.rolling(window=t).mean() if t > 0 else p
+        f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
+        s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
         ema200 = p.ewm(span=200, adjust=False).mean()
+        ema50 = p.ewm(span=50, adjust=False).mean()
         ma5 = p.rolling(window=5).mean()
         
-        # Volume Price Trend (VPT)
-        vpt = (v * p.pct_change()).cumsum()
-        vpt_stijgend = vpt.diff() > 0
-
-        # RSI Berekening
+        # RSI Formules
         def calc_rsi(ser, window):
             delta = ser.diff()
             gain = delta.clip(lower=0).rolling(window).mean()
@@ -74,46 +62,54 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         atr = (h - l).rolling(14).mean()
 
         # BACKTEST
-        p_bt, f_bt, s_bt, e_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:]
-        r2_bt, ma5_bt, vpt_ok = rsi2.iloc[-252:], ma5.iloc[-252:], vpt_stijgend.iloc[-252:]
+        p_bt, f_bt, s_bt, e200_bt, e50_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:], ema50.iloc[-252:]
+        r2_bt, ma5_bt = rsi2.iloc[-252:], ma5.iloc[-252:]
         atr_bt = atr.iloc[-252:]
         
-        profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
+        profit, pos, instap, high_p, sl_val, days_in_trade = 0, False, 0, 0, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
 
         for i in range(1, len(p_bt)):
             cp = float(p_bt.iloc[i])
             if not pos:
                 if use_mean_rev:
-                    # MR Conditie: RSI2 < 25 (goed voor €500k+)
-                    if r2_bt.iloc[i] < 25 and cp > e_bt.iloc[i]:
-                        instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
+                    # Geoptimaliseerde MR: RSI2 < 20 en boven EMA50
+                    if r2_bt.iloc[i] < 20 and cp > e50_bt.iloc[i]:
+                        instap, high_p, sl_val, pos, days_in_trade = cp, cp, cp - (2 * atr_bt.iloc[i]), True, 0
                         profit -= kosten
                 else:
+                    # Oorspronkelijke Hyper/Trend logica
                     if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
-                        if not is_hyper or vpt_ok.iloc[i]:
-                            if not use_trend_filter or cp > e_bt.iloc[i]:
-                                instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
-                                profit -= kosten
+                        if not use_trend_filter or cp > e200_bt.iloc[i]:
+                            instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
+                            profit -= kosten
             else:
                 high_p = max(high_p, cp)
                 sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
-                sell = cp > ma5_bt.iloc[i] if use_mean_rev else f_bt.iloc[i] < s_bt.iloc[i]
-                if sell or cp < sl_val:
+                days_in_trade += 1
+                
+                if use_mean_rev:
+                    # MR Exit: MA5 geraakt of max 5 dagen
+                    sell = cp > ma5_bt.iloc[i] or days_in_trade >= 5 or cp < sl_val
+                else:
+                    sell = f_bt.iloc[i] < s_bt.iloc[i] or cp < sl_val
+                
+                if sell:
                     w = (inzet * (cp / instap) - inzet) - kosten
                     if w > 0: w *= 0.9
                     profit += w
                     pos = False
 
+        # SIGNAAL VANDAAG
         signaal = None
-        curr_p, curr_r2 = p.iloc[-1], rsi2.iloc[-1]
+        cp, cr2 = p.iloc[-1], rsi2.iloc[-1]
         y_l = f"[Chart](https://finance.yahoo.com/quote/{ticker})"
         
-        if use_mean_rev and curr_r2 < 25 and curr_p > ema200.iloc[-1]:
-            signaal = f"📉 *DIP* | €{curr_p:.2f} | RSI2: {curr_r2:.1f} | {y_l}"
-        elif not use_mean_rev and f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
-            if not is_hyper or vpt_stijgend.iloc[-1]:
-                signaal = f"🟢 *TREND* | €{curr_p:.2f} | {y_l}"
+        if use_mean_rev:
+            if cr2 < 20 and cp > ema50.iloc[-1]:
+                signaal = f"📉 *MR DIP* | €{cp:.2f} | RSI2: {cr2:.1f} | {y_l}"
+        elif f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
+            signaal = f"🟢 *KOOP* | €{cp:.2f} | {y_l}"
         
         return profit, signaal
     except: return 0, None
@@ -143,10 +139,7 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
         f"⚡ *Snel:* €{100000 + res['S']:,.0f}",
         f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
         f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
-        f"📉 *Mean Reversion:* €{100000 + res['MR']:,.0f}",
-        "", "🛡️ *TRAAG:*", "\n".join(sig["T"]) or "Geen actie",
-        "", "🎯 *SNEL:*", "\n".join(sig["S"]) or "Geen actie",
-        "", "📉 *DIPS:*", "\n".join(sig["MR"]) or "Geen actie"
+        f"📉 *Mean Reversion:* €{100000 + res['MR']:,.0f}"
     ]
     stuur_telegram("\n".join(rapport))
 
