@@ -56,7 +56,7 @@ def voer_backtest(ticker, s, t, use_trend, inzet=2500):
 
         f_line, s_line, ema200, vol_ma, atr, adx = bereken_indicatoren(df, s, t)
         
-        # Test over laatste jaar
+        # Test over laatste jaar (ca. 252 handelsdagen)
         p_bt = df['Close'].iloc[-252:]
         f_bt, s_bt, e_bt = f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:]
         v_bt, vm_bt, a_bt, adx_bt = df['Volume'].iloc[-252:], vol_ma.iloc[-252:], atr.iloc[-252:], adx.iloc[-252:]
@@ -67,8 +67,8 @@ def voer_backtest(ticker, s, t, use_trend, inzet=2500):
 
         for i in range(1, len(p_bt)):
             cp = float(p_bt.iloc[i])
-            # Aangepast naar dd/mm/yy formaat
-            datum = p_bt.index[i].strftime('%d/%m/%y')
+            # GEWIJZIGD: Formaat naar dd-mm-jj
+            datum = p_bt.index[i].strftime('%d-%m-%y')
             
             if not pos:
                 # KOOP CONDITIES
@@ -80,70 +80,4 @@ def voer_backtest(ticker, s, t, use_trend, inzet=2500):
                             trades.append(f"🔵 `{ticker}`: {datum} KOOP €{cp:.2f}")
             else:
                 high_p = max(high_p, cp)
-                sl_val = max(sl_val, high_p - (2 * a_bt.iloc[i]))
-                
-                # VERKOOP CONDITIES
-                if cp < sl_val or f_bt.iloc[i] < s_bt.iloc[i]:
-                    winst = (inzet * (cp / instap) - inzet) - (2 * kosten)
-                    # 10% tax op winst
-                    if winst > 0: winst *= 0.9
-                    profit_totaal += winst
-                    trades.append(f"🔴 `{ticker}`: {datum} VERK €{cp:.2f} | Netto: €{winst:.2f}")
-                    pos = False
-        
-        return profit_totaal, trades
-    except: return 0, []
-
-def main():
-    print(f"[{datetime.now()}] Start Megatest...")
-    inzet = 2500.0
-    start_kapitaal = 50000.0
-    
-    # Tickers inladen
-    tickers = []
-    for i in range(1, 10):
-        fname = f"tickers_0{i}.txt"
-        if os.path.exists(fname):
-            with open(fname, 'r') as f:
-                content = f.read().replace('\n', ',')
-                tickers.extend([t.strip().upper() for t in content.split(',') if t.strip()])
-    tickers = sorted(list(set(tickers)))
-
-    strategieen = [
-        ("T", "TURTLE TRAAG (50/200)", 50, 200, True),
-        ("S", "SWING SNEL (20/50)", 20, 50, True),
-        ("HT", "HYPER TREND (9/21)", 9, 21, True),
-        ("HS", "HYPER SCALP (9/21)", 9, 21, False)
-    ]
-
-    for code, naam, s, t, trend in strategieen:
-        print(f"Backtesting {naam}...")
-        totaal_winst = 0
-        alle_trades = []
-        
-        for ticker in tickers:
-            winst, trade_logs = voer_backtest(ticker, s, t, trend, inzet)
-            totaal_winst += winst
-            alle_trades.extend(trade_logs)
-
-        # Rapport samenstellen
-        eindstand = start_kapitaal + totaal_winst
-        rendement = (totaal_winst / start_kapitaal) * 100
-        
-        rapport = [
-            f"📊 *BACKTEST: {naam}*",
-            f"💰 Start: €{start_kapitaal:,.0f} | Inzet: €{inzet:,.0f}",
-            f"🏁 Eindstand: €{eindstand:,.2f}",
-            f"📈 Rendement: {rendement:.2f}%",
-            "----------------------------------",
-            "*TRADE LOG:*",
-            "\n".join(alle_trades) if alle_trades else "Geen trades"
-        ]
-        
-        stuur_telegram("\n".join(rapport))
-        time.sleep(2)
-
-    print(f"[{datetime.now()}] Alle backtests voltooid.")
-
-if __name__ == "__main__":
-    main()
+                sl_val = max(sl
