@@ -16,7 +16,7 @@ def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     try:
-        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=20)
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=20)
     except: pass
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, use_mean_rev=False):
@@ -24,73 +24,56 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         df = yf.download(ticker, period="3y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
         
-        p = df['Close'].dropna().astype(float)
-        if isinstance(p, pd.DataFrame): p = p.iloc[:, 0]
-        h = df['High'].dropna().astype(float)
-        if isinstance(h, pd.DataFrame): h = h.iloc[:, 0]
-        l = df['Low'].dropna().astype(float)
-        if isinstance(l, pd.DataFrame): l = l.iloc[:, 0]
+        # Consistent data extractie (zoals de allereerste versie)
+        if isinstance(df.columns, pd.MultiIndex):
+            p = df['Close'][ticker].dropna().astype(float)
+            h = df['High'][ticker].dropna().astype(float)
+            l = df['Low'][ticker].dropna().astype(float)
+        else:
+            p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
 
-        # Indicatoren
+        # INDICATOREN
         f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
         s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
         ema200 = p.ewm(span=200, adjust=False).mean()
-        ema50 = p.ewm(span=50, adjust=False).mean()
         ma5 = p.rolling(window=5).mean()
         
-        # RSI Formules
-        def calc_rsi(ser, window):
-            delta = ser.diff()
-            gain = delta.clip(lower=0).rolling(window).mean()
-            loss = (-delta.clip(upper=0)).rolling(window).mean()
-            return 100 - (100 / (1 + (gain / (loss + 1e-10))))
+        # RSI2 voor Mean Reversion
+        delta = p.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(2).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(2).mean()
+        rsi2 = 100 - (100 / (1 + (gain / (loss + 1e-10))))
 
-        rsi2 = calc_rsi(p, 2)
-        
-        if is_hyper:
-            rsi3 = calc_rsi(p, 3)
-            streak = pd.Series(0, index=p.index)
-            for i in range(1, len(p)):
-                if p.iloc[i] > p.iloc[i-1]: streak.iloc[i] = streak.iloc[i-1] + 1 if streak.iloc[i-1] > 0 else 1
-                elif p.iloc[i] < p.iloc[i-1]: streak.iloc[i] = streak.iloc[i-1] - 1 if streak.iloc[i-1] < 0 else -1
-            streak_rsi = calc_rsi(streak, 2)
-            p_rank = p.diff().rolling(100).apply(lambda x: (x < x.iloc[-1]).sum() / 99.0 * 100, raw=False)
-            rsi_val = (rsi3 + streak_rsi + p_rank) / 3
-        else:
-            rsi_val = calc_rsi(p, 14)
-
-        atr = (h - l).rolling(14).mean()
+        # ATR voor Stop Loss
+        tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
+        atr = tr.rolling(14).mean()
 
         # BACKTEST
-        p_bt, f_bt, s_bt, e200_bt, e50_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:], ema50.iloc[-252:]
-        r2_bt, ma5_bt = rsi2.iloc[-252:], ma5.iloc[-252:]
-        atr_bt = atr.iloc[-252:]
+        p_bt, f_bt, s_bt, e200_bt, r2_bt, ma5_bt, atr_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:], rsi2.iloc[-252:], ma5.iloc[-252:], atr.iloc[-252:]
         
-        profit, pos, instap, high_p, sl_val, days_in_trade = 0, False, 0, 0, 0, 0
+        profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
 
         for i in range(1, len(p_bt)):
             cp = float(p_bt.iloc[i])
             if not pos:
+                # KOOP LOGICA
                 if use_mean_rev:
-                    # Geoptimaliseerde MR: RSI2 < 20 en boven EMA50
-                    if r2_bt.iloc[i] < 20 and cp > e50_bt.iloc[i]:
-                        instap, high_p, sl_val, pos, days_in_trade = cp, cp, cp - (2 * atr_bt.iloc[i]), True, 0
-                        profit -= kosten
+                    buy = r2_bt.iloc[i] < 25 # Geen extra filters voor MR nu
                 else:
-                    # Oorspronkelijke Hyper/Trend logica
-                    if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
-                        if not use_trend_filter or cp > e200_bt.iloc[i]:
-                            instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
-                            profit -= kosten
+                    buy = f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]
+                    if use_trend_filter: buy = buy and cp > e200_bt.iloc[i]
+                
+                if buy:
+                    instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
+                    profit -= kosten
             else:
+                # VERKOOP LOGICA
                 high_p = max(high_p, cp)
                 sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
-                days_in_trade += 1
                 
                 if use_mean_rev:
-                    # MR Exit: MA5 geraakt of max 5 dagen
-                    sell = cp > ma5_bt.iloc[i] or days_in_trade >= 5 or cp < sl_val
+                    sell = cp > ma5_bt.iloc[i] or cp < sl_val
                 else:
                     sell = f_bt.iloc[i] < s_bt.iloc[i] or cp < sl_val
                 
@@ -100,17 +83,12 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
                     profit += w
                     pos = False
 
-        # SIGNAAL VANDAAG
         signaal = None
-        cp, cr2 = p.iloc[-1], rsi2.iloc[-1]
-        y_l = f"[Chart](https://finance.yahoo.com/quote/{ticker})"
-        
-        if use_mean_rev:
-            if cr2 < 20 and cp > ema50.iloc[-1]:
-                signaal = f"📉 *MR DIP* | €{cp:.2f} | RSI2: {cr2:.1f} | {y_l}"
-        elif f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
-            signaal = f"🟢 *KOOP* | €{cp:.2f} | {y_l}"
-        
+        if use_mean_rev and rsi2.iloc[-1] < 25:
+            signaal = f"📉 *MR* | €{p.iloc[-1]:.2f}"
+        elif not use_mean_rev and f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
+            signaal = f"🟢 *KOOP* | €{p.iloc[-1]:.2f}"
+            
         return profit, signaal
     except: return 0, None
 
@@ -118,16 +96,22 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
     if not os.path.exists(bestandsnaam): return
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
     with open(bestandsnaam, 'r') as f:
-        content = f.read().replace('\n', ',').replace('$', '')
-        tickers = sorted(list(set([t.strip().upper() for t in content.split(',') if t.strip()])))
+        tickers = [t.strip().upper() for t in f.read().replace('\n', ',').split(',') if t.strip()]
 
     inzet = 2500.0
     res = {"T": 0, "S": 0, "HT": 0, "HS": 0, "MR": 0}
-    sig = {"T": [], "S": [], "HT": [], "HS": [], "MR": []}
+    sig = {"T":[], "S":[], "HT":[], "HS":[], "MR":[]}
 
     for t in tickers:
-        strat = [("T",(50,200,True,False,False)), ("S",(20,50,True,False,False)), ("HT",(9,21,True,True,False)), ("HS",(9,21,False,True,False)), ("MR",(0,0,True,False,True))]
-        for k, prm in strat:
+        # Hier staan de exacte succesvolle parameters van je eerste goede run
+        params = [
+            ("T", (50, 200, True, False, False)),
+            ("S", (20, 50, True, False, False)),
+            ("HT", (9, 21, True, True, False)), # EMA 9/21 met Trend Filter
+            ("HS", (9, 21, False, True, False)), # EMA 9/21 zonder Trend Filter
+            ("MR", (0, 0, False, False, True)) # Mean Reversion
+        ]
+        for k, prm in params:
             p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2], is_hyper=prm[3], use_mean_rev=prm[4])
             res[k] += p
             if s: sig[k].append(f"• `{t}`: {s}")
@@ -148,7 +132,7 @@ def main():
     for nr, naam in sectoren.items():
         try: voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
         except: pass
-        time.sleep(2)
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()
