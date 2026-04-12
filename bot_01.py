@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import time
 
+# --- SETUP ---
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
@@ -14,10 +15,31 @@ CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    try:
-        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=20)
-        time.sleep(1) 
-    except: pass
+    
+    # Splitsen bij te lange berichten
+    if len(bericht) > 4000:
+        parts = [bericht[i:i+4000] for i in range(0, len(bericht), 4000)]
+    else:
+        parts = [bericht]
+
+    for part in parts:
+        try:
+            response = requests.post(url, data={
+                "chat_id": CHAT_ID, 
+                "text": part, 
+                "parse_mode": "Markdown", 
+                "disable_web_page_preview": True
+            }, timeout=20)
+            
+            if response.status_code != 200:
+                requests.post(url, data={
+                    "chat_id": CHAT_ID, 
+                    "text": part, 
+                    "disable_web_page_preview": True
+                }, timeout=20)
+            time.sleep(0.5)
+        except:
+            pass
 
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, use_macd=False):
     try:
@@ -32,19 +54,19 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         else:
             p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
 
-        # Basis Indicatoren
+        # MA's
         f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
         s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
         ema200 = p.ewm(span=200, adjust=False).mean()
         vol_ma = v.rolling(window=20).mean()
         
-        # MACD Berekening
+        # MACD
         exp1 = p.ewm(span=12, adjust=False).mean()
         exp2 = p.ewm(span=26, adjust=False).mean()
-        macd = exp1 - exp2
-        signal = macd.ewm(span=9, adjust=False).mean()
+        macd_line = exp1 - exp2
+        signal_line = macd_line.ewm(span=9, adjust=False).mean()
 
-        # RSI / CRSI Logica (van bot_00.py)
+        # RSI / CRSI
         delta = p.diff()
         gain = (delta.where(delta > 0, 0)).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -73,10 +95,10 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
         adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
-        # BACKTEST (Laatste jaar)
+        # BACKTEST
         p_bt = p.iloc[-252:]
         f_bt, s_bt, e_bt = f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:]
-        m_bt, sig_bt = macd.iloc[-252:], signal.iloc[-252:]
+        m_bt, sig_bt = macd_line.iloc[-252:], signal_line.iloc[-252:]
         v_bt, v_ma_bt = v.iloc[-252:], vol_ma.iloc[-252:]
         atr_bt = atr_series.iloc[-252:]
         
@@ -84,6 +106,5 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         kosten = 15.0 + (inzet * 0.0035)
 
         for i in range(1, len(p_bt)):
-            cp = p_bt.iloc[i]
-            # Koop conditie (MACD of SMA/EMA crossover)
-            buy_trigger = (m_bt.iloc[i] > sig_bt.iloc[i] and m_bt.iloc[i-1] <= sig_bt.iloc[i-1]) if use_macd else (f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_
+            cp = float(p_bt.iloc[i])
+            buy_trigger = (m_bt.iloc[i] > sig_bt.iloc[i] and m_bt.iloc[i-1] <= sig_bt.iloc[i-1]) if use_macd else (f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1])
