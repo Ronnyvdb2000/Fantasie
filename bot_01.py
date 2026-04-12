@@ -53,16 +53,19 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         else:
             p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
 
+        # MA's
         f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
         s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
         ema200 = p.ewm(span=200, adjust=False).mean()
         vol_ma = v.rolling(window=20).mean()
         
+        # MACD
         exp1 = p.ewm(span=12, adjust=False).mean()
         exp2 = p.ewm(span=26, adjust=False).mean()
         macd_line = exp1 - exp2
         signal_line = macd_line.ewm(span=9, adjust=False).mean()
 
+        # RSI / CRSI
         delta = p.diff()
         gain = (delta.where(delta > 0, 0)).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -91,6 +94,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
         adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
+        # BACKTEST
         p_bt = p.iloc[-252:]
         f_bt, s_bt, e_bt = f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:]
         m_bt, sig_bt = macd_line.iloc[-252:], signal_line.iloc[-252:]
@@ -100,4 +104,105 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
 
-        for
+        for i in range(1, len(p_bt)):
+            cp = float(p_bt.iloc[i])
+            buy_t = (m_bt.iloc[i] > sig_bt.iloc[i] and m_bt.iloc[i-1] <= sig_bt.iloc[i-1]) if use_macd else (f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1])
+            sell_t = (m_bt.iloc[i] < sig_bt.iloc[i] and m_bt.iloc[i-1] >= sig_bt.iloc[i-1]) if use_macd else (f_bt.iloc[i] < s_bt.iloc[i] and f_bt.iloc[i-1] >= s_bt.iloc[i-1])
+
+            if not pos:
+                if buy_t:
+                    if adx.iloc[i] > 15 and v_bt.iloc[i] > (v_ma_bt.iloc[i] * 0.6):
+                        if not use_trend_filter or cp > e_bt.iloc[i]:
+                            instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
+                            profit -= kosten
+            else:
+                high_p = max(high_p, cp)
+                sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
+                if cp < sl_val or sell_t:
+                    w_t = (inzet * (cp / instap) - inzet) - kosten
+                    if w_t > 0: w_t *= 0.9
+                    profit += w_t
+                    pos = False
+
+        signaal = None
+        cp, catr, crsi = p.iloc[-1], atr_series.iloc[-1], rsi_val.iloc[-1]
+        l_rsi = "💎 CRSI" if is_hyper else "📊 RSI"
+        y_l = f"[Chart](https://finance.yahoo.com/quote/{ticker})"
+        
+        b_now = (macd_line.iloc[-1] > signal_line.iloc[-1] and macd_line.iloc[-2] <= signal_line.iloc[-2]) if use_macd else (f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2])
+        s_now = (macd_line.iloc[-1] < signal_line.iloc[-1] and macd_line.iloc[-2] >= signal_line.iloc[-2]) if use_macd else (f_line.iloc[-1] < s_line.iloc[-1] and f_line.iloc[-2] >= s_line.iloc[-2])
+
+        if b_now:
+            if adx.iloc[-1] > 15 and v.iloc[-1] > (vol_ma.iloc[-1] * 0.6):
+                if not use_trend_filter or cp > ema200.iloc[-1]:
+                    signaal = f"🟢 *KOOP* | €{cp:.2f} | {l_rsi}: {crsi:.1f} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}"
+        elif s_now:
+            signaal = f"🔴 *VERKOOP* | €{cp:.2f} | {l_rsi}: {crsi:.1f} | {y_l}"
+
+        return profit, signaal
+    except:
+        return 0, None
+
+def voer_lijst_uit(bestandsnaam, label, naam_sector):
+    if not os.path.exists(bestandsnaam): return
+    nu = datetime.now().strftime("%d/%m/%Y %H:%M")
+    with open(bestandsnaam, 'r') as f:
+        content = f.read().replace('\n', ',').replace('$', '')
+        tickers = sorted(list(set([t.strip().upper() for t in content.split(',') if t.strip()])))
+
+    inzet = 2500.0
+    res = {"T": 0, "S": 0, "HT": 0, "HS": 0, "M": 0}
+    sig = {"T": [], "S": [], "HT": [], "HS": [], "M": []}
+
+    strat_list = [
+        ("T", (50, 200, True, False, False)),
+        ("S", (20, 50, True, False, False)),
+        ("HT", (9, 21, True, True, False)),
+        ("HS", (9, 21, False, True, False)),
+        ("M", (12, 26, True, False, True))
+    ]
+
+    for t in tickers:
+        print(f"Analyseer {t}...")
+        for k, prm in strat_list:
+            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2], is_hyper=prm[3], use_macd=prm[4])
+            res[k] += p
+            if s: sig[k].append(f"• `{t}`: {s}")
+
+    def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
+
+    rapport = [
+        f"📊 *{label} {naam_sector} RAPPORT*",
+        f"_{nu}_",
+        "----------------------------------",
+        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
+        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
+        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
+        f"📈 *MACD Trend:* €{100000 + res['M']:,.0f}",
+        "",
+        "🛡️ *SIGNALEN TRAAG:*", get_s(sig["T"]),
+        "",
+        "🎯 *SIGNALEN SNEL:*", get_s(sig["S"]),
+        "",
+        "📈 *SIGNALEN HYPER TREND:*", get_s(sig["HT"]),
+        "",
+        "⚡ *SIGNALEN HYPER SCALP:*", get_s(sig["HS"]),
+        "",
+        "📊 *SIGNALEN MACD:*", get_s(sig["M"]),
+        "",
+        "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold. CRSI: >90 overbought, <10 oversold_"
+    ]
+    stuur_telegram("\n".join(rapport))
+
+def main():
+    sectoren = {"01": "Hoogland"}
+    for nr, naam in sectoren.items():
+        try:
+            voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
+        except:
+            pass
+        time.sleep(2)
+
+if __name__ == "__main__":
+    main()
