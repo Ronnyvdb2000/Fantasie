@@ -25,115 +25,98 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         if df.empty or len(df) < 260: return 0, None
         
         # Data extractie
-        if isinstance(df.columns, pd.MultiIndex):
-            p = df['Close'][ticker].ffill().astype(float)
-            h = df['High'][ticker].ffill().astype(float)
-            l = df['Low'][ticker].ffill().astype(float)
-        else:
-            p, h, l = df['Close'].ffill(), df['High'].ffill(), df['Low'].ffill()
+        p = df['Close'].ffill().astype(float)
+        if isinstance(p, pd.DataFrame): p = p.iloc[:, 0]
+        h = df['High'].ffill().astype(float)
+        if isinstance(h, pd.DataFrame): h = h.iloc[:, 0]
+        l = df['Low'].ffill().astype(float)
+        if isinstance(l, pd.DataFrame): l = l.iloc[:, 0]
 
-        # STANDAARD INDICATOREN
+        # INDICATOREN
         f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
         s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
         ema200 = p.ewm(span=200, adjust=False).mean()
         ma5 = p.rolling(window=5).mean()
         
-        # RSI2 BEREKENING (Ultra-simpel & Robuust)
+        # RSI2 (Robuuste versie)
         delta = p.diff()
-        gain = delta.where(delta > 0, 0).rolling(window=2).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=2).mean()
-        rs = gain / (loss + 1e-10)
-        rsi_series = 100 - (100 / (1 + rs))
+        gain = delta.clip(lower=0)
+        loss = -1 * delta.clip(upper=0)
+        avg_gain = gain.rolling(window=2).mean()
+        avg_loss = loss.rolling(window=2).mean()
+        rs = avg_gain / (avg_loss + 1e-10)
+        rsi2 = 100 - (100 / (1 + rs))
 
         # ATR
         tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
         atr = tr.rolling(14).mean()
 
-        # BACKTEST CUTOFF
-        p_bt = p.iloc[-252:]
-        f_bt = f_line.iloc[-252:]
-        s_bt = s_line.iloc[-252:]
-        e_bt = ema200.iloc[-252:]
-        r_bt = rsi_series.iloc[-252:]
-        m_bt = ma5.iloc[-252:]
-        a_bt = atr.iloc[-252:]
-        
-        profit, pos, instap, sl_val = 0, False, 0, 0
+        # BACKTEST (Laatste 252 dagen)
+        # We pakken de index van de laatste 252 dagen
+        idx = p.index[-252:]
+        profit, pos, instap, sl_val = 0.0, False, 0.0, 0.0
         kosten = 15.0 + (inzet * 0.0035)
 
-        for i in range(1, len(p_bt)):
-            cp = float(p_bt.iloc[i])
+        for d in idx:
+            cp = float(p.loc[d])
+            cr2 = float(rsi2.loc[d])
+            cma5 = float(ma5.loc[d])
+            catr = float(atr.loc[d])
+            cema = float(ema200.loc[d])
+            
             if not pos:
                 if use_mean_rev:
-                    # ZEER RUIME DREMPEL VOOR TEST
-                    if r_bt.iloc[i] < 35: 
-                        instap, sl_val, pos = cp, cp * 0.90, True
+                    # Koop dip onder 25 (Connors)
+                    if cr2 < 25:
+                        instap, sl_val, pos = cp, cp - (2 * catr), True
                         profit -= kosten
                 else:
-                    # DE SUCCESVOLLE HYPER LOGICA
-                    if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
-                        if not use_trend_filter or cp > e_bt.iloc[i]:
-                            instap, sl_val, pos = cp, cp - (2 * a_bt.iloc[i]), True
+                    # Hyper/Trend logica
+                    if f_line.loc[d] > s_line.loc[d]:
+                        if not use_trend_filter or cp > cema:
+                            instap, sl_val, pos = cp, cp - (2 * catr), True
                             profit -= kosten
             else:
-                # EXIT
+                # Verkoop logica
+                sell = False
                 if use_mean_rev:
-                    if cp > m_bt.iloc[i] or cp < sl_val:
-                        profit += (inzet * (cp / instap) - inzet) - kosten
-                        pos = False
+                    if cp > cma5 or cp < sl_val: sell = True
                 else:
-                    if f_bt.iloc[i] < s_bt.iloc[i] or cp < sl_val:
-                        w = (inzet * (cp / instap) - inzet) - kosten
-                        if w > 0: w *= 0.9
-                        profit += w
-                        pos = False
-
-        signaal = None
-        if use_mean_rev and rsi_series.iloc[-1] < 35:
-            signaal = f"📉 *DIP* | €{p.iloc[-1]:.2f}"
-        elif not use_mean_rev and f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
-            signaal = f"🟢 *TREND* | €{p.iloc[-1]:.2f}"
-            
-        return profit, signaal
+                    if f_line.loc[d] < s_line.loc[d] or cp < sl_val: sell = True
+                
+                if sell:
+                    winst = (inzet * (cp / instap) - inzet) - kosten
+                    if winst > 0: winst *= 0.90
+                    profit += winst
+                    pos = False
+                    
+        return profit, None
     except: return 0, None
 
 def voer_lijst_uit(bestandsnaam, label, naam_sector):
     if not os.path.exists(bestandsnaam): return
-    nu = datetime.now().strftime("%d/%m/%Y %H:%M")
     with open(bestandsnaam, 'r') as f:
         tickers = [t.strip().upper() for t in f.read().replace('\n', ',').split(',') if t.strip()]
 
     inzet = 2500.0
     res = {"T": 0, "S": 0, "HT": 0, "HS": 0, "MR": 0}
-    sig = []
 
     for t in tickers:
-        params = [
-            ("T", (50, 200, True, False, False)),
-            ("S", (20, 50, True, False, False)),
-            ("HT", (9, 21, True, True, False)),
-            ("HS", (9, 21, False, True, False)),
-            ("MR", (0, 0, False, False, True))
-        ]
-        for k, prm in params:
-            p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2], is_hyper=prm[3], use_mean_rev=prm[4])
+        print(f"Check {t}...")
+        for k, prm in [("T",(50,200,True,False,False)), ("S",(20,50,True,False,False)), ("HT",(9,21,True,True,False)), ("HS",(9,21,False,True,False)), ("MR",(0,0,False,False,True))]:
+            p, _ = bereken_alles(t, inzet, prm[0], prm[1], prm[2], is_hyper=prm[3], use_mean_rev=prm[4])
             res[k] += p
-            if k == "MR" and s: sig.append(f"• `{t}`: {s}")
 
-    rapport = [
-        f"📊 *{label} {naam_sector}* - {nu}",
-        "----------------------------------",
-        f"🐢 *Traag:* €{100000 + res['T']:,.0f}",
-        f"⚡ *Snel:* €{100000 + res['S']:,.0f}",
-        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
-        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
-        f"📉 *Mean Reversion:* €{100000 + res['MR']:,.0f}",
-        "", "📉 *DIPS:*", "\n".join(sig[:10]) or "Geen"
-    ]
-    stuur_telegram("\n".join(rapport))
+    rapport = (
+        f"📊 *{label} {naam_sector}*\n"
+        f"----------------------------------\n"
+        f"🐢 Traag: €{100000 + res['T']:,.0f}\n"
+        f"⚡ Snel: €{100000 + res['S']:,.0f}\n"
+        f"🚀 Hyper T: €{100000 + res['HT']:,.0f}\n"
+        f"🔥 Hyper S: €{100000 + res['HS']:,.0f}\n"
+        f"📉 Mean Rev: €{100000 + res['MR']:,.0f}"
+    )
+    stuur_telegram(rapport)
 
 if __name__ == "__main__":
-    sectoren = {"01":"Hoogland"}
-    for nr, naam in sectoren.items():
-        voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
-        time.sleep(1)
+    voer_lijst_uit("tickers_01.txt", "01", "Hoogland")
