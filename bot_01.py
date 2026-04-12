@@ -113,7 +113,7 @@ def main():
 
     # EXACTE WEERGAVE VAN BOT 2
     rapport = [
-        "📊 *Macrotrends RAPPORT*",
+        "📊 *Hoogland RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
