@@ -10,17 +10,20 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 def stuur_telegram(bericht):
-    if not TOKEN or not CHAT_ID: return False
+    if not TOKEN or not CHAT_ID: 
+        print("Telegram configuratie ontbreekt (TOKEN of CHAT_ID).")
+        return False
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     try:
-        # We gebruiken chunking voor het geval het rapport erg lang wordt door 5 jaar aan trades
+        # Chunking voor lange rapporten (max 4000 tekens per bericht)
         if len(bericht) > 4000:
             for i in range(0, len(bericht), 4000):
                 requests.post(url, data={"chat_id": CHAT_ID, "text": bericht[i:i+4000], "parse_mode": "Markdown"})
         else:
             requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=10)
         return True
-    except:
+    except Exception as e:
+        print(f"Fout bij versturen Telegram: {e}")
         return False
 
 def voer_backtest_uit(ticker, inzet=2500):
@@ -28,7 +31,7 @@ def voer_backtest_uit(ticker, inzet=2500):
     BEURSTAKS_PCT = 0.0035
     MEERWAARDE_TAX_PCT = 0.10
 
-    # Haal 7 jaar data op (voldoende voor 5 jaar test + 200 dagen SMA historie)
+    # Haal data op (7 jaar om voldoende buffer te hebben voor 200-dagen SMA)
     df = yf.download(ticker, period="7y", interval="1d", progress=False)
     if df.empty or len(df) < 200: return None, []
 
@@ -49,15 +52,17 @@ def voer_backtest_uit(ticker, inzet=2500):
         s50_oud = test_periode['SMA50'].iloc[i-1]
         s200_oud = test_periode['SMA200'].iloc[i-1]
         prijs = float(test_periode['Close'].iloc[i])
-        datum = test_periode.index[i].strftime('%d-%m-%Y')
+        
+        # --- DATUM FORMAAT AANGEPAST ---
+        datum = test_periode.index[i].strftime('%d/%m/%Y') 
 
-        # KOOP
+        # KOOP SIGNAL (Golden Cross)
         if not positie and s50_nu > s200_nu and s50_oud <= s200_oud:
             koop_prijs = prijs
             positie = True
             trades_log.append(f"🔵 *{ticker} KOOP*: {datum} | ${prijs:.2f}")
 
-        # VERKOOP
+        # VERKOOP SIGNAL (Death Cross)
         elif positie and s50_nu < s200_nu and s50_oud >= s200_oud:
             bruto_waarde = inzet * (prijs / koop_prijs)
             verkoop_kosten = VASTE_KOST + (bruto_waarde * BEURSTAKS_PCT)
@@ -71,6 +76,7 @@ def voer_backtest_uit(ticker, inzet=2500):
             trades_log.append(f"🔴 *{ticker} VERK*: {datum} | ${prijs:.2f} | Netto: €{netto:.2f}")
             positie = False
 
+    # Afsluiting: als we nog in een positie zitten, rekenen we de huidige waarde uit
     if positie:
         laatste_prijs = float(test_periode['Close'].iloc[-1])
         bruto = inzet * (laatste_prijs / koop_prijs)
@@ -79,15 +85,21 @@ def voer_backtest_uit(ticker, inzet=2500):
     return huidig_saldo, trades_log
 
 def main():
+    print("Start analyse...")
     stuur_telegram("⏳ *Lange Termijn Analyse:* 5 jaar historie wordt berekend...")
 
     start_kapitaal = 50000
     inzet_per_aandeel = 2500
     
+    # Lees tickers uit bestand of gebruik default lijst
     try:
-        with open('aandelen.txt', 'r') as f:
-            tickers = [line.strip() for line in f if line.strip()]
-    except:
+        if os.path.exists('aandelen.txt'):
+            with open('aandelen.txt', 'r') as f:
+                tickers = [line.strip() for line in f if line.strip()]
+        else:
+            tickers = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'AMZN']
+    except Exception as e:
+        print(f"Fout bij lezen bestand: {e}")
         tickers = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'AMZN']
 
     alle_trades = []
@@ -100,7 +112,7 @@ def main():
             if eind_waarde is not None:
                 totaal_netto_resultaat += (eind_waarde - inzet_per_aandeel)
                 if len(trade_history) > 0:
-                    # We voegen alleen de laatste 5 trades per aandeel toe om Telegram niet te overbelasten
+                    # Voeg de laatste 5 trades per aandeel toe aan de lijst
                     alle_trades.extend(trade_history[-5:])
         except Exception as e:
             print(f"Fout bij {t}: {e}")
@@ -108,15 +120,18 @@ def main():
     eind_totaal = start_kapitaal + totaal_netto_resultaat
     rendement = ((eind_totaal/start_kapitaal)-1)*100
     
+    # Rapport samenstellen
     rapport = f"📊 *RESULTAAT LAATSTE 5 JAAR*\n"
     rapport += f"💰 Start: €{start_kapitaal:,.2f}\n"
     rapport += f"🏦 Kost: €15 + 0.35% | 🏛️ Tax: 10%\n\n"
-    rapport += "*LAATSTE TRADES (Selectie):*\n" + ("\n".join(alle_trades) if alle_trades else "_Geen trades._")
+    rapport += "*LAATSTE TRADES (Selectie):*\n"
+    rapport += "\n".join(alle_trades) if alle_trades else "_Geen trades gevonden in deze periode._"
     rapport += f"\n\n🏁 *EINDSTAND: €{eind_totaal:,.2f}*"
     rapport += f"\n📈 Totaal Rendement: {rendement:.2f}%"
     rapport += f"\n📅 Gem. per jaar: {(rendement/5):.2f}%"
     
     stuur_telegram(rapport)
+    print("Analyse voltooid en verstuurd.")
 
 if __name__ == "__main__":
     main()
