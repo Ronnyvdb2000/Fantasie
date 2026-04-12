@@ -24,13 +24,13 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         df = yf.download(ticker, period="3y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 260: return 0, None
         
-        # Consistent data extractie (zoals de allereerste versie)
+        # Harde fix voor data kolommen
         if isinstance(df.columns, pd.MultiIndex):
-            p = df['Close'][ticker].dropna().astype(float)
-            h = df['High'][ticker].dropna().astype(float)
-            l = df['Low'][ticker].dropna().astype(float)
+            p = df['Close'][ticker].ffill().astype(float)
+            h = df['High'][ticker].ffill().astype(float)
+            l = df['Low'][ticker].ffill().astype(float)
         else:
-            p, v, h, l = df['Close'], df['Volume'], df['High'], df['Low']
+            p, h, l = df['Close'].ffill().astype(float), df['High'].ffill().astype(float), df['Low'].ffill().astype(float)
 
         # INDICATOREN
         f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
@@ -38,42 +38,48 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
         ema200 = p.ewm(span=200, adjust=False).mean()
         ma5 = p.rolling(window=5).mean()
         
-        # RSI2 voor Mean Reversion
-        delta = p.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(2).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(2).mean()
-        rsi2 = 100 - (100 / (1 + (gain / (loss + 1e-10))))
+        # Eenvoudige RSI2 berekening die ALTIJD werkt
+        diff = p.diff()
+        up = diff.clip(lower=0)
+        down = -1 * diff.clip(upper=0)
+        ma_up = up.rolling(window=2).mean()
+        ma_down = down.rolling(window=2).mean()
+        rs = ma_up / (ma_down + 1e-10)
+        rsi2 = 100 - (100 / (1 + rs))
 
-        # ATR voor Stop Loss
+        # ATR
         tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
         atr = tr.rolling(14).mean()
 
-        # BACKTEST
-        p_bt, f_bt, s_bt, e200_bt, r2_bt, ma5_bt, atr_bt = p.iloc[-252:], f_line.iloc[-252:], s_line.iloc[-252:], ema200.iloc[-252:], rsi2.iloc[-252:], ma5.iloc[-252:], atr.iloc[-252:]
+        # BACKTEST DATA
+        p_bt = p.iloc[-252:]
+        f_bt = f_line.iloc[-252:]
+        s_bt = s_line.iloc[-252:]
+        e_bt = ema200.iloc[-252:]
+        r2_bt = rsi2.iloc[-252:]
+        m5_bt = ma5.iloc[-252:]
+        a_bt = atr.iloc[-252:]
         
-        profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
+        profit, pos, instap, sl_val = 0, False, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
 
-        for i in range(1, len(p_bt)):
+        for i in range(2, len(p_bt)):
             cp = float(p_bt.iloc[i])
             if not pos:
-                # KOOP LOGICA
+                # MEAN REVERSION: RSI2 < 25 (zeer ruim)
                 if use_mean_rev:
-                    buy = r2_bt.iloc[i] < 25 # Geen extra filters voor MR nu
-                else:
-                    buy = f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]
-                    if use_trend_filter: buy = buy and cp > e200_bt.iloc[i]
-                
-                if buy:
-                    instap, high_p, sl_val, pos = cp, cp, cp - (2 * atr_bt.iloc[i]), True
-                    profit -= kosten
+                    if r2_bt.iloc[i] < 25:
+                        instap, sl_val, pos = cp, cp - (2 * a_bt.iloc[i]), True
+                        profit -= kosten
+                # TREND/HYPER
+                elif f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
+                    if not use_trend_filter or cp > e_bt.iloc[i]:
+                        instap, sl_val, pos = cp, cp - (2 * a_bt.iloc[i]), True
+                        profit -= kosten
             else:
-                # VERKOOP LOGICA
-                high_p = max(high_p, cp)
-                sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
-                
+                # EXIT
                 if use_mean_rev:
-                    sell = cp > ma5_bt.iloc[i] or cp < sl_val
+                    sell = cp > m5_bt.iloc[i] or cp < sl_val
                 else:
                     sell = f_bt.iloc[i] < s_bt.iloc[i] or cp < sl_val
                 
@@ -83,11 +89,12 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False, is_hyper=False, u
                     profit += w
                     pos = False
 
+        # Signaal vandaag
         signaal = None
         if use_mean_rev and rsi2.iloc[-1] < 25:
-            signaal = f"📉 *MR* | €{p.iloc[-1]:.2f}"
+            signaal = f"📉 *MR DIP* | €{p.iloc[-1]:.2f} (RSI2: {rsi2.iloc[-1]:.1f})"
         elif not use_mean_rev and f_line.iloc[-1] > s_line.iloc[-1] and f_line.iloc[-2] <= s_line.iloc[-2]:
-            signaal = f"🟢 *KOOP* | €{p.iloc[-1]:.2f}"
+            signaal = f"🟢 *TREND* | €{p.iloc[-1]:.2f}"
             
         return profit, signaal
     except: return 0, None
@@ -100,21 +107,13 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
 
     inzet = 2500.0
     res = {"T": 0, "S": 0, "HT": 0, "HS": 0, "MR": 0}
-    sig = {"T":[], "S":[], "HT":[], "HS":[], "MR":[]}
+    sig = {"MR": []}
 
     for t in tickers:
-        # Hier staan de exacte succesvolle parameters van je eerste goede run
-        params = [
-            ("T", (50, 200, True, False, False)),
-            ("S", (20, 50, True, False, False)),
-            ("HT", (9, 21, True, True, False)), # EMA 9/21 met Trend Filter
-            ("HS", (9, 21, False, True, False)), # EMA 9/21 zonder Trend Filter
-            ("MR", (0, 0, False, False, True)) # Mean Reversion
-        ]
-        for k, prm in params:
+        for k, prm in [("T",(50,200,True,False,False)), ("S",(20,50,True,False,False)), ("HT",(9,21,True,True,False)), ("HS",(9,21,False,True,False)), ("MR",(0,0,False,False,True))]:
             p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2], is_hyper=prm[3], use_mean_rev=prm[4])
             res[k] += p
-            if s: sig[k].append(f"• `{t}`: {s}")
+            if k == "MR" and s: sig["MR"].append(f"• `{t}`: {s}")
 
     rapport = [
         f"📊 *{label} {naam_sector}* - {nu}",
@@ -123,7 +122,8 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
         f"⚡ *Snel:* €{100000 + res['S']:,.0f}",
         f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
         f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
-        f"📉 *Mean Reversion:* €{100000 + res['MR']:,.0f}"
+        f"📉 *Mean Reversion:* €{100000 + res['MR']:,.0f}",
+        "", "📉 *DIP SIGNALEN:*", "\n".join(sig["MR"]) or "Geen actie"
     ]
     stuur_telegram("\n".join(rapport))
 
