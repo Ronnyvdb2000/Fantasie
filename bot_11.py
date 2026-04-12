@@ -3,119 +3,84 @@ import pandas as pd
 import os
 import requests
 
-# --- CONFIGURATIE (SAXO + 10% OPT-IN) ---
-TOKEN = os.getenv('TELEGRAM_TOKEN')
-CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+# --- SAXO BOEKHOUDING CONFIGURATIE ---
 START_KAPITAAL = 10000.0
-INZET_PER_TRADE = 2000.0
-COMMISSIE = 2.0           # Saxo Bronze
-BEURSTAKS = 0.0035        # TOB
-BELASTING_OPT_IN = 0.10   # Jouw 10% opt-in voor meerwaardebelasting
+INZET_PER_TRADE = 2000.0   # Maximaal 5 posities tegelijk
+COMMISSIE = 2.0            # Saxo Bronze tarief
+BEURSTAKS = 0.0035         # Belgische TOB
+BELASTING_OPT_IN = 0.10    # Jouw 10% opt-in meerwaardereserve
 
-def stuur_telegram(bericht):
-    if not TOKEN or not CHAT_ID: return
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    try: requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=15)
-    except: pass
+def bereken_indicatoren(p):
+    # De 9/21 EMA en 200 EMA logica uit jouw Bot 01
+    ema9 = p.ewm(span=9, adjust=False).mean()
+    ema21 = p.ewm(span=21, adjust=False).mean()
+    ema200 = p.ewm(span=200, adjust=False).mean()
+    return pd.DataFrame({'p': p, 'ema9': ema9, 'ema21': ema21, 'ema200': ema200})
 
-def bereken_indicatoren(df, ticker):
-    try:
-        if isinstance(df.columns, pd.MultiIndex):
-            p = df['Close'][ticker].ffill().astype(float)
-        else:
-            p = df['Close'].ffill().astype(float)
-        
-        return pd.DataFrame({
-            'p': p,
-            'ema200': p.ewm(span=200, adjust=False).mean(),
-            'ema9': p.ewm(span=9, adjust=False).mean(), 
-            'ema21': p.ewm(span=21, adjust=False).mean()
-        }, index=df.index)
-    except: return None
+def run_saxo_boekhouding(bestandsnaam):
+    # 1. Tickers laden
+    with open(bestandsnaam, 'r') as f:
+        tickers = [t.strip().upper() for t in f.read().replace('\n', ',').replace(';', ',').split(',') if t.strip()]
 
-def laad_alle_tickers():
-    alle = set()
-    for i in range(1, 10):
-        fname = f"tickers_0{i}.txt"
-        if os.path.exists(fname):
-            with open(fname, 'r') as f:
-                for t in f.read().replace('\n', ',').replace(';', ',').split(','):
-                    ticker = t.strip().upper()
-                    if ticker: alle.add(ticker)
-    return list(alle)
-
-def run_multi_lijst_simulatie():
-    tickers = laad_alle_tickers()
-    if not tickers: return
-
+    # 2. Data ophalen
+    raw_data = yf.download(tickers, period="2y", progress=False, auto_adjust=True)
+    
     cash = START_KAPITAAL
-    fiscale_reserve = 0.0  # De 10% opt-in pot
+    fiscale_reserve = 0.0
     portefeuille = {} 
-    winst_stats = 0.0
-    aantal_trades = 0
-
-    try:
-        raw_data = yf.download(tickers, period="2y", progress=False, auto_adjust=True)
-        data = {t: bereken_indicatoren(raw_data, t) for t in tickers if bereken_indicatoren(raw_data, t) is not None}
-    except: return
-
-    if not data: return
-    dagen = data[next(iter(data))].index[-252:]
+    dagen = raw_data.index[-252:] # Laatste jaar backtesten
 
     for d in dagen:
-        # 1. VERKOOP LOGICA
+        # A. VERKOOP (Exit op EMA crossover)
         for t in list(portefeuille.keys()):
-            row = data[t].loc[d]
+            df_t = bereken_indicatoren(raw_data['Close'][t].ffill())
+            row = df_t.loc[d]
             pos = portefeuille[t]
             
+            # Verkoopconditie: EMA9 < EMA21
             if row['ema9'] < row['ema21'] or d == dagen[-1]:
                 bruto = pos['aantal'] * float(row['p'])
                 verkoop_kost = COMMISSIE + (bruto * BEURSTAKS)
-                netto_opbrengst = bruto - verkoop_kost
+                netto = bruto - verkoop_kost
                 
-                trade_resultaat = netto_opbrengst - pos['totale_instap']
-                
-                # De 10% opt-in berekening
-                if trade_resultaat > 0:
-                    inhouding = trade_resultaat * BELASTING_OPT_IN
+                winst = netto - pos['totale_instap']
+                if winst > 0:
+                    inhouding = winst * BELASTING_OPT_IN
                     fiscale_reserve += inhouding
-                    trade_resultaat -= inhouding
+                    winst -= inhouding
                 
-                cash += (pos['totale_instap'] + trade_resultaat)
-                winst_stats += trade_resultaat
-                aantal_trades += 1
+                cash += (pos['totale_instap'] + winst)
                 del portefeuille[t]
 
-        # 2. AANKOOP LOGICA (Alleen Trend / HS)
-        totale_kost = INZET_PER_TRADE + COMMISSIE + (INZET_PER_TRADE * BEURSTAKS)
-
-        for t, df in data.items():
-            if d not in df.index or t in portefeuille: continue
-            if cash < totale_kost: break 
+        # B. AANKOOP (Entry op EMA crossover + EMA200 filter)
+        kost_per_aankoop = INZET_PER_TRADE + COMMISSIE + (INZET_PER_TRADE * BEURSTAKS)
+        
+        for t in tickers:
+            if t in portefeuille or cash < kost_per_aankoop: continue
             
-            row = df.loc[d]
-            cp = float(row['p'])
+            df_t = bereken_indicatoren(raw_data['Close'][t].ffill())
+            if d not in df_t.index: continue
             
-            if cp > row['ema200'] and row['ema9'] > row['ema21']:
-                prev_ema9 = df['ema9'].loc[:d].iloc[-2]
-                prev_ema21 = df['ema21'].loc[:d].iloc[-2]
-                
-                if prev_ema9 <= prev_ema21:
+            row = df_t.loc[d]
+            prev_row = df_t.shift(1).loc[d]
+            
+            # De Hyper T logica: EMA9 kruist EMA21 naar boven EN prijs > EMA200
+            if row['p'] > row['ema200']:
+                if row['ema9'] > row['ema21'] and prev_row['ema9'] <= prev_row['ema21']:
                     portefeuille[t] = {
-                        'aantal': INZET_PER_TRADE / cp,
-                        'totale_instap': totale_kost
+                        'aantal': INZET_PER_TRADE / row['p'],
+                        'totale_instap': kost_per_aankoop
                     }
-                    cash -= totale_kost
+                    cash -= kost_per_aankoop
 
-    rapport = (
-        f"🌍 *SAXO BOT (10% OPT-IN)*\n"
-        f"Beschikbaar Cash: *€{cash:,.2f}*\n"
-        f"🏦 Fiscale Reserve (10%): €{fiscale_reserve:,.2f}\n"
-        f"--------------------------\n"
-        f"📈 Netto winst (na 10%): €{winst_stats:,.2f}\n"
-        f"🔄 Aantal trades: {aantal_trades}\n"
-    )
-    stuur_telegram(rapport)
+    # Eindresultaat berekenen
+    totaal_waarde = cash + sum([pos['aantal'] * raw_data['Close'][t].iloc[-1] for t, pos in portefeuille.items()])
+    
+    print(f"--- RESULTAAT SAXO BOEKHOUDING ---")
+    print(f"Startkapitaal: €{START_KAPITAAL:,.2f}")
+    print(f"Eindwaarde:    €{totaal_waarde:,.2f}")
+    print(f"Netto Winst:   €{totaal_waarde - START_KAPITAAL:,.2f}")
+    print(f"Fisc. Reserve: €{fiscale_reserve:,.2f}")
 
 if __name__ == "__main__":
-    run_multi_lijst_simulatie()
+    run_saxo_boekhouding("tickers_01.txt")
