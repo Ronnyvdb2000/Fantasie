@@ -2,117 +2,129 @@ import yfinance as yf
 import pandas as pd
 import os
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # --- CONFIGURATIE ---
 START_KAPITAAL = 100000.0
 INZET_PER_TRADE = 2500.0
-COMMISSIE = 2.0           # Saxo
-BEURSTAKS = 0.0035        # TOB
-BELASTING_OPT_IN = 0.10    # 10% reserve
+COMMISSIE = 2.0
+BEURSTAKS = 0.0035
+BELASTING_OPT_IN = 0.10
 
-def bereken_alle_indicatoren(df):
-    """Behoudt exact jouw berekeningen uit de originele bot"""
-    p = df.ffill().astype(float)
+def stuur_telegram(bericht):
+    if not TOKEN or not CHAT_ID: return
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    try: requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=15)
+    except: pass
+
+def bereken_indicatoren_bulk(df_close):
+    """Berekent alle indicatoren voor alle tickers in één keer"""
     # Trend MA's
-    sma50 = p.rolling(window=50).mean()
-    sma200 = p.rolling(window=200).mean()
-    sma20 = p.rolling(window=20).mean()
+    sma50 = df_close.rolling(window=50).mean()
+    sma200 = df_close.rolling(window=200).mean()
+    sma20 = df_close.rolling(window=20).mean()
     # Hyper EMA's
-    ema9 = p.ewm(span=9, adjust=False).mean()
-    ema21 = p.ewm(span=21, adjust=False).mean()
-    ema200 = p.ewm(span=200, adjust=False).mean()
-    # MR Logica
-    delta = p.diff()
-    gain = delta.where(delta > 0, 0).rolling(window=2).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=2).mean()
+    ema9 = df_close.ewm(span=9, adjust=False).mean()
+    ema21 = df_close.ewm(span=21, adjust=False).mean()
+    ema200_e = df_close.ewm(span=200, adjust=False).mean()
+    # MR Logica (RSI2)
+    delta = df_close.diff()
+    gain = delta.clip(lower=0).rolling(window=2).mean()
+    loss = (-delta.clip(upper=0)).rolling(window=2).mean()
     rsi2 = 100 - (100 / (1 + (gain / (loss + 1e-10))))
-    ma5 = p.rolling(window=5).mean()
+    ma5 = df_close.rolling(window=5).mean()
     
-    return pd.DataFrame({
-        'p': p, 'sma50': sma50, 'sma200': sma200, 'sma20': sma20,
-        'ema9': ema9, 'ema21': ema21, 'ema200_e': ema200, 
+    return {
+        'p': df_close, 'sma50': sma50, 'sma200': sma200, 'sma20': sma20,
+        'ema9': ema9, 'ema21': ema21, 'ema200_e': ema200_e, 
         'rsi2': rsi2, 'ma5': ma5
-    })
+    }
 
 def run_geavanceerde_boekhouding(bestandsnaam):
     with open(bestandsnaam, 'r') as f:
         tickers = [t.strip().upper() for t in f.read().replace('\n', ',').split(',') if t.strip()]
 
-    raw_close = yf.download(tickers, period="2y", progress=False, auto_adjust=True)['Close']
+    stuur_telegram(f"🚀 Start simulatie voor {len(tickers)} tickers...")
+
+    # STAP 1: Bulk download (Verhelpt de 35 minuten wachttijd)
+    data_raw = yf.download(tickers, period="2y", progress=False, auto_adjust=True)['Close']
+    ind = bereken_indicatoren_bulk(data_raw)
     
     cash = START_KAPITAAL
     fiscale_reserve = 0.0
     portefeuille = {} 
-    dagen = raw_close.index[-252:]
+    dagen = data_raw.index[-252:]
 
+    # STAP 2: Simulatie loop
     for d in dagen:
-        # 1. VERKOOP LOGICA (Eerst cash vrijmaken)
+        # VERKOOP
         for t in list(portefeuille.keys()):
-            df_t = bereken_alle_indicatoren(raw_close[t])
-            if d not in df_t.index: continue
-            row = df_t.loc[d]
             pos = portefeuille[t]
+            cp = ind['p'][t].loc[d]
             
             sell = False
-            # Exit regels per type uit jouw bot
-            if pos['type'] == 'T' and row['sma50'] < row['sma200']: sell = True
-            elif pos['type'] == 'S' and row['sma20'] < row['sma50']: sell = True
-            elif pos['type'] in ['HT', 'HS'] and row['ema9'] < row['ema21']: sell = True
-            elif pos['type'] == 'MR' and row['p'] > row['ma5']: sell = True
+            if pos['type'] == 'T' and ind['sma50'][t].loc[d] < ind['sma200'][t].loc[d]: sell = True
+            elif pos['type'] == 'S' and ind['sma20'][t].loc[d] < ind['sma50'][t].loc[d]: sell = True
+            elif pos['type'] in ['HT', 'HS'] and ind['ema9'][t].loc[d] < ind['ema21'][t].loc[d]: sell = True
+            elif pos['type'] == 'MR' and cp > ind['ma5'][t].loc[d]: sell = True
             
             if sell or d == dagen[-1]:
-                opbrengst = pos['aantal'] * row['p']
-                kosten = COMMISSIE + (opbrengst * BEURSTAKS)
-                netto = opbrengst - kosten
+                bruto = pos['aantal'] * cp
+                netto = bruto - (COMMISSIE + (bruto * BEURSTAKS))
                 winst = netto - pos['instap_kost']
-                
                 if winst > 0:
-                    inhouding = winst * BELASTING_OPT_IN
-                    fiscale_reserve += inhouding
-                    winst -= inhouding
-                
+                    fiscale_reserve += (winst * BELASTING_OPT_IN)
+                    winst *= (1 - BELASTING_OPT_IN)
                 cash += (pos['instap_kost'] + winst)
                 del portefeuille[t]
 
-        # 2. AANKOOP LOGICA (Volgorde: T > S > HT > HS > MR)
+        # AANKOOP (Prioriteit: T > S > HT > HS > MR)
         kost = INZET_PER_TRADE + COMMISSIE + (INZET_PER_TRADE * BEURSTAKS)
-        
-        # We scannen de strategieën in jouw gewenste volgorde
-        strategie_volgorde = ['T', 'S', 'HT', 'HS', 'MR']
-        
-        for strat in strategie_volgorde:
+        for strat in ['T', 'S', 'HT', 'HS', 'MR']:
             for t in tickers:
-                if t in portefeuille or cash < kost: continue
+                if t in portefeuille or cash < kost or d not in ind['p'][t].index: continue
                 
-                df_t = bereken_alle_indicatoren(raw_close[t])
-                if d not in df_t.index: continue
-                row, prev = df_t.loc[d], df_t.shift(1).loc[d]
+                cp = ind['p'][t].loc[d]
+                idx = ind['p'][t].index.get_loc(d)
+                if idx == 0: continue
                 
                 gekocht = False
-                if strat == 'T' and row['sma50'] > row['sma200'] and prev['sma50'] <= prev['sma200'] and row['p'] > row['ema200_e']:
+                # Traag
+                if strat == 'T' and ind['sma50'][t].iloc[idx] > ind['sma200'][t].iloc[idx] and ind['sma50'][t].iloc[idx-1] <= ind['sma200'][t].iloc[idx-1]:
+                    if cp > ind['ema200_e'][t].iloc[idx]: gekocht = True
+                # Snel
+                elif strat == 'S' and ind['sma20'][t].iloc[idx] > ind['sma50'][t].iloc[idx] and ind['sma20'][t].iloc[idx-1] <= ind['sma50'][t].iloc[idx-1]:
+                    if cp > ind['ema200_e'][t].iloc[idx]: gekocht = True
+                # Hyper T
+                elif strat == 'HT' and ind['ema9'][t].iloc[idx] > ind['ema21'][t].iloc[idx] and ind['ema9'][t].iloc[idx-1] <= ind['ema21'][t].iloc[idx-1]:
+                    if cp > ind['ema200_e'][t].iloc[idx]: gekocht = True
+                # Hyper S
+                elif strat == 'HS' and ind['ema9'][t].iloc[idx] > ind['ema21'][t].iloc[idx] and ind['ema9'][t].iloc[idx-1] <= ind['ema21'][t].iloc[idx-1]:
                     gekocht = True
-                elif strat == 'S' and row['sma20'] > row['sma50'] and prev['sma20'] <= prev['sma50'] and row['p'] > row['ema200_e']:
-                    gekocht = True
-                elif strat == 'HT' and row['ema9'] > row['ema21'] and prev['ema9'] <= prev['ema21'] and row['p'] > row['ema200_e']:
-                    gekocht = True
-                elif strat == 'HS' and row['ema9'] > row['ema21'] and prev['ema9'] <= prev['ema21']: # Geen filter
-                    gekocht = True
-                elif strat == 'MR' and 0 < row['rsi2'] < 30:
+                # Mean Reversion
+                elif strat == 'MR' and 0 < ind['rsi2'][t].iloc[idx] < 30:
                     gekocht = True
 
                 if gekocht:
-                    portefeuille[t] = {'aantal': INZET_PER_TRADE / row['p'], 'instap_kost': kost, 'type': strat}
+                    portefeuille[t] = {'aantal': INZET_PER_TRADE / cp, 'instap_kost': kost, 'type': strat}
                     cash -= kost
 
-    # Resultaat
-    open_waarde = sum([p['aantal'] * raw_close[t].iloc[-1] for t, p in portefeuille.items()])
-    totaal = cash + open_waarde
-    print(f"--- 📊 EINDBALANS (Start €100k) ---")
-    print(f"Netto Eindwaarde: €{totaal:,.2f}")
-    print(f"Fiscale Reserve:  €{fiscale_reserve:,.2f}")
-    print(f"Rendement:        {((totaal/START_KAPITAAL)-1)*100:.2f}%")
+    # FINALE BEREKENING
+    open_w = sum([p['aantal'] * data_raw[t].iloc[-1] for t, p in portefeuille.items()])
+    totaal = cash + open_w
+    
+    rapport = (
+        f"🏁 *SIMULATIE VOLTOOID*\n\n"
+        f"💰 Eindwaarde: *€{totaal:,.2f}*\n"
+        f"🏦 Reserve (10%): €{fiscale_reserve:,.2f}\n"
+        f"📈 Rendement: *{((totaal/START_KAPITAAL)-1)*100:.2f}%*\n"
+        f"💵 Cash over: €{cash:,.2f}"
+    )
+    stuur_telegram(rapport)
 
 if __name__ == "__main__":
     run_geavanceerde_boekhouding("tickers_01.txt")
