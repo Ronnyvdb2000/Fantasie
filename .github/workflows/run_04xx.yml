@@ -1,4 +1,4 @@
-name: "Bot 04: Benelux Scanner (4 regimes)"
+name: "Bot 04: Benelux Scanner x (4 regimes)"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
