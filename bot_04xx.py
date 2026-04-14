@@ -98,7 +98,7 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
-    with open('tickers_04.txt', 'r') as f:
+    with open('tickers_04xx.txt', 'r') as f:
         tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
     inzet = 2500.0
