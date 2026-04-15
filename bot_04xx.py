@@ -145,7 +145,7 @@ def main():
         with open('tickers_04xx.txt', 'r') as f:
             tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
     except FileNotFoundError:
-        print("Bestand tickers_06xx.txt niet gevonden.")
+        print("Bestand tickers_04xx.txt niet gevonden.")
         return
 
     inzet = 2500.0
