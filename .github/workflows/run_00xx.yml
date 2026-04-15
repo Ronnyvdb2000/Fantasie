@@ -1,0 +1,37 @@
+name: "Bot 00: FULL Scanner (01-09) xx"
+
+on:
+  workflow_dispatch: # Handmatige start mogelijk via GitHub UI
+  schedule:
+    # Draait elke 3 uur (00, 03, 06, 09, 12, 15, 18, 21) 
+    # Op de 21ste minuut van het uur
+    # Van maandag (1) t/m zaterdag (6)
+    - cron: '21 */3 * * 1-6'
+
+jobs:
+  run_global:
+    runs-on: ubuntu-latest
+    
+    # Voorkom dat meerdere runs tegelijk draaien als de vorige nog bezig is
+    concurrency:
+      group: scanner-run
+      cancel-in-progress: false
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip' # Versnelt de installatie bij volgende runs
+
+      - name: Bibliotheken installeren
+        run: |
+          pip install yfinance pandas requests python-dotenv numpy
+
+      - name: Voer Globale Bot uit
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_00xx.py 
