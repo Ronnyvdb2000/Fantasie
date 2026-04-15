@@ -7,82 +7,106 @@ from dotenv import load_dotenv
 from datetime import datetime
 import time
 
-# ... (stuur_telegram en check_munger_kwaliteit blijven identiek) ...
+load_dotenv()
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-def bereken_indicatoren_expert(df, s, t, is_hyper):
+def stuur_telegram(bericht):
+    if not TOKEN or not CHAT_ID: return
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=20)
+    except: pass
+
+def check_munger_kwaliteit(ticker_obj):
+    try:
+        info = ticker_obj.info
+        roic = info.get('returnOnCapitalEmployed') or info.get('returnOnAssets', 0)
+        debt_to_equity = info.get('debtToEquity', 150) / 100.0 # Iets ruimer filter
+        if roic > 0.08 and debt_to_equity < 1.2: # Realistischere 2026 criteria
+            return True, roic
+    except: pass
+    return False, 0
+
+def bereken_indicatoren_pullback(df):
     p = df['Close'].ffill()
-    h = df['High'].ffill()
-    l = df['Low'].ffill()
     v = df['Volume'].ffill()
-
-    # Moving Averages
-    f_line = p.rolling(window=s).mean()
-    s_line = p.rolling(window=t).mean()
-    ema200 = p.ewm(span=200, adjust=False).mean()
+    
+    # Gemiddelden
+    sma50 = p.rolling(window=50).mean()
+    sma200 = p.rolling(window=200).mean()
+    vol_ma = v.rolling(window=20).mean()
     
     # RSI (14)
     delta = p.diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rsi = 100 - (100 / (1 + (gain / (loss + 1e-10))))
-
+    
     # ATR voor Stop Loss
-    tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
+    tr = pd.concat([df['High']-df['Low'], abs(df['High']-p.shift()), abs(df['Low']-p.shift())], axis=1).max(axis=1)
     atr = tr.rolling(14).mean()
     
-    return p, f_line, s_line, ema200, rsi, atr
+    return p, sma50, sma200, rsi, atr, v, vol_ma
 
-def voer_lijst_uit_geoptimaliseerd(tickers, naam_sector):
-    res = {"T": 0, "S": 0}
-    sig = {"T": [], "S": []}
+def voer_strategie_uit(tickers, label):
+    nu = datetime.now().strftime("%d/%m/%Y %H:%M")
     inzet = 2500.0
-    bolero_min_fee = 15.0 # Jouw Bolero kostenstructuur
+    bolero_fee = 15.0 + (inzet * 0.0035)
+    
+    total_profit = 0
+    signalen = []
 
     for t in tickers:
         try:
             t_obj = yf.Ticker(t)
-            is_ok, roic, debt = check_munger_kwaliteit(t_obj)
+            is_ok, roic = check_munger_kwaliteit(t_obj)
             if not is_ok: continue
 
-            data = t_obj.history(period="5y")
+            data = t_obj.history(period="2y")
             if len(data) < 200: continue
 
-            # Focus op Traag (50/200) en Snel (20/50)
-            for strat_key, (s_per, t_per) in [("T",(50,200)), ("S",(20,50))]:
-                p, f, s_line, e200, rsi, atr = bereken_indicatoren_expert(data, s_per, t_per, False)
+            p, s50, s200, rsi, atr, vol, v_ma = bereken_indicatoren_pullback(data)
+            
+            # Backtest (252 dagen)
+            profit, pos, instap, sl = 0, False, 0, 0
+            for i in range(150, len(p)): # Start na indicator opbouw
+                cp = p.iloc[i]
                 
-                # Backtest laatste 252 dagen
-                p_bt, f_bt, s_bt, e_bt, r_bt, a_bt = p.iloc[-252:], f.iloc[-252:], s_line.iloc[-252:], e200.iloc[-252:], rsi.iloc[-252:], atr.iloc[-252:]
-                
-                profit, pos, instap, sl_val = 0, False, 0, 0
-                fee = bolero_min_fee + (inzet * 0.0035)
+                # KOOP: Kwaliteit op een dip (RSI < 50) boven de SMA200
+                if not pos:
+                    if cp > s200.iloc[i] and rsi.iloc[i] < 50 and rsi.iloc[i] > 35:
+                        if vol.iloc[i] > v_ma.iloc[i] * 0.8: # Bevestiging van volume
+                            instap, sl, pos = cp, cp - (2.5 * atr.iloc[i]), True
+                            profit -= bolero_fee
+                # VERKOOP: Bij herstel naar RSI > 70 of Trendbreuk
+                else:
+                    if cp < sl or rsi.iloc[i] > 70 or cp < s200.iloc[i]:
+                        profit += (inzet * (cp / instap) - inzet) - bolero_fee
+                        pos = False
+            
+            total_profit += profit
 
-                for i in range(1, len(p_bt)):
-                    cp = p_bt.iloc[i]
-                    # KOOP LOGICA MET MEAN REVERSION FILTER
-                    if not pos:
-                        if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
-                            # FILTER: Alleen kopen als RSI niet 'overbought' is en koers boven EMA200
-                            if r_bt.iloc[i] < 60 and cp > e_bt.iloc[i] * 1.01:
-                                instap = cp
-                                sl_val = cp - (3 * a_bt.iloc[i]) # Ruime SL voor kwaliteit
-                                pos = True
-                                profit -= fee
-                    # VERKOOP LOGICA
-                    else:
-                        if cp < sl_val or f_bt.iloc[i] < s_bt.iloc[i]:
-                            profit += (inzet * (cp / instap) - inzet) - fee
-                            pos = False
-                
-                res[strat_key] += profit
-
-                # Actueel Signaal
-                if f.iloc[-1] > s_line.iloc[-1] and f.iloc[-2] <= s_line.iloc[-2]:
-                    if rsi.iloc[-1] < 65:
-                        sig[strat_key].append(f"• `{t}`: 🟢 KOOP (RSI OK)")
-                elif f.iloc[-1] < s_line.iloc[-1] and f.iloc[-2] >= s_line.iloc[-2]:
-                    sig[strat_key].append(f"• `{t}`: 🔴 VERKOOP")
+            # Actueel Signaal
+            curr_cp, curr_rsi, curr_s200 = p.iloc[-1], rsi.iloc[-1], s200.iloc[-1]
+            if curr_cp > curr_s200 and 35 < curr_rsi < 52:
+                signalen.append(f"• `{t}`: 🔵 *DIP-KOOP* | €{curr_cp:.2f} (RSI: {curr_rsi:.1f})")
+            elif pos and curr_rsi > 68:
+                signalen.append(f"• `{t}`: 🟠 *WINSTNEMING* | €{curr_cp:.2f}")
 
         except: continue
 
-    # (Telegram rapportage logica hier invoegen...)
+    rapport = [
+        f"🏦 *{label} PULLBACK REPORT*",
+        f"_{nu}_",
+        f"💰 *Netto Profit (Backtest):* €{total_profit:,.2f}",
+        "----------------------------------",
+        "*SIGNALEN:*",
+        "\n".join(signalen) if signalen else "Geen actuele kansen."
+    ]
+    stuur_telegram("\n".join(rapport))
+
+# Gebruik de tickers van de 30 Benelux aandelen
+benelux_30 = ["ASML.AS", "ADYEN.AS", "WKL.AS", "LOTB.BR", "ARGX.BR", "REN.AS", "DSFIR.AS", "IMCD.AS", "AZE.BR", "MELE.BR", "SOF.BR", "ACKB.BR", "KINE.BR", "UCB.BR", "DIE.BR", "BFIT.AS", "VGP.BR", "WDP.BR", "AD.AS", "HEIA.AS", "BESI.AS", "ALFEN.AS", "GLPG.AS", "EURN.BR", "ELI.BR", "BAR.BR", "ENX.AS", "NN.AS", "AGS.BR", "RAND.AS"]
+
+voer_strategie_uit(benelux_30, "BENELUX")
