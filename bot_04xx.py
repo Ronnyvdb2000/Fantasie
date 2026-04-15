@@ -18,7 +18,7 @@ def stuur_telegram(bericht):
     except:
         pass
 
-# --- STRATEGIE 1-4: JOUW ORIGINELE VISIE (ADX + TRAILING STOP) ---
+# --- STRATEGIE 1-4: JOUW ORIGINELE VISIE (VOLLEDIG ONGEWIJZIGD) ---
 def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
     try:
         df = yf.download(ticker, period="5y", progress=False, auto_adjust=True)
@@ -85,55 +85,53 @@ def bereken_alles(ticker, inzet, s, t, use_trend_filter=False):
     except:
         return 0, None
 
-# --- STRATEGIE 5: SNIPER MEAN REVERSION ALPHA (BIJGESTUURD) ---
+# --- STRATEGIE 5: POWER REVERSION ALPHA (DE AANGEPASTE VERSIE) ---
 def bereken_mean_reversion_alpha(ticker, inzet):
     try:
         df = yf.download(ticker, period="2y", progress=False, auto_adjust=True)
         if df.empty or len(df) < 200: return 0, None
         
-        if isinstance(df.columns, pd.MultiIndex):
-            p = df['Close'][ticker].dropna().astype(float)
-            v = df['Volume'][ticker].dropna().astype(float)
-        else:
-            p, v = df['Close'], df['Volume']
+        p = df['Close'][ticker].dropna().astype(float) if isinstance(df.columns, pd.MultiIndex) else df['Close']
         
-        # Indicatoren voor Sniper Mean Reversion
+        # Indicatoren
         ma20 = p.rolling(window=20).mean()
         std20 = p.rolling(window=20).std()
-        lower_band = ma20 - (2.5 * std20) # Strengere grens
+        upper_band = ma20 + (2.0 * std20)
+        lower_band = ma20 - (2.2 * std20) 
         ema200 = p.ewm(span=200, adjust=False).mean()
-        vol_ma = v.rolling(window=20).mean()
         
-        # Snelle RSI voor timing
+        # Filter: EMA200 moet stijgend zijn over de laatste 5 dagen
+        ema200_stijgend = ema200.diff(5) > 0
+
+        # RSI 2 (Agressieve entry timing)
         delta = p.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=7).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=7).mean()
-        rsi7 = 100 - (100 / (1 + (gain / (loss + 1e-10))))
+        gain = (delta.where(delta > 0, 0)).rolling(window=2).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=2).mean()
+        rsi2 = 100 - (100 / (1 + (gain / (loss + 1e-10))))
 
         p_bt = p.iloc[-252:]
-        profit, pos, instap = 0, False, 0
+        profit, pos, instap, max_p = 0, False, 0, 0
         kosten = 15.0 + (inzet * 0.0035)
 
         for i in range(20, len(p_bt)):
             cp = p_bt.iloc[i]
-            # Gebruik relatieve index voor indicatoren
             idx = i + (len(p) - 252)
             
             if not pos:
-                # ENTRY: Extreem lage koers + Paniek RSI + Volume bevestiging
-                if cp < lower_band.iloc[idx] and rsi7.iloc[idx] < 25 and v.iloc[idx] > vol_ma.iloc[idx]:
-                    if cp > ema200.iloc[idx]: # Alleen in gezonde lange trend
-                        instap, pos = cp, True
-                        profit -= kosten
+                # ENTRY: Prijs onder band + RSI2 extreem laag + Kwaliteit (stijgende EMA200)
+                if cp < lower_band.iloc[idx] and rsi2.iloc[idx] < 10 and ema200_stijgend.iloc[idx]:
+                    instap, max_p, pos = cp, cp, True
+                    profit -= kosten
             else:
-                # EXIT: Snel herstel naar het gemiddelde of 5% winst
-                if cp >= ma20.iloc[idx] or cp > (instap * 1.05):
+                max_p = max(max_p, cp)
+                # EXIT: 8% Target of Upper Band of 3% Trailing Stop
+                if cp > upper_band.iloc[idx] or cp > (instap * 1.08) or cp < (max_p * 0.97):
                     profit += (inzet * (cp / instap) - inzet) - kosten
                     pos = False
         
         signaal = None
-        if p.iloc[-1] < lower_band.iloc[-1] and rsi7.iloc[-1] < 30:
-            signaal = f"🎯 SNIPER DIP | €{p.iloc[-1]:.2f} (Target: €{ma20.iloc[-1]:.2f})"
+        if p.iloc[-1] < lower_band.iloc[-1] and rsi2.iloc[-1] < 15 and ema200_stijgend.iloc[-1]:
+            signaal = f"🚀 POWER DIP | €{p.iloc[-1]:.2f} (RSI2: {rsi2.iloc[-1]:.0f})"
 
         return profit, signaal
     except:
@@ -141,25 +139,21 @@ def bereken_mean_reversion_alpha(ticker, inzet):
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
-    try:
-        with open('tickers_04xx.txt', 'r') as f:
-            tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
-    except FileNotFoundError:
-        print("Bestand tickers_04xx.txt niet gevonden.")
-        return
+    with open('tickers_06xx.txt', 'r') as f:
+        tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
     inzet = 2500.0
     res = {"T": 0, "S": 0, "HT": 0, "HS": 0, "MRA": 0}
     sig = {"T": [], "S": [], "HT": [], "HS": [], "MRA": []}
 
     for t in tickers:
-        # De 4 originele visies
+        # De 4 ongewijzigde strategieën
         for k, prm in [("T", (50,200,True)), ("S", (20,50,True)), ("HT", (9,21,True)), ("HS", (9,21,False))]:
             p, s = bereken_alles(t, inzet, prm[0], prm[1], prm[2])
             res[k] += p
             if s: sig[k].append(f"• `{t}`: {s}")
         
-        # De nieuwe Sniper Mean Reversion
+        # De aangepaste 5de strategie
         p_mra, s_mra = bereken_mean_reversion_alpha(t, inzet)
         res["MRA"] += p_mra
         if s_mra: sig["MRA"].append(f"• `{t}`: {s_mra}")
@@ -167,19 +161,18 @@ def main():
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Benelux REPORT*",
+        "📊 *Power & AI MULTI-STRAT REPORT*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
         f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
         f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
         f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
-        f"🎯 *Sniper Mean Rev:* €{100000 + res['MRA']:,.0f}",
+        f"💎 *Power Mean Rev:* €{100000 + res['MRA']:,.0f}",
         "----------------------------------",
         "*SIGNALEN TRAAG:*", get_s(sig["T"]),
         "\n*SIGNALEN SNEL:*", get_s(sig["S"]),
-        "\n*SIGNALEN HYPER:*", get_s(sig["HT"]),
-        "\n*SIGNALEN SNIPER:*", get_s(sig["MRA"])
+        "\n*SIGNALEN POWER REV:*", get_s(sig["MRA"])
     ]
     stuur_telegram("\n".join(rapport))
 
