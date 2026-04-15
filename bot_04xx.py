@@ -131,7 +131,7 @@ def bereken_mean_reversion_alpha(ticker, inzet):
 
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
-    # Zorg dat 'tickers_06xx.txt' in de juiste map staat
+    # Zorg dat 'tickers_04xx.txt' in de juiste map staat
     with open('tickers_06xx.txt', 'r') as f:
         tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
 
@@ -154,7 +154,7 @@ def main():
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Power & AI MULTI-REPORT*",
+        "📊 *Benelux xx *",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
