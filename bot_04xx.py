@@ -18,17 +18,17 @@ def stuur_telegram(bericht):
         requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}, timeout=20)
     except: pass
 
-def bereken_indicatoren(df, s, t, is_hyper):
+def bereken_indicatoren(df, s, t, use_trend_filter, is_hyper):
     p = df['Close'].ffill()
     h = df['High'].ffill()
     l = df['Low'].ffill()
-    
-    # Voortschrijdende gemiddelden
+    v = df['Volume'].ffill()
+
     f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
     s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
     ema200 = p.ewm(span=200, adjust=False).mean()
+    vol_ma = v.rolling(window=20).mean()
 
-    # RSI / CRSI Logica
     delta = p.diff()
     if is_hyper:
         rsi3_gain = (delta.where(delta > 0, 0)).rolling(3).mean()
@@ -52,70 +52,25 @@ def bereken_indicatoren(df, s, t, is_hyper):
     tr = pd.concat([h-l, abs(h-p.shift()), abs(l-p.shift())], axis=1).max(axis=1)
     atr = tr.rolling(14).mean()
     
-    return p, f_line, s_line, ema200, rsi_val, atr
+    return p, f_line, s_line, ema200, vol_ma, rsi_val, atr, v
 
-def voer_lijst_uit(tickers):
+def voer_lijst_uit(tickers, naam_sector):
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
     inzet = 2500.0
-    fee = 15.0 + (inzet * 0.0035) 
-    
     res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
+    sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for t in tickers:
         try:
-            # We gebruiken auto_adjust=True voor zuivere koersen
-            data = yf.download(t, period="2y", progress=False, auto_adjust=True)
+            data = yf.download(t, period="5y", progress=False)
             if len(data) < 200: continue
 
-            # De 4 Originele Strategieën
-            strat_config = [
-                ("T", 50, 200, True, False),   # Traag
-                ("S", 20, 50, True, False),    # Snel
-                ("HT", 9, 21, True, True),     # Hyper Trend
-                ("HS", 9, 21, False, True)     # Hyper Scalp
-            ]
-
-            for key, s, t_per, use_trend, is_hyp in strat_config:
-                p, f, s_line, e200, rsi, atr = bereken_indicatoren(data, s, t_per, is_hyp)
+            for key, (s, t_per, use_tr, is_hyp) in [
+                ("T", (50, 200, True, False)), 
+                ("S", (20, 50, True, False)), 
+                ("HT", (9, 21, True, True)), 
+                ("HS", (9, 21, False, True))
+            ]:
+                p, f, s_line, e200, v_ma, rsi, atr, vol = bereken_indicatoren(data, s, t_per, use_tr, is_hyp)
                 
-                pos, instap, sl, profit = False, 0, 0, 0
-                
-                # Backtest venster: Laatste 252 dagen
-                for i in range(len(p)-252, len(p)):
-                    cp = p.iloc[i]
-                    if not pos:
-                        # Koop conditie: Crossover
-                        if f.iloc[i] > s_line.iloc[i] and f.iloc[i-1] <= s_line.iloc[i-1]:
-                            # Trend filter (EMA200) alleen indien gevraagd
-                            if not use_trend or cp > e200.iloc[i]:
-                                instap = cp
-                                sl = cp - (2.5 * atr.iloc[i])
-                                pos = True
-                                profit -= fee
-                    else:
-                        # Verkoop conditie: Crossover terug of Stop Loss
-                        if cp < sl or f.iloc[i] < s_line.iloc[i]:
-                            profit += (inzet * (cp / instap) - inzet) - fee
-                            pos = False
-                
-                res[key] += profit
-
-        except Exception as e:
-            print(f"Fout bij {t}: {e}")
-
-    rapport = [
-        f"📊 *BOT V5.2 - ORIGINELE VISIE*",
-        f"📅 {nu}",
-        "----------------------------------",
-        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
-        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
-        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
-        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
-        "----------------------------------",
-        "_De backtest resultaten zijn nu weer zichtbaar._"
-    ]
-    stuur_telegram("\n".join(rapport))
-
-if __name__ == "__main__":
-    benelux_30 = ["ASML.AS", "ADYEN.AS", "WKL.AS", "LOTB.BR", "ARGX.BR", "REN.AS", "DSFIR.AS", "IMCD.AS", "AZE.BR", "MELE.BR", "SOF.BR", "ACKB.BR", "KINE.BR", "UCB.BR", "DIE.BR", "BFIT.AS", "VGP.BR", "WDP.BR", "AD.AS", "HEIA.AS", "BESI.AS", "ALFEN.AS", "GLPG.AS", "EURN.BR", "ELI.BR", "BAR.BR", "ENX.AS", "NN.AS", "AGS.BR", "RAND.AS"]
-    voer_lijst_uit(benelux_30)
+                p
