@@ -142,7 +142,7 @@ def bereken_mean_reversion_alpha(ticker, inzet):
 def main():
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
     try:
-        with open('tickers_06xx.txt', 'r') as f:
+        with open('tickers_04xx.txt', 'r') as f:
             tickers = list(set([t.strip().upper() for t in f.read().replace('\n', ',').replace('$', '').split(',') if t.strip()]))
     except FileNotFoundError:
         print("Bestand tickers_06xx.txt niet gevonden.")
@@ -167,7 +167,7 @@ def main():
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        "📊 *Power & AI MULTI-STRAT REPORT*",
+        "📊 *Benelux REPORT*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
