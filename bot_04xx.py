@@ -76,4 +76,53 @@ def voer_lijst_uit(tickers, naam_sector):
                 ("T", (20, 50, True, False, True)),   # TRAAG: Nu Mean Reversion V5
                 ("S", (20, 50, True, False, False)),  # SNEL: Origineel
                 ("HT", (9, 21, True, True, False)),   # HYPER TREND: Origineel
-                ("HS", (9, 21, False, True, False))
+                ("HS", (9, 21, False, True, False))   # HYPER SCALP: Origineel
+            ]:
+                p, f, s_line, e200, rsi, atr, vol, v_ma = bereken_indicatoren_vectorized(data, s, t_per, use_tr, is_hyp)
+                
+                pos, instap, sl, profit = False, 0, 0, 0
+                
+                for i in range(len(p)-252, len(p)):
+                    cp = p.iloc[i]
+                    if not pos:
+                        if is_mr: # Mean Reversion Koop
+                            if cp > e200.iloc[i] and cp < f.iloc[i] and rsi.iloc[i] < 40:
+                                instap, sl, pos = cp, cp - (3 * atr.iloc[i]), True
+                                profit -= fee
+                        else: # Originele Trend Koop
+                            if f.iloc[i] > s_line.iloc[i] and f.iloc[i-1] <= s_line.iloc[i-1]:
+                                if not use_tr or cp > e200.iloc[i]:
+                                    instap, sl, pos = cp, cp - (2.5 * atr.iloc[i]), True
+                                    profit -= fee
+                    else:
+                        if is_mr: # Mean Reversion Exit
+                            if cp > s_line.iloc[i] or cp < sl:
+                                profit += (inzet * (cp / instap) - inzet) - fee
+                                pos = False
+                        else: # Originele Trend Exit
+                            if cp < sl or f.iloc[i] < s_line.iloc[i]:
+                                profit += (inzet * (cp / instap) - inzet) - fee
+                                pos = False
+                
+                res[key] += profit
+                
+                # Signalen
+                if is_mr and p.iloc[-1] > e200.iloc[-1] and p.iloc[-1] < f.iloc[-1] and rsi.iloc[-1] < 42:
+                    sig[key].append(f"`{t}` (DIP)")
+                elif not is_mr and f.iloc[-1] > s_line.iloc[-1] and f.iloc[-2] <= s_line.iloc[-2]:
+                    sig[key].append(f"`{t}` (TREND)")
+
+        except: continue
+
+    rapport = [
+        f"🤖 *BOT V{VERSION}*",
+        f"👑 *Mean Rev (Traag):* €{100000 + res['T']:,.0f}",
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
+        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
+        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}"
+    ]
+    stuur_telegram("\n".join(rapport))
+
+if __name__ == "__main__":
+    benelux_30 = ["ASML.AS", "ADYEN.AS", "WKL.AS", "LOTB.BR", "ARGX.BR", "REN.AS", "DSFIR.AS", "IMCD.AS", "AZE.BR", "MELE.BR", "SOF.BR", "ACKB.BR", "KINE.BR", "UCB.BR", "DIE.BR", "BFIT.AS", "VGP.BR", "WDP.BR", "AD.AS", "HEIA.AS", "BESI.AS", "ALFEN.AS", "GLPG.AS", "EURN.BR", "ELI.BR", "BAR.BR", "ENX.AS", "NN.AS", "AGS.BR", "RAND.AS"]
+    voer_lijst_uit(benelux_30, "BENELUX")
