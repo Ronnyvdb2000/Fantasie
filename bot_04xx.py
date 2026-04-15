@@ -73,4 +73,51 @@ def voer_lijst_uit(tickers, naam_sector):
             ]:
                 p, f, s_line, e200, v_ma, rsi, atr, vol = bereken_indicatoren(data, s, t_per, use_tr, is_hyp)
                 
-                p
+                p_bt, f_bt, s_bt, e_bt = p.iloc[-252:], f.iloc[-252:], s_line.iloc[-252:], e200.iloc[-252:]
+                v_bt, v_ma_bt, atr_bt = vol.iloc[-252:], v_ma.iloc[-252:], atr.iloc[-252:]
+                
+                profit, pos, instap, sl_val = 0, False, 0, 0
+                kosten = 15.0 + (inzet * 0.0035)
+
+                for i in range(1, len(p_bt)):
+                    cp = p_bt.iloc[i]
+                    if not pos:
+                        if f_bt.iloc[i] > s_bt.iloc[i] and f_bt.iloc[i-1] <= s_bt.iloc[i-1]:
+                            if v_bt.iloc[i] > (v_ma_bt.iloc[i] * 0.6):
+                                if not use_tr or cp > e_bt.iloc[i]:
+                                    instap, sl_val, pos = cp, cp - (2 * atr_bt.iloc[i]), True
+                                    profit -= kosten
+                    else:
+                        if cp < sl_val or f_bt.iloc[i] < s_bt.iloc[i]:
+                            profit += (inzet * (cp / instap) - inzet) - kosten
+                            pos = False
+                
+                res[key] += profit
+
+                cp_act, f_act, s_act, e_act = p.iloc[-1], f.iloc[-1], s_line.iloc[-1], e200.iloc[-1]
+                if f_act > s_act and f.iloc[-2] <= s_line.iloc[-2]:
+                    if not use_tr or cp_act > e_act:
+                        sig[key].append(f"`{t}`: 🟢 KOOP (€{cp_act:.2f})")
+                elif f_act < s_act and f.iloc[-2] >= s_line.iloc[-2]:
+                    sig[key].append(f"`{t}`: 🔴 VERKOOP (€{cp_act:.2f})")
+
+        except: continue
+
+    rapport = [
+        f"📊 *{naam_sector} RAPPORT*",
+        f"_{nu}_",
+        "----------------------------------",
+        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
+        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
+        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
+        "",
+        "*SIGNALEN:*",
+        f"T: {', '.join(sig['T']) if sig['T'] else 'None'}",
+        f"S: {', '.join(sig['S']) if sig['S'] else 'None'}"
+    ]
+    stuur_telegram("\n".join(rapport))
+
+if __name__ == "__main__":
+    benelux_30 = ["ASML.AS", "ADYEN.AS", "WKL.AS", "LOTB.BR", "ARGX.BR", "REN.AS", "DSFIR.AS", "IMCD.AS", "AZE.BR", "MELE.BR", "SOF.BR", "ACKB.BR", "KINE.BR", "UCB.BR", "DIE.BR", "BFIT.AS", "VGP.BR", "WDP.BR", "AD.AS", "HEIA.AS", "BESI.AS", "ALFEN.AS", "GLPG.AS", "EURN.BR", "ELI.BR", "BAR.BR", "ENX.AS", "NN.AS", "AGS.BR", "RAND.AS"]
+    voer_lijst_uit(benelux_30, "BENELUX")
