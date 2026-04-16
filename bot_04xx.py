@@ -8,6 +8,9 @@
 # 5. Stop-loss toegevoegd (-8%)
 # 6. Foutafhandeling verbeterd: specifieke Exception logging
 # 7. Indicatoren berekend op volledige dataset, backtest indexeert correct
+# 8. FIX: 'from __future__ import annotations' toegevoegd voor Python 3.7/3.8/3.9 compatibiliteit
+
+from __future__ import annotations  # FIX: maakt str | None en tuple[...] syntax compatibel met Python < 3.10
 
 import yfinance as yf
 import pandas as pd
@@ -64,13 +67,13 @@ def bereken_mean_reversion_alpha(ticker: str, inzet: float) -> tuple[float, str 
             return 0, None
 
         # --- Indicatoren berekend op volledige reeks ---
-        ma2   = p.rolling(window=2).mean()
-        ma5   = p.rolling(window=5).mean()
-        ma20  = p.rolling(window=20).mean()
-        std20 = p.rolling(window=20).std()
+        ma2        = p.rolling(window=2).mean()
+        ma5        = p.rolling(window=5).mean()
+        ma20       = p.rolling(window=20).mean()
+        std20      = p.rolling(window=20).std()
         upper_band = ma20 + (2.0 * std20)
 
-        ema200         = p.ewm(span=200, adjust=False).mean()
+        ema200          = p.ewm(span=200, adjust=False).mean()
         ema200_stijgend = ema200.diff(5) > 0  # stijgend over laatste 5 dagen
 
         # RSI(2)
@@ -82,7 +85,7 @@ def bereken_mean_reversion_alpha(ticker: str, inzet: float) -> tuple[float, str 
         # --- Backtest over volledige beschikbare periode ---
         # Begin pas na de opwarmperiode van 200 dagen
         WARMUP    = 200
-        STOP_LOSS = 0.08   # 8% stop-loss
+        STOP_LOSS = 0.08  # 8% stop-loss
         kosten    = 15.0 + (inzet * 0.0035)
 
         profit = 0.0
@@ -95,8 +98,8 @@ def bereken_mean_reversion_alpha(ticker: str, inzet: float) -> tuple[float, str 
             if not pos:
                 # --- ENTRY ---
                 entry_conditie = (
-                    rsi2.iloc[i]           < 5    and
-                    cp                     < ma5.iloc[i] * 0.95 and
+                    rsi2.iloc[i]            < 5   and
+                    cp                      < ma5.iloc[i] * 0.95 and
                     ema200_stijgend.iloc[i]
                 )
                 if entry_conditie:
@@ -106,9 +109,9 @@ def bereken_mean_reversion_alpha(ticker: str, inzet: float) -> tuple[float, str 
 
             else:
                 # --- EXIT ---
-                stop_geraakt   = cp < instap * (1 - STOP_LOSS)
-                bounce_klaar   = cp > ma2.iloc[i]
-                upper_geraakt  = cp > upper_band.iloc[i]
+                stop_geraakt  = cp < instap * (1 - STOP_LOSS)
+                bounce_klaar  = cp > ma2.iloc[i]
+                upper_geraakt = cp > upper_band.iloc[i]
 
                 if stop_geraakt or bounce_klaar or upper_geraakt:
                     trade_pnl = (inzet * (cp / instap)) - inzet - kosten
@@ -125,8 +128,8 @@ def bereken_mean_reversion_alpha(ticker: str, inzet: float) -> tuple[float, str 
         # --- Huidig signaal (zelfde drempel als backtest: RSI2 < 5) ---
         signaal = None
         huidig_signaal = (
-            rsi2.iloc[-1]            < 5    and
-            p.iloc[-1]               < ma5.iloc[-1] * 0.95 and
+            rsi2.iloc[-1] < 5 and
+            p.iloc[-1]    < ma5.iloc[-1] * 0.95 and
             ema200_stijgend.iloc[-1]
         )
         if huidig_signaal:
