@@ -1,79 +1,52 @@
 import yfinance as yf
 import os
 import time
+import requests
 
-# --- CONFIGURATIE ---
-# De bot zoekt nu slim naar dit bestand, ongeacht hoofdletters
-ZOEK_BESTAND = "tickers_04a.txt" 
-TARGET_FILE = "tickers_04m.txt"
+# --- CONFIG ---
+SOURCE_FILE = "tickers_04a.txt"
+MASTER_FILE = "tickers_04xx.txt"
+CURRENT_RUN_FILE = "tickers_04m.txt"
 
-def munger_keuring(ticker_symbol):
-    """
-    Beoordeelt een aandeel op fundamentele Munger-kwaliteit.
-    """
+# Telegram Config (Zorg dat deze variabelen in je GitHub Secrets staan of vul ze hier in)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+def send_telegram_msg(message):
+    if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+        try:
+            requests.post(url, json=payload)
+        except Exception as e:
+            print(f"⚠️ Telegram fout: {e}")
+
+def munger_keuring(symbol):
     try:
-        t_obj = yf.Ticker(ticker_symbol)
-        info = t_obj.info
-        
-        if not info or 'returnOnEquity' not in info:
-            return False
-
-        # Fundamentele parameters (Munger-check)
+        t = yf.Ticker(symbol)
+        info = t.info
         roe = info.get('returnOnEquity', 0)
-        debt_to_equity = info.get('debtToEquity', 100) 
-        profit_margin = info.get('profitMargins', 0)
-        name = info.get('shortName', ticker_symbol)
-
-        # Munger Criteria Filters
-        is_profitable = roe > 0.15          # ROE > 15%
-        is_safe = debt_to_equity < 60       # Schuld < 60%
-        has_moat = profit_margin > 0.10     # Marge > 10%
-
-        if is_profitable and is_safe and has_moat:
-            print(f"✅ GOEDGEKEURD: {ticker_symbol: <8} | {name: <25} | ROE: {roe:.1%} | Debt/Eq: {debt_to_equity:.1f}")
-            return True
-        return False
-            
-    except Exception:
-        return False
+        debt = info.get('debtToEquity', 100)
+        margin = info.get('profitMargins', 0)
+        
+        # Munger Criteria: ROE > 15%, Schuld < 60, Marge > 10%
+        if roe > 0.15 and debt < 60 and margin > 0.10:
+            return True, roe, debt
+        return False, 0, 0
+    except:
+        return False, 0, 0
 
 def main():
-    print(f"--- START MUNGER FILTERING (bot_04m.py) ---")
+    print("--- MASTER LIST UPDATER + TELEGRAM (04m -> 04xx) ---")
     
-    # 1. Vind het bronbestand ongeacht hoofdletters
+    # 1. Vind bronbestand
     bestanden = os.listdir('.')
-    actueel_bestand = next((f for f in bestanden if f.lower() == ZOEK_BESTAND.lower()), None)
-
-    if not actueel_bestand:
-        print(f"❌ FOUT: Bestand '{ZOEK_BESTAND}' niet gevonden in: {bestanden}")
+    actueel_bron = next((f for f in bestanden if f.lower() == SOURCE_FILE.lower()), None)
+    if not actueel_bron:
+        print(f"❌ Bronbestand {SOURCE_FILE} niet gevonden.")
         return
 
-    print(f"📖 Bronbestand gevonden: '{actueel_bestand}'")
-
-    # 2. Tickers inlezen
-    with open(actueel_bestand, 'r') as f:
-        content = f.read().replace('\n', ',')
-        alle_tickers = [t.strip().upper() for t in content.split(',') if t.strip()]
-
-    print(f"Totaal aantal tickers te beoordelen: {len(alle_tickers)}")
-    
-    kwaliteits_tickers = []
-
-    # 3. Analyse loop
-    for symbol in alle_tickers:
-        if munger_keuring(symbol):
-            kwaliteits_tickers.append(symbol)
-        time.sleep(0.5) # Voorkom blokkade door Yahoo
-
-    # 4. Opslaan naar tickers_04m.txt
-    if kwaliteits_tickers:
-        with open(TARGET_FILE, 'w') as f:
-            f.write(", ".join(kwaliteits_tickers))
-        print(f"\n--- ANALYSE VOLTOOID ---")
-        print(f"Geselecteerd: {len(kwaliteits_tickers)} van de {len(alle_tickers)}")
-        print(f"Resultaat opgeslagen in: {TARGET_FILE}")
-    else:
-        print("\n⚠️ Geen enkel aandeel voldeed aan de eisen.")
-
-if __name__ == "__main__":
-    main()
+    # 2. Lees tickers
+    with open(actueel_bron, 'r') as f:
+        data = f.read().replace('\n', ',')
+        scan_tickers = [t.strip().upper() for t in data.
