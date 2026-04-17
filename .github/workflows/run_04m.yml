@@ -2,16 +2,22 @@ name: Munger Ticker Filter (04m)
 
 on:
   schedule:
+    # Draait elke zondag om 00:00 om de week met een verse lijst te beginnen
     - cron: '0 0 * * 0'
   workflow_dispatch:
+    # Hiermee kun je de actie handmatig starten in het GitHub 'Actions' tabblad
 
 jobs:
   filter_tickers:
     runs-on: ubuntu-latest
 
+    # De runner heeft schrijfrechten nodig om het nieuwe bestand te kunnen opslaan
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -26,13 +32,12 @@ jobs:
       - name: Draai Munger Filter Bot
         run: python bot_04m.py
 
-      - name: Check of bestand bestaat
+      - name: Controleer of output bestaat
         run: |
           if [ -f "tickers_04m.txt" ]; then
             echo "Bestand tickers_04m.txt is succesvol aangemaakt."
-            ls -l tickers_04m.txt
           else
-            echo "FOUT: tickers_04m.txt is NIET gevonden!"
+            echo "FOUT: tickers_04m.txt werd niet aangemaakt door de bot."
             exit 1
           fi
 
@@ -40,7 +45,14 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          # Gebruik -f om force add te doen indien nodig, maar git add is meestal genoeg
+          
+          # Voeg het nieuwe bestand toe
           git add tickers_04m.txt
-          # Alleen committen als er echt wijzigingen zijn
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update: tickers_04m.txt bijgewerkt via Munger Filter" && git push)
+          
+          # Alleen pushen als er daadwerkelijk iets veranderd is in de lijst
+          if git diff --staged --quiet; then
+            echo "Geen wijzigingen in de kwaliteitslijst gevonden."
+          else
+            git commit -m "Automatische update: tickers_04m.txt bijgewerkt"
+            git push
+          fi
