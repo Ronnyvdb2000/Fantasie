@@ -2,10 +2,8 @@ name: Munger Ticker Filter (04m)
 
 on:
   schedule:
-    # Draait elke zondag om 00:00 (tijd om de lijst voor de nieuwe week te verversen)
     - cron: '0 0 * * 0'
   workflow_dispatch:
-    # Hiermee kun je de filter handmatig starten via de GitHub interface
 
 jobs:
   filter_tickers:
@@ -28,10 +26,21 @@ jobs:
       - name: Draai Munger Filter Bot
         run: python bot_04m.py
 
+      - name: Check of bestand bestaat
+        run: |
+          if [ -f "tickers_04m.txt" ]; then
+            echo "Bestand tickers_04m.txt is succesvol aangemaakt."
+            ls -l tickers_04m.txt
+          else
+            echo "FOUT: tickers_04m.txt is NIET gevonden!"
+            exit 1
+          fi
+
       - name: Commit en Push resultaten
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
+          # Gebruik -f om force add te doen indien nodig, maar git add is meestal genoeg
           git add tickers_04m.txt
-          git commit -m "Update: tickers_04m.txt bijgewerkt via Munger Filter" || echo "Geen wijzigingen om te committen"
-          git push
+          # Alleen committen als er echt wijzigingen zijn
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update: tickers_04m.txt bijgewerkt via Munger Filter" && git push)
