@@ -49,4 +49,53 @@ def main():
     # 2. Lees tickers
     with open(actueel_bron, 'r') as f:
         data = f.read().replace('\n', ',')
-        scan_tickers = [t.strip().upper() for t in data.
+        scan_tickers = [t.strip().upper() for t in data.split(',') if t.strip()]
+
+    # 3. Master-lijst inlezen
+    master_tickers = []
+    if os.path.exists(MASTER_FILE):
+        with open(MASTER_FILE, 'r') as f:
+            master_data = f.read().replace('\n', ',')
+            master_tickers = [t.strip().upper() for t in master_data.split(',') if t.strip()]
+
+    # 4. Analyse en vergelijking
+    kwaliteits_vondsten = []
+    nieuwe_vondsten_details = []
+
+    for s in scan_tickers:
+        print(f"Check: {s}...", end=" ")
+        is_kwaliteit, roe, debt = munger_keuring(s)
+        if is_kwaliteit:
+            print("KWALITEIT! ✅")
+            kwaliteits_vondsten.append(s)
+            if s not in master_tickers:
+                nieuwe_vondsten_details.append(f"🔹 *{s}* (ROE: {roe:.1%}, Debt: {debt:.1f})")
+        else:
+            print("❌")
+        time.sleep(0.5)
+
+    # 5. Master-lijst bijwerken
+    nieuwe_tickers = [t for t in kwaliteits_vondsten if t not in master_tickers]
+    if nieuwe_tickers:
+        master_tickers.extend(nieuwe_tickers)
+        master_tickers.sort()
+        
+        # Sla op
+        with open(MASTER_FILE, 'w') as f:
+            f.write(", ".join(master_tickers))
+        
+        # Stuur Telegram melding
+        bericht = "🚀 *Nieuwe Munger Kwaliteit ontdekt!*\n\n"
+        bericht += "De volgende Benelux aandelen zijn toegevoegd aan de Master-lijst (04xx):\n"
+        bericht += "\n".join(nieuwe_vondsten_details)
+        bericht += f"\n\n📊 Totaal aantal kwaliteits-aandelen: {len(master_tickers)}"
+        send_telegram_msg(bericht)
+    else:
+        print("Geen nieuwe aandelen gevonden voor de Master-lijst.")
+
+    # Altijd de dag-lijst opslaan
+    with open(CURRENT_RUN_FILE, 'w') as f:
+        f.write(", ".join(kwaliteits_vondsten))
+
+if __name__ == "__main__":
+    main()
