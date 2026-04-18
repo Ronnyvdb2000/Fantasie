@@ -1,17 +1,13 @@
-name: Bot 04: Munger Ticker Filter (04m)
+name: Munger Ticker Filter (04m)
 
 on:
   schedule:
-    # Draait elke zondag om 00:00 om de week met een verse lijst te beginnen
     - cron: '0 0 * * 0'
   workflow_dispatch:
-    # Hiermee kun je de actie handmatig starten in het GitHub 'Actions' tabblad
 
 jobs:
   filter_tickers:
     runs-on: ubuntu-latest
-
-    # De runner heeft schrijfrechten nodig om de nieuwe bestanden te kunnen pushen
     permissions:
       contents: write
 
@@ -30,7 +26,6 @@ jobs:
           pip install yfinance pandas requests
 
       - name: Draai Munger Filter Bot
-        # Geef de geheime Telegram tokens door aan het Python script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -40,14 +35,10 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          # Voeg beide bestanden toe (daglijst en masterlijst)
-          git add tickers_04m.txt tickers_04xx.txt || echo "Bestanden nog niet aanwezig"
-          
-          # Alleen commit en push als er daadwerkelijk wijzigingen zijn
+          git add tickers_04m.txt tickers_04xx.txt
           if git diff --staged --quiet; then
-            echo "Geen wijzigingen gevonden in de lijsten."
+            echo "Geen wijzigingen gevonden."
           else
-            git commit -m "Automatische update: Munger Elite en Master-lijst bijgewerkt"
+            git commit -m "Update Munger lijsten"
             git push
           fi
