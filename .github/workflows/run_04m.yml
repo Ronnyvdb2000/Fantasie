@@ -1,4 +1,4 @@
-name: Munger Ticker Filter (04m)
+name: Bot 04: Munger Ticker Filter (04m)
 
 on:
   schedule:
