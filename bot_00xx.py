@@ -30,7 +30,7 @@ def stuur_telegram(bericht: str) -> bool:
     except: return False
 
 # ---------------------------------------------------------------------------
-# INDICATOREN (ONGÉWIIJZIGD VOOR STRAT 1-4, VERBETERD VOOR 5)
+# INDICATOREN
 # ---------------------------------------------------------------------------
 def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_filter: bool, is_hyper: bool) -> tuple:
     p = df['Close'].ffill()
@@ -50,11 +50,11 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1/14, adjust=False).mean()
     rsi_val = 100 - (100 / (1 + gain / (loss + 1e-10)))
 
-    # 2. STRAT 5 SPECIALS (IBS & Extreme Bollinger)
+    # 2. STRAT 5 SPECIALS (Aangepast voor meer ruimte)
     ma20 = p.rolling(20).mean()
     std20 = p.rolling(20).std()
-    lower_b3 = ma20 - (2.2 * std20)  # 2.2 Standard Deviations voor meer signalen (was oorspr 3)
-    ibs = (p - l) / (h - l + 1e-10)  # Internal Bar Strength
+    lower_b3 = ma20 - (2.2 * std20)  
+    ibs = (p - l) / (h - l + 1e-10)  
     ma5 = p.rolling(5).mean()
 
     # 3. HYPER (Streak RSI)
@@ -81,7 +81,7 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     adx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)).ewm(alpha=1/14, adjust=False).mean()
 
     return p, f_line, s_line, ema100, vol_ma, rsi_val, atr, adx, v, ibs, lower_b3, ma5
-    
+
 # ---------------------------------------------------------------------------
 # SECTOR VERWERKING
 # ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             p, f, sl, e100, v_ma, rsi, atr, adx, vol, ibs, l_b3, ma5 = bereken_indicatoren_vectorized(t_data, 50, 200, True, False)
             kosten = 15.0 + (inzet * 0.0035)
 
-            # --- STRAT 1-4 BACKTEST (IDENTIEK) ---
+            # --- STRAT 1-4 BACKTEST ---
             for skey, s_p, t_p, utr, ihyp in STRATS:
                 pi, fi, sli, ei, vmai, rsii, atri, adxi, voli, _, _, _ = bereken_indicatoren_vectorized(t_data, s_p, t_p, utr, ihyp)
                 pb = pi.iloc[200:]; fb = fi.iloc[200:]; sb = sli.iloc[200:]; eb = ei.iloc[200:]; vb = voli.iloc[200:]; vmb = vmai.iloc[200:]; ab = atri.iloc[200:]; dxb = adxi.iloc[200:]
@@ -131,7 +131,6 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                 if pos: pr += (inzet*(pb.iloc[-1]/ins)-inzet)-kosten
                 res[skey] += pr
                 
-                # Signaal Strat 1-4 (laatste dag)
                 if skey == "T":
                     cp = pi.iloc[-1]; y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
                     if fi.iloc[-1] > sli.iloc[-1] and fi.iloc[-2] <= sli.iloc[-2] and adxi.iloc[-1] > 15 and voli.iloc[-1] > (vmb.iloc[-1]*0.6) and ((not utr) or cp > ei.iloc[-1]):
@@ -139,17 +138,16 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                     elif fi.iloc[-1] < sli.iloc[-1] and fi.iloc[-2] >= sli.iloc[-2]:
                         sig[skey].append(f"• `{ticker}`: 🔴 *VERKOOP* | €{cp:.2f}")
 
-            # --- STRAT 5: IBS MEAN REVERSION BACKTEST (NEW & IMPROVED) ---
-            pb, ibsb, lbb, eb, m5b = p.iloc[200:], ibs.iloc[200:], l_b3.iloc[200:], e100.iloc[100:], ma5.iloc[200:]
+            # --- STRAT 5: IBS MEAN REVERSION BACKTEST ---
+            pb, ibsb, lbb, eb, m5b = p.iloc[200:], ibs.iloc[200:], l_b3.iloc[200:], e100.iloc[200:], ma5.iloc[200:]
             pr5, pos5, ins5 = 0.0, False, 0.0
             for i in range(1, len(pb)):
                 cp = pb.iloc[i]
                 if not pos5:
-                    if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.2 and cp > eb.iloc[i]:
+                    if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.25 and cp > eb.iloc[i]:
                         ins5, pos5 = cp, True
                         pr5 -= kosten
                 else:
-                    # Target: herstel naar MA5 of 6% winst
                     if cp > m5b.iloc[i] or cp > (ins5 * 1.06):
                         pr5 += (inzet*(cp/ins5)-inzet)-kosten
                         pos5 = False
@@ -157,7 +155,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             res["MRA"] += pr5
 
             # Signaal Strat 5
-            if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.20 and p.iloc[-1] > e100.iloc[-1]:
+            if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.25 and p.iloc[-1] > e100.iloc[-1]:
                 sig["MRA"].append(f"• `{ticker}`: 🛡️ *Munger Dip* | €{p.iloc[-1]:.2f}")
 
         except: continue
@@ -172,8 +170,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
         f"💎 *Power Mean Rev:* {fmt(res['MRA'])}",
         "", "🛡️ *SIGNALEN TRAAG:*", "\n".join(sig["T"]) if sig["T"] else "Geen actie",
         "", "💎 *SIGNALEN POWER MEAN REV:*", "\n".join(sig["MRA"]) if sig["MRA"] else "Geen actie",
-        "", "💡 _Traag gebruikt 50/200 MA. MRA gebruikt IBS & Extreme Bands, Bollgier band naar 2.2, IBS naar 0.2._",
-        "", "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold. CRSI: >90 overbought, <10 oversold_"
+        "", "💡 _Traag gebruikt 50/200 MA. MRA gebruikt IBS & Extreme Bands._",
     ]
     stuur_telegram("\n".join(rapport))
 
