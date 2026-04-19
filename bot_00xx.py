@@ -144,7 +144,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             for i in range(1, len(pb)):
                 cp = pb.iloc[i]
                 if not pos5:
-                    if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.25 and cp > eb.iloc[i]:
+                    if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.30 and cp > eb.iloc[i]:
                         ins5, pos5 = cp, True
                         pr5 -= kosten
                 else:
@@ -155,7 +155,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             res["MRA"] += pr5
 
             # Signaal Strat 5
-            if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.25 and p.iloc[-1] > e100.iloc[-1]:
+            if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.30:
                 sig["MRA"].append(f"• `{ticker}`: 🛡️ *Munger Dip* | €{p.iloc[-1]:.2f}")
 
         except: continue
