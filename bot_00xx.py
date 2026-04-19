@@ -164,7 +164,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
     stuur_telegram("\n".join(rapport))
 
 def main():
-    sectoren = {"01":"Hoogland", "02":"Macrotrends", "03":"Beursbrink", "04":"Benelux", "05":"Parijs", "06":"Power & AI", "07":"Metalen", "08":"Defensie", "09":"Varia"}
+    sectoren = {"01":"Hoogland x", "02":"Macrotrends x", "03":"Beursbrink x", "04":"Benelux x", "05":"Parijs x", "06":"Power & AI x", "07":"Metalen x", "08":"Defensie x", "09":"Varia x."}
     for nr, naam in sectoren.items():
         voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
         time.sleep(2)
