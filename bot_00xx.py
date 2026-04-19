@@ -80,8 +80,8 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     minus_di = 100 * (down.where((down > up) & (down > 0), 0.0).ewm(alpha=1/14, adjust=False).mean() / (atr + 1e-10))
     adx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)).ewm(alpha=1/14, adjust=False).mean()
 
-    return p, f_line, s_line, ema200, vol_ma, rsi_val, atr, adx, v, , lower_b3, ma5
-
+    return p, f_line, s_line, ema200, vol_ma, rsi_val, atr, adx, v, ibs, lower_b3, ma5
+    
 # ---------------------------------------------------------------------------
 # SECTOR VERWERKING
 # ---------------------------------------------------------------------------
