@@ -54,7 +54,6 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     ibs = (p - l) / (h - l + 1e-10)  
     ma5 = p.rolling(5).mean()
 
-    # Hyper Logica
     if is_hyper:
         p_rank = delta.rolling(100).apply(lambda x: (x[:-1] < x[-1]).sum() / 99.0 * 100 if len(x) > 0 else 50, raw=True)
         rsi_val = (rsi_val + p_rank) / 2
@@ -88,8 +87,6 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
     inzet = 2500.0
     res = {"T": 0.0, "S": 0.0, "HT": 0.0, "HS": 0.0, "MRA": 0.0}
     sig = {"T": [], "MRA": []}
-    
-    # Kosten per trade
     kosten = 15.0 + (inzet * 0.0035)
 
     for ticker in tickers:
@@ -97,13 +94,11 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             t_data = raw_df.xs(ticker, axis=1, level=1).dropna(how='all') if len(tickers) > 1 else raw_df.dropna(how='all')
             if len(t_data) < 250: continue
 
-            # --- TREND STRATS ---
+            # --- TREND STRATS (Laatste Visie: StopLoss 3xATR) ---
             configs = [("T", 50, 200, True, False), ("S", 20, 50, True, False), ("HT", 9, 21, True, True), ("HS", 9, 21, False, True)]
-            
             for skey, sp, tp, utr, ihyp in configs:
-                p, f, sl, eb, vma, rsi, ab, dxb, vol, ibs, lbb, m5 = bereken_indicatoren_vectorized(t_data, sp, tp, utr, ihyp)
+                p, f, sl, eb, vma, rsi, ab, dxb, vol, ibs_v, lbb, m5 = bereken_indicatoren_vectorized(t_data, sp, tp, utr, ihyp)
                 pb, fb, sb, abb, dxb_b = p.iloc[200:], f.iloc[200:], sl.iloc[200:], ab.iloc[200:], dxb.iloc[200:]
-                
                 pr, pos, ins, hi = 0.0, False, 0.0, 0.0
                 for i in range(1, len(pb)):
                     cp = pb.iloc[i]
@@ -113,50 +108,43 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                             pr -= kosten
                     else:
                         hi = max(hi, cp)
-                        # StopLoss 3xATR (zoals gevraagd in je onderschrift)
+                        # LAATSTE VISIE: 3xATR
                         if cp < (hi - 3 * abb.iloc[i]) or fb.iloc[i] < sb.iloc[i]:
                             pr += (inzet * (cp / ins) - inzet) - kosten
                             pos = False
                 res[skey] += pr
-
-                # Signalen Traag (50/200)
                 if skey == "T":
-                    cp = p.iloc[-1]
-                    y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+                    cp = p.iloc[-1]; y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
                     if f.iloc[-1] > sl.iloc[-1] and f.iloc[-2] <= sl.iloc[-2] and dxb.iloc[-1] > 15:
                         sig["T"].append(f"• {ticker}: 🟢 *KOOP* | €{cp:.2f} | {y_l}")
 
-            # --- MRA STRATEGIE (NIEUWE LOGICA) ---
+            # --- MRA (Laatste Visie: Target 12%, IBS 0.30, Geen EMA) ---
             p, _, _, _, _, _, _, _, _, ibs, l_b3, ma5 = bereken_indicatoren_vectorized(t_data, 20, 50, False, False)
             pb, ibsb, lbb, m5b = p.iloc[200:], ibs.iloc[200:], l_b3.iloc[200:], ma5.iloc[200:]
-            
             pr_mra, pos_mra, ins_mra = 0.0, False, 0.0
             for i in range(1, len(pb)):
                 cp = pb.iloc[i]
                 if not pos_mra:
-                    # IBS 0.30 & Geen EMA filter
                     if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.30:
                         ins_mra, pos_mra = cp, True
                         pr_mra -= kosten
                 else:
-                    # Target 12%
                     if cp > m5b.iloc[i] or cp > (ins_mra * 1.12):
                         pr_mra += (inzet * (cp / ins_mra) - inzet) - kosten
                         pos_mra = False
             res["MRA"] += pr_mra
-
             if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.30:
                 sig["MRA"].append(f"• {ticker}: 🛡️ *DIP* | €{p.iloc[-1]:.2f}")
 
         except: continue
 
     # ---------------------------------------------------------------------------
-    # EXACT RAPPORT UITZICHT (Zoals je voorbeeld)
+    # RAPPORT LAYOUT (ZOALS BEZORGD OM 06:00 UUR)
     # ---------------------------------------------------------------------------
     def fmt(n): return f"€{100000 + n:,.0f}"
     
     rapport = [
-        f"📊 *{label} {naam_sector} RAPPORT x",
+        f"📊 *{label} {naam_sector} RAPPORT xx",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* {fmt(res['T'])}",
