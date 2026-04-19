@@ -53,7 +53,7 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     # 2. STRAT 5 SPECIALS (IBS & Extreme Bollinger)
     ma20 = p.rolling(20).mean()
     std20 = p.rolling(20).std()
-    lower_b3 = ma20 - (3.0 * std20)  # 3 Standard Deviations
+    lower_b3 = ma20 - (2.2 * std20)  # 2.2 Standard Deviations voor meer signalen (was oorspr 3)
     ibs = (p - l) / (h - l + 1e-10)  # Internal Bar Strength
     ma5 = p.rolling(5).mean()
 
@@ -80,7 +80,7 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     minus_di = 100 * (down.where((down > up) & (down > 0), 0.0).ewm(alpha=1/14, adjust=False).mean() / (atr + 1e-10))
     adx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)).ewm(alpha=1/14, adjust=False).mean()
 
-    return p, f_line, s_line, ema200, vol_ma, rsi_val, atr, adx, v, ibs, lower_b3, ma5
+    return p, f_line, s_line, ema200, vol_ma, rsi_val, atr, adx, v, , lower_b3, ma5
 
 # ---------------------------------------------------------------------------
 # SECTOR VERWERKING
@@ -145,7 +145,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             for i in range(1, len(pb)):
                 cp = pb.iloc[i]
                 if not pos5:
-                    if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.1 and cp > eb.iloc[i]:
+                    if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.2 and cp > eb.iloc[i]:
                         ins5, pos5 = cp, True
                         pr5 -= kosten
                 else:
@@ -157,7 +157,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             res["MRA"] += pr5
 
             # Signaal Strat 5
-            if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.1 and p.iloc[-1] > e200.iloc[-1]:
+            if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.20 and p.iloc[-1] > e200.iloc[-1]:
                 sig["MRA"].append(f"• `{ticker}`: 🛡️ *Munger Dip* | €{p.iloc[-1]:.2f}")
 
         except: continue
@@ -172,7 +172,8 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
         f"💎 *Power Mean Rev:* {fmt(res['MRA'])}",
         "", "🛡️ *SIGNALEN TRAAG:*", "\n".join(sig["T"]) if sig["T"] else "Geen actie",
         "", "💎 *SIGNALEN POWER MEAN REV:*", "\n".join(sig["MRA"]) if sig["MRA"] else "Geen actie",
-        "", "💡 _Traag gebruikt 50/200 MA. MRA gebruikt IBS & Extreme Bands._",
+        "", "💡 _Traag gebruikt 50/200 MA. MRA gebruikt IBS & Extreme Bands, Bollgier band naar 2.2, IBS naar 0.2._",
+        "", "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold. CRSI: >90 overbought, <10 oversold_"
     ]
     stuur_telegram("\n".join(rapport))
 
