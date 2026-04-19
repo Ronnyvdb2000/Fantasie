@@ -40,7 +40,7 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
 
     f_line = p.rolling(window=s).mean() if s >= 20 else p.ewm(span=s, adjust=False).mean()
     s_line = p.rolling(window=t).mean() if t >= 50 else p.ewm(span=t, adjust=False).mean()
-    ema200 = p.ewm(span=200, adjust=False).mean()
+    ema100 = p.ewm(span=100, adjust=False).mean()
     vol_ma = v.rolling(window=20).mean()
 
     delta = p.diff()
@@ -80,7 +80,7 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     minus_di = 100 * (down.where((down > up) & (down > 0), 0.0).ewm(alpha=1/14, adjust=False).mean() / (atr + 1e-10))
     adx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)).ewm(alpha=1/14, adjust=False).mean()
 
-    return p, f_line, s_line, ema200, vol_ma, rsi_val, atr, adx, v, ibs, lower_b3, ma5
+    return p, f_line, s_line, ema100, vol_ma, rsi_val, atr, adx, v, ibs, lower_b3, ma5
     
 # ---------------------------------------------------------------------------
 # SECTOR VERWERKING
@@ -109,7 +109,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             if len(t_data) < 250: continue
 
             # --- DATA BEREKENEN ---
-            p, f, sl, e200, v_ma, rsi, atr, adx, vol, ibs, l_b3, ma5 = bereken_indicatoren_vectorized(t_data, 50, 200, True, False)
+            p, f, sl, e100, v_ma, rsi, atr, adx, vol, ibs, l_b3, ma5 = bereken_indicatoren_vectorized(t_data, 50, 200, True, False)
             kosten = 15.0 + (inzet * 0.0035)
 
             # --- STRAT 1-4 BACKTEST (IDENTIEK) ---
@@ -140,7 +140,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                         sig[skey].append(f"• `{ticker}`: 🔴 *VERKOOP* | €{cp:.2f}")
 
             # --- STRAT 5: IBS MEAN REVERSION BACKTEST (NEW & IMPROVED) ---
-            pb, ibsb, lbb, eb, m5b = p.iloc[200:], ibs.iloc[200:], l_b3.iloc[200:], e200.iloc[200:], ma5.iloc[200:]
+            pb, ibsb, lbb, eb, m5b = p.iloc[200:], ibs.iloc[200:], l_b3.iloc[200:], e100.iloc[100:], ma5.iloc[200:]
             pr5, pos5, ins5 = 0.0, False, 0.0
             for i in range(1, len(pb)):
                 cp = pb.iloc[i]
@@ -157,7 +157,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             res["MRA"] += pr5
 
             # Signaal Strat 5
-            if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.20 and p.iloc[-1] > e200.iloc[-1]:
+            if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.20 and p.iloc[-1] > e100.iloc[-1]:
                 sig["MRA"].append(f"• `{ticker}`: 🛡️ *Munger Dip* | €{p.iloc[-1]:.2f}")
 
         except: continue
