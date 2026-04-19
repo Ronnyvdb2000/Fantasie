@@ -45,19 +45,19 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
 
     delta = p.diff()
     
-    # 1. STANDAARD RSI (Wilder Smoothing)
+    # 1. STANDAARD RSI
     gain = delta.where(delta > 0, 0.0).ewm(alpha=1/14, adjust=False).mean()
     loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1/14, adjust=False).mean()
     rsi_val = 100 - (100 / (1 + gain / (loss + 1e-10)))
 
-    # 2. STRAT 5 SPECIALS (Aangepast voor meer ruimte)
+    # 2. STRAT 5 SPECIALS
     ma20 = p.rolling(20).mean()
     std20 = p.rolling(20).std()
     lower_b3 = ma20 - (2.2 * std20)  
     ibs = (p - l) / (h - l + 1e-10)  
     ma5 = p.rolling(5).mean()
 
-    # 3. HYPER (Streak RSI)
+    # 3. HYPER
     if is_hyper:
         change = np.sign(delta).fillna(0)
         streak = change.groupby((change != change.shift()).cumsum()).cumsum()
@@ -71,7 +71,7 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
         p_rank = delta.rolling(100).apply(lambda x: (x[:-1] < x[-1]).sum() / 99.0 * 100 if len(x) > 0 else 50, raw=True)
         rsi_val = (rsi3 + streak_rsi + p_rank) / 3
 
-    # 4. CORRECTE ADX (Wilder)
+    # 4. CORRECTE ADX
     tr = pd.concat([h - l, (h - p.shift()).abs(), (l - p.shift()).abs()], axis=1).max(axis=1)
     atr = tr.ewm(alpha=1/14, adjust=False).mean()
     up = h.diff().clip(lower=0)
@@ -125,18 +125,19 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                             pr -= kosten
                     else:
                         hi = max(hi, cp)
-                        if cp < (hi - 2*ab.iloc[i]) or fb.iloc[i] < sb.iloc[i]:
+                        # Verruimde stop-loss naar 3*ATR voor betere resultaten
+                        if cp < (hi - 3*ab.iloc[i]) or fb.iloc[i] < sb.iloc[i]:
                             pr += (inzet*(cp/ins)-inzet)-kosten
                             pos = False
                 if pos: pr += (inzet*(pb.iloc[-1]/ins)-inzet)-kosten
                 res[skey] += pr
                 
                 if skey == "T":
-                    cp = pi.iloc[-1]; y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
-                    if fi.iloc[-1] > sli.iloc[-1] and fi.iloc[-2] <= sli.iloc[-2] and adxi.iloc[-1] > 15 and voli.iloc[-1] > (vmb.iloc[-1]*0.6) and ((not utr) or cp > ei.iloc[-1]):
-                        sig[skey].append(f"• `{ticker}`: 🟢 *KOOP* | €{cp:.2f} | {y_l}")
+                    cp_l = pi.iloc[-1]; y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+                    if fi.iloc[-1] > sli.iloc[-1] and fi.iloc[-2] <= sli.iloc[-2] and adxi.iloc[-1] > 15 and voli.iloc[-1] > (vmb.iloc[-1]*0.6) and ((not utr) or cp_l > ei.iloc[-1]):
+                        sig[skey].append(f"• `{ticker}`: 🟢 *KOOP* | €{cp_l:.2f} | {y_l}")
                     elif fi.iloc[-1] < sli.iloc[-1] and fi.iloc[-2] >= sli.iloc[-2]:
-                        sig[skey].append(f"• `{ticker}`: 🔴 *VERKOOP* | €{cp:.2f}")
+                        sig[skey].append(f"• `{ticker}`: 🔴 *VERKOOP* | €{cp_l:.2f}")
 
             # --- STRAT 5: IBS MEAN REVERSION BACKTEST ---
             pb, ibsb, lbb, eb, m5b = p.iloc[200:], ibs.iloc[200:], l_b3.iloc[200:], e100.iloc[200:], ma5.iloc[200:]
@@ -144,17 +145,19 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             for i in range(1, len(pb)):
                 cp = pb.iloc[i]
                 if not pos5:
-                    if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.30 and cp > eb.iloc[i]:
+                    # MRA Backtest: IBS naar 0.30 en EMA-check weg voor betere winstkansen
+                    if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.30:
                         ins5, pos5 = cp, True
                         pr5 -= kosten
                 else:
-                    if cp > m5b.iloc[i] or cp > (ins5 * 1.06):
+                    # Hogere target van 12% om kosten te verslaan
+                    if cp > m5b.iloc[i] or cp > (ins5 * 1.12):
                         pr5 += (inzet*(cp/ins5)-inzet)-kosten
                         pos5 = False
             if pos5: pr5 += (inzet*(pb.iloc[-1]/ins5)-inzet)-kosten
             res["MRA"] += pr5
 
-            # Signaal Strat 5
+            # Signaal Strat 5 (Signaal volgt backtest parameters)
             if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.30:
                 sig["MRA"].append(f"• `{ticker}`: 🛡️ *Munger Dip* | €{p.iloc[-1]:.2f}")
 
@@ -170,7 +173,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
         f"💎 *Power Mean Rev:* {fmt(res['MRA'])}",
         "", "🛡️ *SIGNALEN TRAAG:*", "\n".join(sig["T"]) if sig["T"] else "Geen actie",
         "", "💎 *SIGNALEN POWER MEAN REV:*", "\n".join(sig["MRA"]) if sig["MRA"] else "Geen actie",
-        "", "💡 _Traag gebruikt 50/200 MA. MRA gebruikt IBS & Extreme Bands._",
+        "", "💡 _Instellingen: StopLoss 3xATR, MRA Target 12%, IBS 0.30._"
     ]
     stuur_telegram("\n".join(rapport))
 
