@@ -95,7 +95,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
 
     inzet = 2500.0
     res = {"T": 0.0, "S": 0.0, "HT": 0.0, "HS": 0.0, "MRA": 0.0}
-    num_trades = {"MRA": 0} # Trades teller
+    num_trades = {"T": 0, "S": 0, "HT": 0, "HS": 0, "MRA": 0} 
     sig = {"T": [], "S": [], "HT": [], "HS": [], "MRA": []}
     STRATS = [("T", 50, 200, True, False), ("S", 20, 50, True, False), ("HT", 9, 21, True, True), ("HS", 9, 21, False, True)]
 
@@ -117,6 +117,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                         if fb.iloc[i] > sb.iloc[i] and fb.iloc[i-1] <= sb.iloc[i-1] and dxb.iloc[i] > 15 and vb.iloc[i] > (vmb.iloc[i]*0.6) and ((not utr) or cp > eb.iloc[i]):
                             ins, hi, pos = cp, cp, True
                             pr -= kosten
+                            num_trades[skey] += 1
                     else:
                         hi = max(hi, cp)
                         if cp < (hi - 2*ab.iloc[i]) or fb.iloc[i] < sb.iloc[i]:
@@ -127,7 +128,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                 
                 if skey == "T":
                     cp = pi.iloc[-1]; y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
-                    if fi.iloc[-1] > sli.iloc[-1] and fi.iloc[-2] <= sli.iloc[-2] and adxi.iloc[-1] > 15 and voli.iloc[-1] > (vmb.iloc[-1]*0.6) and ((not utr) or cp > ei.iloc[-1]):
+                    if fi.iloc[-1] > sli.iloc[-1] and fi.iloc[-2] <= sli.iloc[-2] and dxi.iloc[-1] > 15 and voli.iloc[-1] > (vmb.iloc[-1]*0.6) and ((not utr) or cp > ei.iloc[-1]):
                         sig[skey].append(f"• `{ticker}`: 🟢 *KOOP* | €{cp:.2f} | {y_l}")
                     elif fi.iloc[-1] < sli.iloc[-1] and fi.iloc[-2] >= sli.iloc[-2]:
                         sig[skey].append(f"• `{ticker}`: 🔴 *VERKOOP* | €{cp:.2f}")
@@ -141,7 +142,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                     if cp < lbb.iloc[i] and ibsb.iloc[i] < 0.30:
                         ins5, pos5 = cp, True
                         pr5 -= kosten
-                        num_trades["MRA"] += 1 # Trade tellen bij instap
+                        num_trades["MRA"] += 1
                 else:
                     if cp > m5b.iloc[i] or cp > (ins5 * 1.12):
                         pr5 += (inzet*(cp/ins5)-inzet)-kosten
@@ -157,8 +158,8 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
     def fmt(n): return f"€{100000 + n:,.0f}"
     rapport = [
         f"📊 *{label} {naam_sector} RAPPORT*", f"_{nu}_", "----------------------------------",
-        f"🐢 *Traag:* {fmt(res['T'])} | ⚡ *Snel:* {fmt(res['S'])}",
-        f"🚀 *Hyper:* {fmt(res['HT'])} | 🔥 *Scalp:* {fmt(res['HS'])}",
+        f"🐢 *Traag:* {fmt(res['T'])} ({num_trades['T']} trades) | ⚡ *Snel:* {fmt(res['S'])} ({num_trades['S']} trades)",
+        f"🚀 *Hyper:* {fmt(res['HT'])} ({num_trades['HT']} trades) | 🔥 *Scalp:* {fmt(res['HS'])} ({num_trades['HS']} trades)",
         f"💎 *MRA:* {fmt(res['MRA'])} ({num_trades['MRA']} trades)",
         "", "🛡️ *SIGNALEN TRAAG:*", "\n".join(sig["T"]) if sig["T"] else "Geen actie",
         "", "💎 *SIGNALEN MRA:*", "\n".join(sig["MRA"]) if sig["MRA"] else "Geen actie"
