@@ -157,7 +157,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
 
     def fmt(n): return f"€{100000 + n:,.0f}"
     rapport = [
-        f"📊 *{label} {naam_sector} RAPPORT xx", f"_{nu}_", "----------------------------------",
+        f"📊 *{label} {naam_sector} RAPPORT **", f"_{nu}_", "----------------------------------",
         f"🐢 *Traag:* {fmt(res['T'])} ({num_trades['T']} trades) | ⚡ *Snel:* {fmt(res['S'])} ({num_trades['S']} trades)",
         f"🚀 *Hyper:* {fmt(res['HT'])} ({num_trades['HT']} trades) | 🔥 *Scalp:* {fmt(res['HS'])} ({num_trades['HS']} trades)",
         f"💎 *MRA:* {fmt(res['MRA'])} ({num_trades['MRA']} trades)",
