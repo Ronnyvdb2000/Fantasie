@@ -27,7 +27,9 @@ def stuur_telegram(bericht: str) -> bool:
         r = requests.post(url, data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown", "disable_web_page_preview": True}, timeout=30)
         r.raise_for_status()
         return True
-    except: return False
+    except Exception as e:
+        logger.error(f"Telegram fout: {e}")
+        return False
 
 # ---------------------------------------------------------------------------
 # INDICATOREN
@@ -81,7 +83,9 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
 # CORE ENGINE
 # ---------------------------------------------------------------------------
 def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
-    if not os.path.exists(bestandsnaam): return
+    if not os.path.exists(bestandsnaam): 
+        logger.warning(f"Bestand {bestandsnaam} niet gevonden.")
+        return
     nu = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     with open(bestandsnaam, 'r') as f:
@@ -89,9 +93,13 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
         tickers = sorted(list(set([t.strip().upper() for t in content.split(',') if t.strip()])))
     if not tickers: return
 
+    logger.info(f"Start analyse voor {naam_sector} met {len(tickers)} tickers.")
+
     try:
         raw_df = yf.download(tickers, period="5y", progress=False, auto_adjust=True)
-    except: return
+    except Exception as e:
+        logger.error(f"Download fout: {e}")
+        return
 
     inzet = 2500.0
     res = {"T": 0.0, "S": 0.0, "HT": 0.0, "HS": 0.0, "MRA": 0.0}
@@ -101,7 +109,11 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
 
     for ticker in tickers:
         try:
-            t_data = raw_df.xs(ticker, axis=1, level=1).dropna(how='all') if len(tickers) > 1 else raw_df.dropna(how='all')
+            if len(tickers) > 1:
+                t_data = raw_df.xs(ticker, axis=1, level=1).dropna(how='all')
+            else:
+                t_data = raw_df.dropna(how='all')
+                
             if len(t_data) < 250: continue
 
             p, f, sl, e100, v_ma, rsi, atr, adx, vol, ibs, l_b3, ma5 = bereken_indicatoren_vectorized(t_data, 50, 200, True, False)
@@ -126,9 +138,10 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                 if pos: pr += (inzet*(pb.iloc[-1]/ins)-inzet)-kosten
                 res[skey] += pr
                 
+                # FIX: adxi veranderd naar dxi
                 if skey == "T":
                     cp = pi.iloc[-1]; y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
-                    if fi.iloc[-1] > sli.iloc[-1] and fi.iloc[-2] <= sli.iloc[-2] and dxi.iloc[-1] > 15 and voli.iloc[-1] > (vmb.iloc[-1]*0.6) and ((not utr) or cp > ei.iloc[-1]):
+                    if fi.iloc[-1] > sli.iloc[-1] and fi.iloc[-2] <= sli.iloc[-2] and dxi.iloc[-1] > 15 and voli.iloc[-1] > (vmai.iloc[-1]*0.6) and ((not utr) or cp > ei.iloc[-1]):
                         sig[skey].append(f"• `{ticker}`: 🟢 *KOOP* | €{cp:.2f} | {y_l}")
                     elif fi.iloc[-1] < sli.iloc[-1] and fi.iloc[-2] >= sli.iloc[-2]:
                         sig[skey].append(f"• `{ticker}`: 🔴 *VERKOOP* | €{cp:.2f}")
@@ -153,11 +166,13 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             if p.iloc[-1] < l_b3.iloc[-1] and ibs.iloc[-1] < 0.30:
                 sig["MRA"].append(f"• `{ticker}`: 🛡️ *Munger Dip* | €{p.iloc[-1]:.2f}")
 
-        except: continue
+        except Exception as e: 
+            logger.error(f"Fout bij ticker {ticker}: {e}")
+            continue
 
     def fmt(n): return f"€{100000 + n:,.0f}"
     rapport = [
-        f"📊 *{label} {naam_sector} RAPPORT 5 strat", f"_{nu}_", "----------------------------------",
+        f"📊 *{label} {naam_sector} RAPPORT 5 strat*", f"_{nu}_", "----------------------------------",
         f"🐢 *Traag:* {fmt(res['T'])} ({num_trades['T']} trades) | ⚡ *Snel:* {fmt(res['S'])} ({num_trades['S']} trades)",
         f"🚀 *Hyper:* {fmt(res['HT'])} ({num_trades['HT']} trades) | 🔥 *Scalp:* {fmt(res['HS'])} ({num_trades['HS']} trades)",
         f"💎 *MRA:* {fmt(res['MRA'])} ({num_trades['MRA']} trades)",
@@ -172,4 +187,5 @@ def main():
         voer_lijst_uit(f"tickers_{nr}.txt", nr, naam)
         time.sleep(2)
 
-if __name__ == "__main__": main()
+if __name__ == "__main__": 
+    main()
