@@ -54,7 +54,7 @@ def bereken_indicatoren_vectorized(df, s, t, use_trend_filter, is_hyper):
     up, down = h.diff().clip(lower=0), (-l.diff()).clip(lower=0)
     tr14 = tr.rolling(14).sum()
     plus_di = 100 * (up.rolling(14).sum() / (tr14 + 1e-10))
-    minus_di = 100 * (down.rolling(14).sum() / (tr14 + 1e-10))
+    minus_di = 100 * (down.where((down > up) & (down > 0), 0.0).rolling(14).sum() / (tr14 + 1e-10))
     adx = (100 * abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10)).rolling(14).mean()
 
     return p, f_line, s_line, ema200, vol_ma, rsi_val, atr, adx, v
@@ -72,8 +72,8 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
     raw_df = yf.download(tickers, period="5y", progress=False, auto_adjust=True)
     
     inzet = 2500.0
-    res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
-    num_trades = {"T": 0, "S": 0, "HT": 0, "HS": 0} # Nieuwe teller
+    res = {"T": 0.0, "S": 0.0, "HT": 0.0, "HS": 0.0}
+    num_trades = {"T": 0, "S": 0, "HT": 0, "HS": 0} 
     sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     for strat_key, (s_per, t_per, use_tr, is_hyp) in [
@@ -83,9 +83,11 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
         for t in tickers:
             try:
                 if len(tickers) > 1:
-                    t_data = raw_df.xs(t, axis=1, level=1)
+                    t_data = raw_df.xs(t, axis=1, level=1).dropna(how='all')
                 else:
-                    t_data = raw_df
+                    t_data = raw_df.dropna(how='all')
+
+                if len(t_data) < 250: continue
 
                 p, f, s_line, e200, v_ma, rsi, atr, adx, vol = bereken_indicatoren_vectorized(t_data, s_per, t_per, use_tr, is_hyp)
                 
@@ -93,7 +95,7 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
                 e_bt, v_bt, v_ma_bt = e200.iloc[-252:], vol.iloc[-252:], v_ma.iloc[-252:]
                 atr_bt, adx_bt = atr.iloc[-252:], adx.iloc[-252:]
                 
-                profit, pos, instap, high_p, sl_val = 0, False, 0, 0, 0
+                profit, pos, instap, high_p, sl_val = 0.0, False, 0.0, 0.0, 0.0
                 kosten = 15.0 + (inzet * 0.0035)
 
                 for i in range(1, len(p_bt)):
@@ -104,7 +106,7 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
                                 if not use_tr or cp_i > e_bt.iloc[i]:
                                     instap, high_p, sl_val, pos = cp_i, cp_i, cp_i - (2 * atr_bt.iloc[i]), True
                                     profit -= kosten
-                                    num_trades[strat_key] += 1 # Tel de trade
+                                    num_trades[strat_key] += 1
                     else:
                         high_p = max(high_p, cp_i)
                         sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
@@ -118,22 +120,27 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
                 if f.iloc[-1] > s_line.iloc[-1] and f.iloc[-2] <= s_line.iloc[-2]:
                     if adx.iloc[-1] > 15 and vol.iloc[-1] > (v_ma.iloc[-1] * 0.6):
                         if not use_tr or cp > e200.iloc[-1]:
+                            l_rsi = "💎 CRSI" if is_hyp else "📊 RSI"
                             y_l = f"[Grafiek](https://finance.yahoo.com/quote/{t})"
-                            sig[strat_key].append(f"• `{t}`: 🟢 *KOOP* | €{cp:.2f} | {y_l}")
+                            sig[strat_key].append(f"• `{t}`: 🟢 *KOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} | {l_rsi}: {crsi:.1f} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}")
                 elif f.iloc[-1] < s_line.iloc[-1] and f.iloc[-2] >= s_line.iloc[-2]:
-                    sig[strat_key].append(f"• `{t}`: 🔴 *VERKOOP* | €{cp:.2f}")
+                    l_rsi = "💎 CRSI" if is_hyp else "📊 RSI"
+                    sig[strat_key].append(f"• `{t}`: 🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} | {l_rsi}: {crsi:.1f} | 🛡️ SL: €{cp-(2*catr):.2f}")
 
             except: continue
 
-    def fmt(n): return f"€{100000 + n:,.0f}"
+    def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
     rapport_lijst = [
-        f"📊 *{label} {naam_sector} RAPPORT rev", f"_{nu}_", "----------------------------------",
-        f"🐢 *Traag:* {fmt(res['T'])} ({num_trades['T']} trades)",
-        f"⚡ *Snel:* {fmt(res['S'])} ({num_trades['S']} trades)",
-        f"🚀 *Hyper Trend:* {fmt(res['HT'])} ({num_trades['HT']} trades)",
-        f"🔥 *Hyper Scalp:* {fmt(res['HS'])} ({num_trades['HS']} trades)",
-        "", "🛡️ *SIGNALEN TRAAG:*", "\n".join(sig["T"]) if sig["T"] else "Geen actie",
-        "", "🎯 *SIGNALEN SNEL:*", "\n".join(sig["S"]) if sig["S"] else "Geen actie"
+        f"📊 *{label} {naam_sector} RAPPORT*", f"_{nu}_", "----------------------------------",
+        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f} ({num_trades['T']} trades)",
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f} ({num_trades['S']} trades)",
+        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f} ({num_trades['HT']} trades)",
+        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f} ({num_trades['HS']} trades)",
+        "", "🛡️ *SIGNALEN TRAAG (RSI):*", get_s(sig["T"]),
+        "", "🎯 *SIGNALEN SNEL (RSI):*", get_s(sig["S"]),
+        "", "📈 *SIGNALEN HYPER TREND (CRSI):*", get_s(sig["HT"]),
+        "", "⚡ *SIGNALEN HYPER SCALP (CRSI):*", get_s(sig["HS"]),
+        "", "💡 _ATR %: <2% laag, >5% hoog. RSI: >70 overbought, <30 oversold. CRSI: >90 overbought, <10 oversold_"
     ]
     stuur_telegram("\n".join(rapport_lijst))
 
