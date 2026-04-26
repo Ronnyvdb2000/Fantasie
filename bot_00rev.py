@@ -131,7 +131,7 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
 
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
     rapport_lijst = [
-        f"📊 *{label} {naam_sector} RAPPORT*", f"_{nu}_", "----------------------------------",
+        f"📊 *{label} {naam_sector} RAPPORT rev*", f"_{nu}_", "----------------------------------",
         f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f} ({num_trades['T']} trades)",
         f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f} ({num_trades['S']} trades)",
         f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f} ({num_trades['HT']} trades)",
