@@ -83,6 +83,7 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
     
     inzet = 2500.0
     res = {"T": 0, "S": 0, "HT": 0, "HS": 0}
+    num_trades = {"T": 0, "S": 0, "HT": 0, "HS": 0}  # NIEUW: trade teller
     sig = {"T": [], "S": [], "HT": [], "HS": []}
 
     # --- STAP 2: VERWERKING PER STRATEGIE ---
@@ -116,6 +117,7 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
                                 if not use_tr or cp_i > e_bt.iloc[i]:
                                     instap, high_p, sl_val, pos = cp_i, cp_i, cp_i - (2 * atr_bt.iloc[i]), True
                                     profit -= kosten
+                                    num_trades[strat_key] += 1  # NIEUW: tel trade
                     else:
                         high_p = max(high_p, cp_i)
                         sl_val = max(sl_val, high_p - (2 * atr_bt.iloc[i]))
@@ -140,14 +142,14 @@ def voer_lijst_uit(bestandsnaam, label, naam_sector):
 
             except: continue
 
-    # Rapport genereren (Identieke weergave)
+    # Rapport genereren
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
     rapport_lijst = [
         f"📊 *{label} {naam_sector} RAPPORT 00*", f"_{nu}_", "----------------------------------",
-        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f}",
-        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f}",
-        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f}",
-        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f}",
+        f"🐢 *Traag (50/200):* €{100000 + res['T']:,.0f} ({num_trades['T']} trades)",  # NIEUW
+        f"⚡ *Snel (20/50):* €{100000 + res['S']:,.0f} ({num_trades['S']} trades)",    # NIEUW
+        f"🚀 *Hyper Trend:* €{100000 + res['HT']:,.0f} ({num_trades['HT']} trades)",  # NIEUW
+        f"🔥 *Hyper Scalp:* €{100000 + res['HS']:,.0f} ({num_trades['HS']} trades)",  # NIEUW
         "", "🛡️ *SIGNALEN TRAAG (RSI):*", get_s(sig["T"]),
         "", "🎯 *SIGNALEN SNEL (RSI):*", get_s(sig["S"]),
         "", "📈 *SIGNALEN HYPER TREND (CRSI):*", get_s(sig["HT"]),
