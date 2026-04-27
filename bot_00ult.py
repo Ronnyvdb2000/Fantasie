@@ -199,11 +199,11 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             # MRA SNEL — originele logica: BB + IBS instap, uitstap MA5 of +12%
             # Backtest venster identiek aan origineel: laatste 252 dagen
             # ---------------------------------------------------------------
-            pb    = p.iloc[-252:];    ibsb  = ibs.iloc[-252:]
-            lbb_b = l_bb.iloc[-252:]; m5b   = ma5.iloc[-252:]
-            vb    = vol.iloc[-252:];  vmb   = v_ma.iloc[-252:]
-            rsib  = rsi.iloc[-252:];  e100b = e100.iloc[-252:]
-            atrb  = atr.iloc[-252:]
+            pb    = p.iloc[-252:].ffill();     ibsb  = ibs.iloc[-252:].ffill()
+            lbb_b = l_bb.iloc[-252:].ffill();  m5b   = ma5.iloc[-252:].ffill()
+            vb    = vol.iloc[-252:].ffill();    vmb   = v_ma.iloc[-252:].ffill()
+            rsib  = rsi.iloc[-252:].ffill();    e100b = e100.iloc[-252:].ffill()
+            atrb  = atr.iloc[-252:].ffill()
 
             pr_ms, pos_ms, ins_ms = 0.0, False, 0.0
             for i in range(1, len(pb)):
