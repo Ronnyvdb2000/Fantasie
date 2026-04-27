@@ -277,7 +277,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     rapport = [
-        f"📊 *{label} {naam_sector} RAPPORT*",
+        f"📊 *{label} {naam_sector} RAPPORT ult*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):*  {fmt(res['T'])} ({num_trades['T']} trades)",
