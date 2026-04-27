@@ -21,19 +21,18 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # ---------------------------------------------------------------------------
-# MRA FILTERS — niet te streng zodat er nog signalen komen
+# MRA PARAMETERS
 # ---------------------------------------------------------------------------
-MRA_VOL_FACTOR   = 1.2    # volume moet 1.2x boven MA20 liggen (licht verhoogd)
-MRA_RSI_MAX      = 45     # RSI onder 45 = licht oversold (niet te streng)
-MRA_TREND_BARS   = 50     # EMA100 vergelijken met 50 bars terug (langzame trend)
-MRA_BB_STD       = 2.2    # Bollinger Band breedte (ongewijzigd)
-MRA_IBS_MAX      = 0.35   # IBS iets versoepeld van 0.30 naar 0.35
+MRA_BB_STD       = 2.2    # Bollinger Band breedte
+MRA_IBS_MAX      = 0.30   # IBS (sluit in onderste 30% van dagrange)
 
-# MRA SNEL uitstap
+# MRA SNEL — exact origineel (gaf €945.000)
 MRA_SNEL_WINST   = 1.12   # +12% winstlimiet
-# MRA TRAAG uitstap
-MRA_TRAAG_WINST  = 1.25   # +25% winstlimiet
-MRA_TRAAG_MA     = 20     # verkoop boven MA20 (trager dan MA5)
+MRA_SNEL_MA      = 5      # verkoop boven MA5
+
+# MRA TRAAG — ruimere uitstap om grotere bewegingen mee te nemen
+MRA_TRAAG_WINST  = 1.40   # +40% winstlimiet
+MRA_TRAAG_ATR    = 3      # trailing stop 3x ATR
 
 def stuur_telegram(bericht: str) -> bool:
     if not TOKEN or not CHAT_ID: return False
@@ -103,20 +102,8 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
 # MRA INSTAP FILTER (gedeeld door Snel en Traag)
 # ---------------------------------------------------------------------------
 def mra_instap_ok(cp, lbb_i, ibs_i, vol_i, vma_i, rsi_i, ema100_i, ema100_prev) -> bool:
-    """
-    Gecombineerde instapfilter voor MRA:
-    - Bollinger Band: koers onder lower band
-    - IBS: sluit in onderste deel van dagrange (licht versoepeld)
-    - Volume: licht verhoogd t.o.v. MA20 (paniekverkoop bevestiging)
-    - RSI: licht oversold (niet te streng)
-    - Trend: EMA100 nog stijgend of vlak (geen dalende mes)
-    """
-    bb_ok    = cp < lbb_i
-    ibs_ok   = ibs_i < MRA_IBS_MAX
-    vol_ok   = vol_i > (vma_i * MRA_VOL_FACTOR)
-    rsi_ok   = rsi_i < MRA_RSI_MAX
-    trend_ok = ema100_i >= (ema100_prev * 0.97)  # EMA100 max 3% gedaald over 50 bars
-    return bb_ok and ibs_ok and vol_ok and rsi_ok and trend_ok
+    """Originele MRA instap: enkel BB + IBS, geen extra filters."""
+    return cp < lbb_i and ibs_i < MRA_IBS_MAX
 
 # ---------------------------------------------------------------------------
 # CORE ENGINE
@@ -209,12 +196,14 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                     sig[skey].append(f"• `{ticker}`: 🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} | {l_rsi}: {crsi:.1f} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}")
 
             # ---------------------------------------------------------------
-            # MRA SNEL — instap met filters, uitstap bij MA5 of +12%
+            # MRA SNEL — originele logica: BB + IBS instap, uitstap MA5 of +12%
+            # Backtest venster identiek aan origineel: laatste 252 dagen
             # ---------------------------------------------------------------
-            pb    = p.iloc[200:];    ibsb  = ibs.iloc[200:]
-            lbb_b = l_bb.iloc[200:]; m5b   = ma5.iloc[200:]
-            vb    = vol.iloc[200:];  vmb   = v_ma.iloc[200:]
-            rsib  = rsi.iloc[200:];  e100b = e100.iloc[200:]
+            pb    = p.iloc[-252:];    ibsb  = ibs.iloc[-252:]
+            lbb_b = l_bb.iloc[-252:]; m5b   = ma5.iloc[-252:]
+            vb    = vol.iloc[-252:];  vmb   = v_ma.iloc[-252:]
+            rsib  = rsi.iloc[-252:];  e100b = e100.iloc[-252:]
+            atrb  = atr.iloc[-252:]
 
             pr_ms, pos_ms, ins_ms = 0.0, False, 0.0
             for i in range(1, len(pb)):
@@ -234,21 +223,25 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
             res["MRAS"] += pr_ms
 
             # ---------------------------------------------------------------
-            # MRA TRAAG — zelfde instap, uitstap bij MA20 of +25%
+            # MRA TRAAG — zelfde instap, uitstap via ATR trailing stop of +40%
+            # Backtest venster identiek aan origineel: laatste 252 dagen
             # ---------------------------------------------------------------
-            ma20b = ma20.iloc[200:]
-
-            pr_mt, pos_mt, ins_mt = 0.0, False, 0.0
-            for i in range(1, len(pb)):
+            pr_mt, pos_mt, ins_mt, hi_mt, sl_mt = 0.0, False, 0.0, 0.0, 0.0
+            for i in range(1, len(pb)):  # hergebruik pb/atrb van MRA Snel hierboven
                 cp = pb.iloc[i]
                 if not pos_mt:
                     e100_prev = e100b.iloc[max(0, i - MRA_TREND_BARS)]
                     if mra_instap_ok(cp, lbb_b.iloc[i], ibsb.iloc[i], vb.iloc[i], vmb.iloc[i], rsib.iloc[i], e100b.iloc[i], e100_prev):
-                        ins_mt, pos_mt = cp, True
-                        pr_mt -= kosten
+                        ins_mt  = cp
+                        hi_mt   = cp
+                        sl_mt   = cp - (3 * atrb.iloc[i])  # ruimere stop dan trend strats (2x ATR)
+                        pos_mt  = True
+                        pr_mt  -= kosten
                         num_trades["MRAT"] += 1
                 else:
-                    if cp > ma20b.iloc[i] or cp > (ins_mt * MRA_TRAAG_WINST):
+                    hi_mt = max(hi_mt, cp)
+                    sl_mt = max(sl_mt, hi_mt - (3 * atrb.iloc[i]))  # trailing stop 3x ATR
+                    if cp < sl_mt or cp > (ins_mt * MRA_TRAAG_WINST):
                         pr_mt += (inzet * (cp / ins_mt) - inzet) - kosten
                         pos_mt = False
             if pos_mt:
@@ -305,8 +298,15 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
         "🐢 *SIGNALEN MRA TRAAG (Munger Dip):*",
         get_s(sig["MRAT"]),
         "",
-        "💡 _Filters MRA: Vol>1.2x MA20 | RSI<45 | EMA100 trend | BB 2.2σ | IBS<0.35_",
-        "💡 _MRA Snel: uitstap MA5 of +12% | MRA Traag: uitstap MA20 of +25%_"
+        "⚙️ *PARAMETERS TREND STRATS:*",
+        f"_ADX>15 | Vol>0.6x MA20 | EMA100 trendfilter | ATR trailing stop (2x)_",
+        f"_Traag: MA50/200 | Snel: MA20/50 | Hyper: EMA9/21 | Scalp: EMA9/21 geen trendfilter_",
+        "",
+        "⚙️ *PARAMETERS MRA:*",
+        f"_Instap: BB {MRA_BB_STD}σ | IBS<{MRA_IBS_MAX}_",
+        f"_MRA Snel: uitstap MA{MRA_SNEL_MA} of +{int((MRA_SNEL_WINST-1)*100)}% (origineel)_",
+        f"_MRA Traag: trailing stop {MRA_TRAAG_ATR}x ATR of +{int((MRA_TRAAG_WINST-1)*100)}%_",
+        f"_Inzet: €{inzet:.0f} | Kosten: €{kosten:.2f}/trade_"
     ]
     stuur_telegram("\n".join(rapport))
 
