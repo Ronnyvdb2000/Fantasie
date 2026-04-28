@@ -21,19 +21,19 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 # ---------------------------------------------------------------------------
-# MRA FILTERS — niet te streng zodat er nog signalen komen
+# MRA PARAMETERS — geen filters, puur BB + IBS (origineel bewezen €945.000)
 # ---------------------------------------------------------------------------
-MRA_VOL_FACTOR   = 1.2    # volume moet 1.2x boven MA20 liggen (licht verhoogd)
-MRA_RSI_MAX      = 45     # RSI onder 45 = licht oversold (niet te streng)
-MRA_TREND_BARS   = 50     # EMA100 vergelijken met 50 bars terug (langzame trend)
-MRA_BB_STD       = 2.2    # Bollinger Band breedte (ongewijzigd)
-MRA_IBS_MAX      = 0.35   # IBS iets versoepeld van 0.30 naar 0.35
+MRA_BB_STD      = 2.2   # Bollinger Band breedte
+MRA_IBS_MAX     = 0.30  # IBS (sluit in onderste 30% van dagrange)
 
-# MRA SNEL uitstap
-MRA_SNEL_WINST   = 1.12   # +12% winstlimiet
-# MRA TRAAG uitstap
-MRA_TRAAG_WINST  = 1.25   # +25% winstlimiet
-MRA_TRAAG_MA     = 20     # verkoop boven MA20 (trager dan MA5)
+# MRA SNEL uitstap — origineel
+MRA_SNEL_WINST  = 1.12  # +12% winstlimiet
+MRA_SNEL_MA     = 5     # verkoop boven MA5
+
+# MRA TRAAG uitstap — minimum houdperiode, dan MA10 of +25%
+MRA_TRAAG_WINST = 1.25  # +25% winstlimiet
+MRA_TRAAG_MA    = 10    # verkoop boven MA10
+MRA_TRAAG_HOLD  = 5     # minimum 5 dagen vasthouden
 
 def stuur_telegram(bericht: str) -> bool:
     if not TOKEN or not CHAT_ID: return False
@@ -48,6 +48,7 @@ def stuur_telegram(bericht: str) -> bool:
 
 # ---------------------------------------------------------------------------
 # INDICATOREN
+# FIX: ma20_line alias verwijderd — ma20 wordt lokaal berekend in MRA sectie
 # ---------------------------------------------------------------------------
 def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_filter: bool, is_hyper: bool) -> tuple:
     p = df['Close'].ffill()
@@ -72,7 +73,7 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     lower_bb = ma20 - (MRA_BB_STD * std20)
     ibs   = (p - l) / (h - l + 1e-10)
     ma5   = p.rolling(5).mean()
-    ma20_line = ma20  # voor MRA Traag uitstap
+    # FIX: ma20_line alias verwijderd — was identiek aan ma20, overbodig
 
     # CRSI voor Hyper strategieën
     if is_hyper:
@@ -97,26 +98,8 @@ def bereken_indicatoren_vectorized(df: pd.DataFrame, s: int, t: int, use_trend_f
     minus_di = 100 * (down.where((down > up) & (down > 0), 0.0).ewm(alpha=1/14, adjust=False).mean() / (atr + 1e-10))
     adx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)).ewm(alpha=1/14, adjust=False).mean()
 
-    return p, f_line, s_line, ema100, vol_ma, rsi_val, atr, adx, v, ibs, lower_bb, ma5, ma20_line
-
-# ---------------------------------------------------------------------------
-# MRA INSTAP FILTER (gedeeld door Snel en Traag)
-# ---------------------------------------------------------------------------
-def mra_instap_ok(cp, lbb_i, ibs_i, vol_i, vma_i, rsi_i, ema100_i, ema100_prev) -> bool:
-    """
-    Gecombineerde instapfilter voor MRA:
-    - Bollinger Band: koers onder lower band
-    - IBS: sluit in onderste deel van dagrange (licht versoepeld)
-    - Volume: licht verhoogd t.o.v. MA20 (paniekverkoop bevestiging)
-    - RSI: licht oversold (niet te streng)
-    - Trend: EMA100 nog stijgend of vlak (geen dalende mes)
-    """
-    bb_ok    = cp < lbb_i
-    ibs_ok   = ibs_i < MRA_IBS_MAX
-    vol_ok   = vol_i > (vma_i * MRA_VOL_FACTOR)
-    rsi_ok   = rsi_i < MRA_RSI_MAX
-    trend_ok = ema100_i >= (ema100_prev * 0.97)  # EMA100 max 3% gedaald over 50 bars
-    return bb_ok and ibs_ok and vol_ok and rsi_ok and trend_ok
+    # FIX: 12 return waarden ipv 13 (ma20_line verwijderd)
+    return p, f_line, s_line, ema100, vol_ma, rsi_val, atr, adx, v, ibs, lower_bb, ma5
 
 # ---------------------------------------------------------------------------
 # CORE ENGINE
@@ -141,9 +124,9 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
         return
 
     inzet = 2500.0
-    res       = {"T": 0.0, "S": 0.0, "HT": 0.0, "HS": 0.0, "MRAS": 0.0, "MRAT": 0.0}
+    res        = {"T": 0.0, "S": 0.0, "HT": 0.0, "HS": 0.0, "MRAS": 0.0, "MRAT": 0.0}
     num_trades = {"T": 0,   "S": 0,   "HT": 0,   "HS": 0,   "MRAS": 0,   "MRAT": 0}
-    sig       = {"T": [],   "S": [],   "HT": [],   "HS": [],   "MRAS": [],   "MRAT": []}
+    sig        = {"T": [],  "S": [],  "HT": [],   "HS": [],  "MRAS": [],  "MRAT": []}
 
     STRATS = [
         ("T",  50,  200, True,  False),
@@ -161,13 +144,14 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
 
             if len(t_data) < 250: continue
 
-            # Bereken basis indicatoren (50/200, niet-hyper) voor MRA
-            p, f, sl, e100, v_ma, rsi, atr, adx, vol, ibs, l_bb, ma5, ma20 = bereken_indicatoren_vectorized(t_data, 50, 200, True, False)
+            # Bereken basis indicatoren voor MRA (FIX: 12 return waarden)
+            p, f, sl, e100, v_ma, rsi, atr, adx, vol, ibs, l_bb, ma5 = bereken_indicatoren_vectorized(t_data, 50, 200, True, False)
             kosten = 15.0 + (inzet * 0.0035)
 
-            # --- STRATEGIEËN T / S / HT / HS ---
+            # --- STRATEGIEËN T / S / HT / HS (ongewijzigd) ---
             for skey, s_p, t_p, utr, ihyp in STRATS:
-                pi, fi, sli, ei, vmai, rsii, atri, dxi, voli, _, _, _, _ = bereken_indicatoren_vectorized(t_data, s_p, t_p, utr, ihyp)
+                # FIX: 12 return waarden unpacking
+                pi, fi, sli, ei, vmai, rsii, atri, dxi, voli, _, _, _ = bereken_indicatoren_vectorized(t_data, s_p, t_p, utr, ihyp)
 
                 pb  = pi.iloc[200:];  fb  = fi.iloc[200:];  sb  = sli.iloc[200:]
                 eb  = ei.iloc[200:];  vb  = voli.iloc[200:]; vmb = vmai.iloc[200:]
@@ -209,75 +193,91 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
                     sig[skey].append(f"• `{ticker}`: 🔴 *VERKOOP* | €{cp:.2f} | ⚡ ATR: {catr:.2f} | {l_rsi}: {crsi:.1f} | 🛡️ SL: €{cp-(2*catr):.2f} | {y_l}")
 
             # ---------------------------------------------------------------
-            # MRA SNEL — instap met filters, uitstap bij MA5 of +12%
+            # MRA SNEL — origineel: BB + IBS, geen filters, uitstap MA5 of +12%
+            # FIX backtest venster: iloc[-252:] + reset_index voor NaN-veiligheid
             # ---------------------------------------------------------------
-            pb    = p.iloc[200:];    ibsb  = ibs.iloc[200:]
-            lbb_b = l_bb.iloc[200:]; m5b   = ma5.iloc[200:]
-            vb    = vol.iloc[200:];  vmb   = v_ma.iloc[200:]
-            rsib  = rsi.iloc[200:];  e100b = e100.iloc[200:]
+            pb_mra  = p.iloc[-252:].reset_index(drop=True)
+            lbb_mra = l_bb.iloc[-252:].reset_index(drop=True)
+            ibs_mra = ibs.iloc[-252:].reset_index(drop=True)
+            m5_mra  = ma5.iloc[-252:].reset_index(drop=True)
 
             pr_ms, pos_ms, ins_ms = 0.0, False, 0.0
-            for i in range(1, len(pb)):
-                cp = pb.iloc[i]
+            for i in range(1, len(pb_mra)):
+                cp    = pb_mra.iloc[i]
+                lbb_i = lbb_mra.iloc[i]
+                ibs_i = ibs_mra.iloc[i]
+                if pd.isna(cp) or pd.isna(lbb_i) or pd.isna(ibs_i): continue
                 if not pos_ms:
-                    e100_prev = e100b.iloc[max(0, i - MRA_TREND_BARS)]
-                    if mra_instap_ok(cp, lbb_b.iloc[i], ibsb.iloc[i], vb.iloc[i], vmb.iloc[i], rsib.iloc[i], e100b.iloc[i], e100_prev):
+                    # FIX: enkel BB + IBS, geen extra filters
+                    if cp < lbb_i and ibs_i < MRA_IBS_MAX:
                         ins_ms, pos_ms = cp, True
                         pr_ms -= kosten
                         num_trades["MRAS"] += 1
                 else:
-                    if cp > m5b.iloc[i] or cp > (ins_ms * MRA_SNEL_WINST):
+                    m5_i = m5_mra.iloc[i]
+                    if pd.isna(m5_i): continue
+                    if cp > m5_i or cp > (ins_ms * MRA_SNEL_WINST):
                         pr_ms += (inzet * (cp / ins_ms) - inzet) - kosten
                         pos_ms = False
             if pos_ms:
-                pr_ms += (inzet * (pb.iloc[-1] / ins_ms) - inzet) - kosten
+                pr_ms += (inzet * (pb_mra.iloc[-1] / ins_ms) - inzet) - kosten
             res["MRAS"] += pr_ms
 
             # ---------------------------------------------------------------
-            # MRA TRAAG — zelfde instap, uitstap bij MA20 of +25%
+            # MRA TRAAG — BB + IBS instap, min 5 dagen, uitstap MA10 of +25%
+            # FIX backtest venster: iloc[-252:] + reset_index voor NaN-veiligheid
+            # FIX uitstap: MA10 ipv MA20 (MA20 werkt niet voor miners)
             # ---------------------------------------------------------------
-            ma20b = ma20.iloc[200:]
+            ma10_mra = p.rolling(MRA_TRAAG_MA).mean().iloc[-252:].reset_index(drop=True)
 
-            pr_mt, pos_mt, ins_mt = 0.0, False, 0.0
-            for i in range(1, len(pb)):
-                cp = pb.iloc[i]
+            pr_mt, pos_mt, ins_mt, hold_mt = 0.0, False, 0.0, 0
+            for i in range(1, len(pb_mra)):
+                cp    = pb_mra.iloc[i]
+                lbb_i = lbb_mra.iloc[i]
+                ibs_i = ibs_mra.iloc[i]
+                if pd.isna(cp) or pd.isna(lbb_i) or pd.isna(ibs_i): continue
                 if not pos_mt:
-                    e100_prev = e100b.iloc[max(0, i - MRA_TREND_BARS)]
-                    if mra_instap_ok(cp, lbb_b.iloc[i], ibsb.iloc[i], vb.iloc[i], vmb.iloc[i], rsib.iloc[i], e100b.iloc[i], e100_prev):
-                        ins_mt, pos_mt = cp, True
+                    if cp < lbb_i and ibs_i < MRA_IBS_MAX:
+                        ins_mt, pos_mt, hold_mt = cp, True, 0
                         pr_mt -= kosten
                         num_trades["MRAT"] += 1
                 else:
-                    if cp > ma20b.iloc[i] or cp > (ins_mt * MRA_TRAAG_WINST):
-                        pr_mt += (inzet * (cp / ins_mt) - inzet) - kosten
-                        pos_mt = False
+                    hold_mt += 1
+                    ma10_i = ma10_mra.iloc[i]
+                    if pd.isna(ma10_i): continue
+                    if hold_mt >= MRA_TRAAG_HOLD:
+                        if cp > ma10_i or cp > (ins_mt * MRA_TRAAG_WINST):
+                            pr_mt += (inzet * (cp / ins_mt) - inzet) - kosten
+                            pos_mt = False
             if pos_mt:
-                pr_mt += (inzet * (pb.iloc[-1] / ins_mt) - inzet) - kosten
+                pr_mt += (inzet * (pb_mra.iloc[-1] / ins_mt) - inzet) - kosten
             res["MRAT"] += pr_mt
 
             # ---------------------------------------------------------------
-            # ACTUELE MRA SIGNALEN (gedeelde instapcheck)
+            # ACTUELE MRA SIGNALEN — enkel BB + IBS, geen filters
             # ---------------------------------------------------------------
-            cp_now     = p.iloc[-1]
-            e100_prev  = e100.iloc[-1 - MRA_TREND_BARS] if len(e100) > MRA_TREND_BARS else e100.iloc[0]
-            if mra_instap_ok(cp_now, l_bb.iloc[-1], ibs.iloc[-1], vol.iloc[-1], v_ma.iloc[-1], rsi.iloc[-1], e100.iloc[-1], e100_prev):
-                crsi_now = rsi.iloc[-1]
-                y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
-                sig["MRAS"].append(f"• `{ticker}`: 🛡️ *Munger Snel* | €{cp_now:.2f} | 📊 RSI: {crsi_now:.1f} | {y_l}")
-                sig["MRAT"].append(f"• `{ticker}`: 🐢 *Munger Traag* | €{cp_now:.2f} | 📊 RSI: {crsi_now:.1f} | {y_l}")
+            cp_now  = p.iloc[-1]
+            lbb_now = l_bb.iloc[-1]
+            ibs_now = ibs.iloc[-1]
+            if not pd.isna(cp_now) and not pd.isna(lbb_now) and not pd.isna(ibs_now):
+                if cp_now < lbb_now and ibs_now < MRA_IBS_MAX:
+                    y_l = f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+                    sig["MRAS"].append(f"• `{ticker}`: 🛡️ *Munger Snel* | €{cp_now:.2f} | 📊 RSI: {rsi.iloc[-1]:.1f} | {y_l}")
+                    sig["MRAT"].append(f"• `{ticker}`: 🐢 *Munger Traag* | €{cp_now:.2f} | 📊 RSI: {rsi.iloc[-1]:.1f} | {y_l}")
 
         except Exception as e:
             logger.error(f"Fout bij ticker {ticker}: {e}")
             continue
 
     # ---------------------------------------------------------------------------
-    # RAPPORT
+    # RAPPORT — gesplitst in 2 berichten (Telegram max 4096 tekens)
     # ---------------------------------------------------------------------------
     def fmt(n): return f"€{100000 + n:,.0f}"
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
-    rapport = [
-        f"📊 *{label} {naam_sector} RAPPORT ult*",
+    # Deel 1: resultaten + trend signalen
+    deel1 = [
+        f"📊 *{label} {naam_sector} RAPPORT ult *",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):*  {fmt(res['T'])} ({num_trades['T']} trades)",
@@ -292,6 +292,11 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
         "",
         "🎯 *SIGNALEN SNEL (RSI):*",
         get_s(sig["S"]),
+    ]
+
+    # Deel 2: hyper + MRA signalen + parameters
+    deel2 = [
+        f"📊 *{label} {naam_sector} (2/2)*",
         "",
         "📈 *SIGNALEN HYPER TREND (CRSI):*",
         get_s(sig["HT"]),
@@ -299,16 +304,23 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
         "⚡ *SIGNALEN HYPER SCALP (CRSI):*",
         get_s(sig["HS"]),
         "",
-        "🛡️ *SIGNALEN MRA SNEL (Munger Dip):*",
+        "🛡️ *SIGNALEN MRA SNEL:*",
         get_s(sig["MRAS"]),
         "",
-        "🐢 *SIGNALEN MRA TRAAG (Munger Dip):*",
+        "🐢 *SIGNALEN MRA TRAAG:*",
         get_s(sig["MRAT"]),
         "",
-        "💡 _Filters MRA: Vol>1.2x MA20 | RSI<45 | EMA100 trend | BB 2.2σ | IBS<0.35_",
-        "💡 _MRA Snel: uitstap MA5 of +12% | MRA Traag: uitstap MA20 of +25%_"
+        "⚙️ *PARAMETERS:*",
+        f"_Trend: ADX>15 | Vol>0.6x MA20 | EMA100 filter | Trailing stop 2x ATR_",
+        f"_MRA instap: BB {MRA_BB_STD}σ | IBS<{MRA_IBS_MAX} (geen extra filters)_",
+        f"_MRA Snel: uitstap MA{MRA_SNEL_MA} of +{int((MRA_SNEL_WINST-1)*100)}%_",
+        f"_MRA Traag: min {MRA_TRAAG_HOLD}d, uitstap MA{MRA_TRAAG_MA} of +{int((MRA_TRAAG_WINST-1)*100)}%_",
+        f"_Inzet: €{inzet:.0f} | Kosten: €{kosten:.2f}/trade_",
     ]
-    stuur_telegram("\n".join(rapport))
+
+    stuur_telegram("\n".join(deel1))
+    time.sleep(1)
+    stuur_telegram("\n".join(deel2))
 
 # ---------------------------------------------------------------------------
 # MAIN
