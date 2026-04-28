@@ -277,7 +277,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
 
     # Deel 1: resultaten + trend signalen
     deel1 = [
-        f"📊 *{label} {naam_sector} RAPPORT ult *",
+        f"📊 *{label} {naam_sector} RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):*  {fmt(res['T'])} ({num_trades['T']} trades)",
