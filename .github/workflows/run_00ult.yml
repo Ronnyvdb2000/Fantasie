@@ -1,4 +1,4 @@
-name: "Bot 00: FULL Scanner (01-09) ult"
+8name: "Bot 00: FULL Scanner (01-09) ult"
 
 on:
   workflow_dispatch: # Handmatige start mogelijk via GitHub UI
@@ -35,4 +35,4 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python bot_00ult.py
+        run: python bot_00ultV2.py
