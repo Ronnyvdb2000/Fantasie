@@ -6,7 +6,7 @@ on:
     # Draait elk uur op de 17de minuut
     # Van 08:17 UTC tot 21:17 UTC (09:17 - 22:17 Belgische tijd)
     # Van maandag (1) t/m vrijdag (5)
-    - cron: '17 8-21 * * 1-5'
+    # - cron: '17 8-21 * * 1-5'
 
 jobs:
   run_global:
