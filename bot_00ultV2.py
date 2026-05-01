@@ -640,21 +640,13 @@ def run_alle_sectoren():
 
     logger.info("Dagelijkse analyse run voltooid.")
 
+# ---------------------------------------------------------------------------
+# MAIN — 1x uitvoeren en stoppen (scheduler via GitHub Actions cron)
+# ---------------------------------------------------------------------------
 def main():
-    RUN_TIJD = "22:30"
-    logger.info(f"Bot gestart — dagelijkse run gepland om {RUN_TIJD}.")
-
-    # Direct 1x draaien bij opstart
+    logger.info(f"Bot gestart om {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     run_alle_sectoren()
-
-    # Daarna elke dag om 22:30
-    while True:
-        nu = datetime.now().strftime("%H:%M")
-        if nu == RUN_TIJD:
-            run_alle_sectoren()
-            time.sleep(61)
-        else:
-            time.sleep(30)
+    logger.info("Bot klaar.")
 
 if __name__ == "__main__":
     main()
