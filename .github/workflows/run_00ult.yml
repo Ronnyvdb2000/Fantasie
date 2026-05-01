@@ -1,38 +1,32 @@
-name: "Bot 00: FULL Scanner (01-09) ult"
+name: Trading Bot 00ult V2
 
 on:
-  workflow_dispatch: # Handmatige start mogelijk via GitHub UI
   schedule:
-    # Draait elke 7 uur (00, 07, 14, 21)
-    # Op de 55ste minuut van het uur
-    # Van maandag (1) t/m zaterdag (6)
-    - cron: '55 */7 * * 1-6'
+    - cron: '30 21 * * 1-5'  # 21:30 UTC = 22:30 BE (winter) | maandag t/m vrijdag
+  workflow_dispatch:           # ook manueel te starten via GitHub UI
 
 jobs:
-  run_global:
+  run-bot:
     runs-on: ubuntu-latest
-
-    # Voorkom dat meerdere runs tegelijk draaien als de vorige nog bezig is
-    concurrency:
-      group: scanner-run
-      cancel-in-progress: false
+    timeout-minutes: 60        # maximale runtime 60 minuten
 
     steps:
-      - name: Code ophalen
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Python instellen
+      - name: Python installeren
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'  # FIX: was 3.9 → str | None syntax vereist 3.10+
-          cache: 'pip'            # Versnelt de installatie bij volgende runs
+          python-version: '3.11'
 
-      - name: Bibliotheken installeren
-        run: |
-          pip install yfinance pandas requests python-dotenv numpy
+      - name: Dependencies installeren
+        run: pip install yfinance pandas numpy requests python-dotenv
 
-      - name: Voer Globale Bot uit
+      - name: Bot uitvoeren
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python bot_00ult.py
+          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
+        run: python bot_00ultV2.py
