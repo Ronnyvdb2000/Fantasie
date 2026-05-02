@@ -1,4 +1,4 @@
- name: Trading Bot 00ult
+ name: bot 00ult
 
 on:
   schedule:
