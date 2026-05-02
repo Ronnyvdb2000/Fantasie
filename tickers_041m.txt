@@ -1,1 +1,9 @@
-MUM
+# MASTERLIJST â€” bron: tickers_041a.txt
+# Laatste update: 02/05/2025
+# Criteria: ROE>15% | Debt<60 | Marge>10% | Vol 18%-65%
+# Status: actief | zwakker (max 2 weken) | verwijderd
+# ------------------------------------------------------------------------
+ASML.AS      | opname:2025-01-15 | ROE:42% | Debt:12.0 | Marge:28% | Vol:31% | actief
+KPN.AS       | opname:2025-03-02 | ROE:19% | Debt:44.0 | Marge:14% | Vol:24% | actief
+ING.AS       | opname:2025-02-10 | ROE:16% | Debt:58.0 | Marge:11% | Vol:38% | zwakker | weken_buiten:1
+ABN.AS       | opname:2025-01-20 | verwijderd:2025-04-28
