@@ -2,7 +2,7 @@ name: "Bot 041: Frankfurt Munger Ticker Filter"
 
 on:
   schedule:
-    - cron: '0 0 * * 0'
+    - cron: '0 7 * * 0'
   workflow_dispatch:
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance pandas requests
+          pip install yfinance pandas numpy requests
 
       - name: Draai Munger Filter Bot
         env:
@@ -35,10 +35,10 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add tickers_05m.txt tickers_05xx.txt
+          git add tickers_041m.txt tickers_041x.txt tickers_041d.txt
           if git diff --staged --quiet; then
             echo "Geen wijzigingen gevonden."
           else
-            git commit -m "Update Munger lijsten"
+            git commit -m "Bot 041: update ticker selectie $(date +'%Y-%m-%d')"
             git push
           fi
