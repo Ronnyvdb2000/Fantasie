@@ -1,0 +1,51 @@
+name: Trading Bot Run
+
+on:
+  schedule:
+    # Draait elke dag om 21:30 UTC (22:30 of 23:30 Belgische tijd afhankelijk van zomer/wintertijd)
+    - cron: '30 21 * * *'
+  workflow_dispatch: # Hiermee kun je de bot handmatig starten via het "Actions" tabblad
+
+jobs:
+  run_trading_bot:
+    runs-on: ubuntu-latest
+    
+    # Cruciaal voor het bijwerken van portfolio.json in je repo
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas requests python-dotenv numpy
+
+      - name: Run Trading Bot
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+        run: python bot_00ultrev.py
+
+      - name: Commit and Push changes
+        if: always() # Zorg dat de data altijd wordt opgeslagen, ook als de bot een foutmelding geeft
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Check of er wijzigingen zijn in de portfolio.json
+          git add portfolio.json
+          
+          # Alleen committen als er echt iets veranderd is (om foutmeldingen te voorkomen)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update portfolio: $(date +'%d-%m-%Y %H:%M')" && git push)
