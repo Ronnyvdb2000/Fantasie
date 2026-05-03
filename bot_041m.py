@@ -1,21 +1,18 @@
 """
 MRA Filter Bot — bot_041m.py
 =============================
-Filtert tickers_041a.txt op:
-  1. Geldig Europees suffix + yfinance data beschikbaar
-  2. Munger kwaliteitscriteria (ROE, Debt, Marge) — soepel niveau
+Verwerkt automatisch alle tickerlijsten van 041 tot 060:
+  tickers_041a.txt → tickers_041m.txt, tickers_041x.txt, tickers_041d.txt
+  tickers_042a.txt → tickers_042m.txt, tickers_042x.txt, tickers_042d.txt
+  ...
+  tickers_060a.txt → tickers_060m.txt, tickers_060x.txt, tickers_060d.txt
+
+Ontbrekende lijsten worden automatisch overgeslagen.
+
+Filtert op:
+  1. Geldig Europees suffix
+  2. Munger kwaliteitscriteria (ROE>10%, Debt<100, Marge>7%)
   3. MRA-geschikte volatiliteit (18% - 65% jaarlijks)
-
-Output:
-  tickers_041m.txt  — masterlijst met datum + parameters
-  tickers_041x.txt  — schone tickerlijst voor MRA-bot
-
-Snelheidsoptimalisaties:
-  - Batch download van alle OHLCV-data in één yfinance-aanroep
-  - Minder sleep tussen calls
-  - Gedenoteerde tickers worden gecached en overgeslagen
-
-Scheduling: elke zondag (minst druk op Yahoo Finance API)
 """
 
 import os
@@ -32,14 +29,6 @@ from datetime import date
 # ---------------------------------------------------------------------------
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("peewee").setLevel(logging.CRITICAL)
-
-# ---------------------------------------------------------------------------
-# BESTANDEN
-# ---------------------------------------------------------------------------
-BRON_BESTAND     = "tickers_041a.txt"
-MASTER_BESTAND   = "tickers_041m.txt"
-EXPORT_BESTAND   = "tickers_041x.txt"
-DELISTED_BESTAND = "tickers_041d.txt"   # gecachede gedenoteerde tickers
 
 # ---------------------------------------------------------------------------
 # TELEGRAM
@@ -67,6 +56,9 @@ BATCH_SIZE       = 50     # tickers per batch OHLCV download
 SLEEP_BATCH      = 2.0    # seconden tussen batches
 SLEEP_INFO       = 0.3    # seconden tussen Munger info-calls
 
+REEKS_START      = 41
+REEKS_EINDE      = 60
+
 
 # ---------------------------------------------------------------------------
 # TELEGRAM
@@ -92,17 +84,34 @@ def send_telegram(bericht: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# BESTANDSNAMEN
+# ---------------------------------------------------------------------------
+def bestand_bron(getal: str) -> str:
+    return f"tickers_{getal}a.txt"
+
+def bestand_master(getal: str) -> str:
+    return f"tickers_{getal}m.txt"
+
+def bestand_export(getal: str) -> str:
+    return f"tickers_{getal}x.txt"
+
+def bestand_delisted(getal: str) -> str:
+    return f"tickers_{getal}d.txt"
+
+
+# ---------------------------------------------------------------------------
 # DELISTED CACHE
 # ---------------------------------------------------------------------------
-def laad_delisted() -> set:
-    if not os.path.exists(DELISTED_BESTAND):
+def laad_delisted(getal: str) -> set:
+    pad = bestand_delisted(getal)
+    if not os.path.exists(pad):
         return set()
-    with open(DELISTED_BESTAND, "r", encoding="utf-8") as f:
+    with open(pad, "r", encoding="utf-8") as f:
         return set(t.strip().upper() for t in f.read().split(",") if t.strip())
 
 
-def sla_delisted_op(delisted: set) -> None:
-    with open(DELISTED_BESTAND, "w", encoding="utf-8") as f:
+def sla_delisted_op(getal: str, delisted: set) -> None:
+    with open(bestand_delisted(getal), "w", encoding="utf-8") as f:
         f.write(", ".join(sorted(delisted)))
 
 
@@ -110,11 +119,6 @@ def sla_delisted_op(delisted: set) -> None:
 # BATCH OHLCV DOWNLOAD
 # ---------------------------------------------------------------------------
 def batch_download_ohlcv(tickers: list) -> dict:
-    """
-    Download 1 jaar OHLCV voor alle tickers in batches van BATCH_SIZE.
-    Veel sneller dan ticker-per-ticker downloaden.
-    Geeft dict terug: {ticker: DataFrame of None}
-    """
     resultaat = {}
     batches   = [tickers[i:i+BATCH_SIZE] for i in range(0, len(tickers), BATCH_SIZE)]
 
@@ -157,11 +161,12 @@ def batch_download_ohlcv(tickers: list) -> dict:
 # ---------------------------------------------------------------------------
 # MASTERLIJST — lezen
 # ---------------------------------------------------------------------------
-def laad_master() -> dict:
+def laad_master(getal: str) -> dict:
     master = {}
-    if not os.path.exists(MASTER_BESTAND):
+    pad    = bestand_master(getal)
+    if not os.path.exists(pad):
         return master
-    with open(MASTER_BESTAND, "r", encoding="utf-8") as f:
+    with open(pad, "r", encoding="utf-8") as f:
         for regel in f:
             regel = regel.strip()
             if not regel or regel.startswith("#"):
@@ -185,10 +190,10 @@ def laad_master() -> dict:
 # ---------------------------------------------------------------------------
 # MASTERLIJST — schrijven
 # ---------------------------------------------------------------------------
-def sla_master_op(master: dict) -> None:
+def sla_master_op(getal: str, master: dict) -> None:
     vandaag = date.today().strftime("%d/%m/%Y")
     regels  = [
-        f"# MASTERLIJST — bron: {BRON_BESTAND}",
+        f"# MASTERLIJST — bron: {bestand_bron(getal)}",
         f"# Laatste update: {vandaag}",
         f"# Criteria (soepel): ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | "
         f"Marge>{MARGE_MIN:.0%} | Vol {VOL_MIN:.0%}-{VOL_MAX:.0%}",
@@ -223,19 +228,19 @@ def sla_master_op(master: dict) -> None:
                 regel += f" | weken_buiten:{entry.get('weken_buiten', 1)}"
             regels.append(regel)
 
-    with open(MASTER_BESTAND, "w", encoding="utf-8") as f:
+    with open(bestand_master(getal), "w", encoding="utf-8") as f:
         f.write("\n".join(regels) + "\n")
 
 
 # ---------------------------------------------------------------------------
 # EXPORT — schrijven
 # ---------------------------------------------------------------------------
-def sla_export_op(master: dict) -> list:
+def sla_export_op(getal: str, master: dict) -> list:
     export = sorted(
         t for t, e in master.items()
         if e.get("status") in ("nieuw", "actief", "zwakker")
     )
-    with open(EXPORT_BESTAND, "w", encoding="utf-8") as f:
+    with open(bestand_export(getal), "w", encoding="utf-8") as f:
         f.write(", ".join(export))
     return export
 
@@ -283,7 +288,7 @@ def check_munger(ticker: str) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# LAAG 3 — VOLATILITEITSFILTER (uit batch cache)
+# LAAG 3 — VOLATILITEITSFILTER
 # ---------------------------------------------------------------------------
 def check_volatiliteit(ticker: str, ohlcv_cache: dict) -> tuple:
     df = ohlcv_cache.get(ticker)
@@ -337,69 +342,56 @@ def update_entry(master: dict, ticker: str, door_filter: bool, metrics: dict) ->
 
 
 # ---------------------------------------------------------------------------
-# HOOFD SCAN
+# SCAN ÉÉN LIJST
 # ---------------------------------------------------------------------------
-def scan() -> None:
-    start_tijd = time.time()
+def scan_lijst(getal: str) -> dict:
+    bron = bestand_bron(getal)
 
     print(f"\n{'='*60}")
-    print(f"  🔍 MRA FILTER BOT — soepel niveau")
-    print(f"  📋 Bron   : {BRON_BESTAND}")
-    print(f"  📁 Master : {MASTER_BESTAND}")
-    print(f"  📤 Export : {EXPORT_BESTAND}")
-    print(f"  📅 Datum  : {date.today().strftime('%d/%m/%Y')}")
-    print(f"  ⚙️  Criteria: ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | "
-          f"Marge>{MARGE_MIN:.0%} | Vol {VOL_MIN:.0%}-{VOL_MAX:.0%}")
+    print(f"  🔍 LIJST {getal}")
+    print(f"  📋 Bron   : {bron}")
+    print(f"  📁 Master : {bestand_master(getal)}")
+    print(f"  📤 Export : {bestand_export(getal)}")
     print(f"{'='*60}")
 
-    # --- Bronbestand laden ---
-    if not os.path.exists(BRON_BESTAND):
-        msg = f"❌ Bronbestand {BRON_BESTAND} niet gevonden."
-        print(msg)
-        send_telegram(msg)
-        return
-
-    with open(BRON_BESTAND, "r", encoding="utf-8") as f:
+    with open(bron, "r", encoding="utf-8") as f:
         inhoud = f.read().replace("\n", ",").replace("$", "")
     alle_tickers = sorted(set(
         t.strip().upper() for t in inhoud.split(",") if t.strip()
     ))
 
-    # --- Suffix filter ---
-    tickers        = [t for t in alle_tickers if check_suffix(t)]
-    afgew_suffix   = [t for t in alle_tickers if not check_suffix(t)]
+    # Suffix filter
+    tickers      = [t for t in alle_tickers if check_suffix(t)]
+    afgew_suffix = [t for t in alle_tickers if not check_suffix(t)]
     if afgew_suffix:
-        print(f"\n  🚫 {len(afgew_suffix)} tickers zonder geldig suffix overgeslagen")
+        print(f"  🚫 {len(afgew_suffix)} tickers zonder geldig suffix overgeslagen")
 
-    # --- Delisted cache ---
-    delisted_cache       = laad_delisted()
-    tickers_te_scannen   = [t for t in tickers if t not in delisted_cache]
+    # Delisted cache
+    delisted_cache     = laad_delisted(getal)
+    tickers_te_scannen = [t for t in tickers if t not in delisted_cache]
     if delisted_cache:
         print(f"  ⚡ {len(delisted_cache)} gedenoteerde tickers overgeslagen (cache)")
     print(f"  📊 {len(tickers_te_scannen)} tickers te scannen")
 
-    # --- Master laden ---
-    master     = laad_master()
+    # Master laden
+    master     = laad_master(getal)
     eerste_run = len(master) == 0
-    print(f"  {'Eerste run — master wordt aangemaakt' if eerste_run else f'{len(master)} tickers gekend in master'}")
+    print(f"  {'Eerste run' if eerste_run else f'{len(master)} tickers gekend in master'}")
 
-    # --- STAP 1: Batch OHLCV download ---
+    # Stap 1: Batch OHLCV download
     ohlcv_cache = batch_download_ohlcv(tickers_te_scannen)
 
     # Detecteer nieuw gedenoteerde tickers
     nieuw_delisted = {t for t, df in ohlcv_cache.items() if df is None or len(df) == 0}
     delisted_cache.update(nieuw_delisted)
-    sla_delisted_op(delisted_cache)
+    sla_delisted_op(getal, delisted_cache)
 
     tickers_actief = [t for t in tickers_te_scannen if t not in nieuw_delisted]
     print(f"\n  ✅ {len(tickers_actief)} tickers met data | "
           f"❌ {len(nieuw_delisted)} nieuw gedenoteerd\n")
 
-    # --- STAP 2: Munger + Volatiliteit per ticker ---
+    # Stap 2: Munger + Volatiliteit
     print(f"{'='*60}")
-    print(f"  📊 ANALYSE")
-    print(f"{'='*60}")
-
     tellers = {
         "nieuw":       [],
         "actief":      [],
@@ -442,76 +434,101 @@ def scan() -> None:
         status  = update_entry(master, ticker, True, metrics)
         tellers[status].append(ticker)
 
-    # --- Opslaan ---
-    sla_master_op(master)
-    export_lijst = sla_export_op(master)
+    # Opslaan
+    sla_master_op(getal, master)
+    export_lijst = sla_export_op(getal, master)
 
-    # --- Timing ---
+    print(f"\n  ✅ {getal} klaar: {len(export_lijst)} tickers → {bestand_export(getal)}")
+
+    return {
+        "getal":   getal,
+        "tellers": tellers,
+        "master":  master,
+        "export":  export_lijst,
+    }
+
+
+# ---------------------------------------------------------------------------
+# HOOFD SCAN — alle lijsten 041 tot 060
+# ---------------------------------------------------------------------------
+def scan_alle() -> None:
+    start_tijd   = time.time()
+    nu           = date.today().strftime("%d/%m/%Y")
+    verwerkt     = []
+    overgeslagen = []
+
+    print(f"\n{'='*60}")
+    print(f"  🔍 MRA FILTER BOT — ALLE LIJSTEN 041-060")
+    print(f"  📅 Datum  : {nu}")
+    print(f"  ⚙️  Criteria: ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | "
+          f"Marge>{MARGE_MIN:.0%} | Vol {VOL_MIN:.0%}-{VOL_MAX:.0%}")
+    print(f"{'='*60}")
+
+    alle_resultaten = {}
+
+    for nr in range(REEKS_START, REEKS_EINDE + 1):
+        getal = f"0{nr}"
+        bron  = bestand_bron(getal)
+
+        if not os.path.exists(bron):
+            print(f"\n  ⏭️  {bron} niet gevonden — overgeslagen")
+            overgeslagen.append(getal)
+            continue
+
+        verwerkt.append(getal)
+        resultaat = scan_lijst(getal)
+        alle_resultaten[getal] = resultaat
+        time.sleep(1)
+
+    # Timing
     elapsed  = time.time() - start_tijd
     minuten  = int(elapsed // 60)
     seconden = int(elapsed % 60)
 
-    # --- Console samenvatting ---
+    # Console samenvatting
     print(f"\n{'='*60}")
-    print(f"  ✅ SCAN VOLTOOID in {minuten}m {seconden}s")
-    print(f"  🆕 Nieuw       : {len(tellers['nieuw'])}")
-    print(f"  ✅ Actief      : {len(tellers['actief'])}")
-    print(f"  ⚠️  Zwakker     : {len(tellers['zwakker'])}")
-    print(f"  ❌ Verwijderd  : {len(tellers['verwijderd'])}")
-    print(f"  🚫 Munger fail : {len(tellers['munger_fail'])}")
-    print(f"  📉 Vol fail    : {len(tellers['vol_fail'])}")
-    print(f"  📤 Export      : {len(export_lijst)} tickers → {EXPORT_BESTAND}")
+    print(f"  ✅ ALLE SCANS VOLTOOID in {minuten}m {seconden}s")
+    print(f"  📋 Verwerkt    : {len(verwerkt)} lijsten ({', '.join(verwerkt)})")
+    print(f"  ⏭️  Overgeslagen: {len(overgeslagen)} lijsten ({', '.join(overgeslagen)})")
+    for getal, res in alle_resultaten.items():
+        t = res["tellers"]
+        print(f"     {getal}: 🆕{len(t['nieuw'])} ✅{len(t['actief'])} "
+              f"⚠️{len(t['zwakker'])} ❌{len(t['verwijderd'])} "
+              f"→ {len(res['export'])} export")
     print(f"{'='*60}\n")
 
-    # --- Telegram rapport ---
-    nu      = date.today().strftime("%d/%m/%Y")
-    rapport = f"📊 *MRA Filter — {BRON_BESTAND}*\n_{nu}_\n"
+    # Telegram rapport
+    rapport  = f"📊 *MRA Filter — Alle lijsten*\n_{nu}_\n"
     rapport += f"⏱️ _Looptijd: {minuten}m {seconden}s_\n"
-    rapport += "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    rapport += f"⚙️ ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | Marge>{MARGE_MIN:.0%}\n\n"
+    rapport += f"⚙️ ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | Marge>{MARGE_MIN:.0%}\n"
+    rapport += "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
-    if tellers["nieuw"]:
-        rapport += f"🆕 *Nieuw ({len(tellers['nieuw'])}):*\n"
-        for t in tellers["nieuw"]:
-            e = master[t]
-            rapport += (
-                f"• `{t}` — ROE:{e.get('ROE','?')} | "
-                f"Debt:{e.get('Debt','?')} | "
-                f"Marge:{e.get('Marge','?')} | "
-                f"Vol:{e.get('Vol','?')}\n"
-            )
+    for getal, res in alle_resultaten.items():
+        t      = res["tellers"]
+        export = res["export"]
+        rapport += f"*{getal}* — {len(export)} tickers\n"
+        if t["nieuw"]:
+            rapport += f"  🆕 {', '.join(f'`{x}`' for x in t['nieuw'])}\n"
+        if t["verwijderd"]:
+            rapport += f"  ❌ {', '.join(f'`{x}`' for x in t['verwijderd'])}\n"
+        if t["zwakker"]:
+            rapport += f"  ⚠️ {', '.join(f'`{x}`' for x in t['zwakker'])}\n"
+        if not t["nieuw"] and not t["verwijderd"] and not t["zwakker"]:
+            rapport += f"  ✅ Geen wijzigingen\n"
+        rapport += "\n"
 
-    if tellers["verwijderd"]:
-        rapport += f"\n❌ *Verwijderd ({len(tellers['verwijderd'])}):*\n"
-        for t in tellers["verwijderd"]:
-            rapport += f"• `{t}`\n"
-
-    if tellers["zwakker"]:
-        rapport += f"\n⚠️ *Verzwakt ({len(tellers['zwakker'])}):*\n"
-        for t in tellers["zwakker"]:
-            weken = master[t].get("weken_buiten", 1)
-            rapport += f"• `{t}` ({weken}/{MAX_WEKEN_BUITEN} weken)\n"
-
-    if not tellers["nieuw"] and not tellers["verwijderd"] and not tellers["zwakker"]:
-        rapport += "✅ Geen wijzigingen deze week\n"
-
-    actief_totaal = sorted(
-        t for t, e in master.items()
-        if e.get("status") in ("nieuw", "actief", "zwakker")
-    )
-    rapport += f"\n📤 *Export: {len(actief_totaal)} tickers*\n"
-    if actief_totaal:
-        rapport += f"`{', '.join(actief_totaal)}`\n"
-    rapport += "\n_Volgende run: volgende zondag_"
+    rapport += "_Volgende run: volgende zondag_"
 
     if len(rapport) <= 4096:
         send_telegram(rapport)
     else:
         send_telegram(rapport[:4000] + "\n_...zie master voor volledig overzicht_")
+        time.sleep(1)
+        send_telegram("_(vervolg)_\n" + rapport[4000:])
 
 
 # ---------------------------------------------------------------------------
 # START
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    scan()
+    scan_alle()
