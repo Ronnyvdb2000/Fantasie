@@ -40,5 +40,6 @@ jobs:
             echo "Geen wijzigingen gevonden."
           else
             git commit -m "Bot update ticker selectie"
+            git pull --rebase origin main
             git push
           fi
