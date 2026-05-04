@@ -475,7 +475,7 @@ def scan_lijst(getal: str) -> dict:
                 gecorrigeerde_tickers.append(gecorrigeerd)
                 correcties.append((ticker, gecorrigeerd))
                 print(f"     ✏️  {ticker} → {gecorrigeerd}")
-            elif niet reden:
+            elif not reden:
                 # Geen suffix nodig (Nasdaq) of al correct
                 gecorrigeerde_tickers.append(gecorrigeerd)
             else:
