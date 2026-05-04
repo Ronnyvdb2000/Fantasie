@@ -1,4 +1,4 @@
-name: Bot 00: FULL Scanner (01-90) mail
+name: "Bot 00: FULL Scanner (01-90) mail"
 
 on:
   schedule:
