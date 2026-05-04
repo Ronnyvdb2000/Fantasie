@@ -1,4 +1,4 @@
-name: "Bot 041: FULL Munger Ticker Filter"
+name: "Bot 041: Frankfurt Munger Ticker Filter"
 
 on:
   schedule:
@@ -33,4 +33,12 @@ jobs:
 
       - name: Commit en Push resultaten
         run: |
-          git config --local user.email "gith
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add tickers_0*m.txt tickers_0*x.txt tickers_0*d.txt
+          if git diff --staged --quiet; then
+            echo "Geen wijzigingen gevonden."
+          else
+            git commit -m "Bot update ticker selectie"
+            git push
+          fi
