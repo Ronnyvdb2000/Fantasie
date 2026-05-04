@@ -1,16 +1,21 @@
 """
 MRA Filter Bot — bot_041m.py
 =============================
-Verwerkt automatisch alle tickerlijsten van 041 tot 060:
-  tickers_041a.txt → tickers_041m.txt, tickers_041x.txt, tickers_041d.txt
-  tickers_042a.txt → tickers_042m.txt, tickers_042x.txt, tickers_042d.txt
-  ...
-  tickers_060a.txt → tickers_060m.txt, tickers_060x.txt, tickers_060d.txt
+Verwerkt tickerlijsten per beurs met automatische suffix-correctie:
+  041 → Benelux     (.AS / .BR)
+  042 → Parijs      (.PA)
+  043 → Frankfurt   (.DE)
+  044 → Spanje/Portugal (.MC / .LS)
+  045 → Londen      (.L)
+  046 → Milaan      (.MI)
+  047 → Toronto     (.TO)
+  048 → Nasdaq/NYSE (geen suffix)
 
-Ontbrekende lijsten worden automatisch overgeslagen.
+Suffix-correctie: als een ticker het verkeerde of geen suffix heeft,
+wordt automatisch het correcte suffix voor de betreffende beurs geprobeerd.
 
 Filtert op:
-  1. Geldig Europees suffix
+  1. Suffix check + automatische correctie
   2. Munger kwaliteitscriteria (ROE>10%, Debt<100, Marge>7%)
   3. MRA-geschikte volatiliteit (18% - 65% jaarlijks)
 """
@@ -25,7 +30,7 @@ import yfinance as yf
 from datetime import date
 
 # ---------------------------------------------------------------------------
-# LOGGING — onderdruk lelijke yfinance meldingen
+# LOGGING
 # ---------------------------------------------------------------------------
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("peewee").setLevel(logging.CRITICAL)
@@ -37,14 +42,55 @@ TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN",   "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # ---------------------------------------------------------------------------
-# CONFIG — soepel niveau
+# BEURS CONFIGURATIE
+# Per lijstnummer: naam + geldige suffixen (volgorde = prioriteit bij correctie)
+# Lege string "" = geen suffix (Nasdaq/NYSE)
 # ---------------------------------------------------------------------------
-GELDIGE_SUFFIXEN = [
-    ".AS", ".PA", ".BR", ".DE", ".MC",
-    ".L",  ".SW", ".MI", ".OL", ".ST",
-    ".CO", ".HE", ".LS", ".IR",
-]
+BEURS_CONFIG = {
+    "041": {
+        "naam":     "Benelux",
+        "suffixen": [".AS", ".BR"],          # Amsterdam eerst, dan Brussel
+    },
+    "042": {
+        "naam":     "Parijs",
+        "suffixen": [".PA"],
+    },
+    "043": {
+        "naam":     "Frankfurt",
+        "suffixen": [".DE"],
+    },
+    "044": {
+        "naam":     "Spanje/Portugal",
+        "suffixen": [".MC", ".LS"],
+    },
+    "045": {
+        "naam":     "Londen",
+        "suffixen": [".L"],
+    },
+    "046": {
+        "naam":     "Milaan",
+        "suffixen": [".MI"],
+    },
+    "047": {
+        "naam":     "Toronto",
+        "suffixen": [".TO", ".V"],           # TSX eerst, dan TSX Venture
+    },
+    "048": {
+        "naam":     "Nasdaq/NYSE",
+        "suffixen": [""],                    # Geen suffix voor Amerikaanse beurzen
+    },
+}
 
+# Alle geldige suffixen gecombineerd (voor globale check)
+ALLE_SUFFIXEN = set()
+for cfg in BEURS_CONFIG.values():
+    for s in cfg["suffixen"]:
+        if s:
+            ALLE_SUFFIXEN.add(s)
+
+# ---------------------------------------------------------------------------
+# CONFIG — criteria
+# ---------------------------------------------------------------------------
 ROE_MIN          = 0.10   # ROE > 10%
 DEBT_MAX         = 100.0  # Debt/Equity < 100
 MARGE_MIN        = 0.07   # Winstmarge > 7%
@@ -86,17 +132,68 @@ def send_telegram(bericht: str) -> None:
 # ---------------------------------------------------------------------------
 # BESTANDSNAMEN
 # ---------------------------------------------------------------------------
-def bestand_bron(getal: str) -> str:
-    return f"tickers_{getal}a.txt"
+def bestand_bron(getal):    return f"tickers_{getal}a.txt"
+def bestand_master(getal):  return f"tickers_{getal}m.txt"
+def bestand_export(getal):  return f"tickers_{getal}x.txt"
+def bestand_delisted(getal):return f"tickers_{getal}d.txt"
 
-def bestand_master(getal: str) -> str:
-    return f"tickers_{getal}m.txt"
 
-def bestand_export(getal: str) -> str:
-    return f"tickers_{getal}x.txt"
+# ---------------------------------------------------------------------------
+# SUFFIX CORRECTIE
+# ---------------------------------------------------------------------------
+def heeft_geldig_suffix(ticker: str, suffixen: list) -> bool:
+    """Controleert of ticker al een geldig suffix voor deze beurs heeft."""
+    if "" in suffixen:
+        # Nasdaq/NYSE: ticker mag geen Europees/.TO suffix hebben
+        return not any(ticker.endswith(s) for s in ALLE_SUFFIXEN if s)
+    return any(ticker.endswith(s) for s in suffixen)
 
-def bestand_delisted(getal: str) -> str:
-    return f"tickers_{getal}d.txt"
+
+def strip_suffix(ticker: str) -> str:
+    """Verwijdert elk bekend suffix van een ticker."""
+    for s in sorted(ALLE_SUFFIXEN, key=len, reverse=True):
+        if ticker.endswith(s):
+            return ticker[:-len(s)]
+    return ticker
+
+
+def corrigeer_suffix(ticker: str, suffixen: list) -> tuple:
+    """
+    Probeert de ticker te corrigeren naar het juiste suffix voor deze beurs.
+    Geeft (gecorrigeerde_ticker, was_gecorrigeerd, reden) terug.
+    Valideert via yfinance fast_info.
+    """
+    # Al correct?
+    if heeft_geldig_suffix(ticker, suffixen):
+        return ticker, False, ""
+
+    basis = strip_suffix(ticker)
+
+    # Geen suffix nodig (Nasdaq/NYSE)
+    if suffixen == [""]:
+        kandidaat = basis
+        try:
+            fi = yf.Ticker(kandidaat).fast_info
+            prijs = getattr(fi, "last_price", None)
+            if prijs and prijs > 0:
+                return kandidaat, ticker != kandidaat, ""
+        except Exception:
+            pass
+        return ticker, False, f"niet gevonden op Nasdaq/NYSE"
+
+    # Probeer elk geldig suffix voor deze beurs
+    for suffix in suffixen:
+        kandidaat = basis + suffix
+        try:
+            fi = yf.Ticker(kandidaat).fast_info
+            prijs = getattr(fi, "last_price", None)
+            if prijs and prijs > 0:
+                return kandidaat, True, ""
+        except Exception:
+            pass
+        time.sleep(0.2)
+
+    return ticker, False, f"niet gevonden met {suffixen}"
 
 
 # ---------------------------------------------------------------------------
@@ -120,8 +217,10 @@ def sla_delisted_op(getal: str, delisted: set) -> None:
 # ---------------------------------------------------------------------------
 def batch_download_ohlcv(tickers: list) -> dict:
     resultaat = {}
-    batches   = [tickers[i:i+BATCH_SIZE] for i in range(0, len(tickers), BATCH_SIZE)]
+    if not tickers:
+        return resultaat
 
+    batches = [tickers[i:i+BATCH_SIZE] for i in range(0, len(tickers), BATCH_SIZE)]
     print(f"\n  📥 OHLCV batch download: {len(tickers)} tickers "
           f"in {len(batches)} batches van {BATCH_SIZE}...")
 
@@ -190,10 +289,10 @@ def laad_master(getal: str) -> dict:
 # ---------------------------------------------------------------------------
 # MASTERLIJST — schrijven
 # ---------------------------------------------------------------------------
-def sla_master_op(getal: str, master: dict) -> None:
+def sla_master_op(getal: str, master: dict, beurs_naam: str) -> None:
     vandaag = date.today().strftime("%d/%m/%Y")
     regels  = [
-        f"# MASTERLIJST — bron: {bestand_bron(getal)}",
+        f"# MASTERLIJST — {beurs_naam} | bron: {bestand_bron(getal)}",
         f"# Laatste update: {vandaag}",
         f"# Criteria (soepel): ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | "
         f"Marge>{MARGE_MIN:.0%} | Vol {VOL_MIN:.0%}-{VOL_MAX:.0%}",
@@ -214,14 +313,14 @@ def sla_master_op(getal: str, master: dict) -> None:
 
         if status == "verwijderd":
             verw = entry.get("verwijderd", date.today().isoformat())
-            regels.append(f"{t:<14} | opname:{opname} | verwijderd:{verw}")
+            regels.append(f"{t:<16} | opname:{opname} | verwijderd:{verw}")
         else:
             roe   = entry.get("ROE",   "?")
             debt  = entry.get("Debt",  "?")
             marge = entry.get("Marge", "?")
             vol   = entry.get("Vol",   "?")
             regel = (
-                f"{t:<14} | opname:{opname} | "
+                f"{t:<16} | opname:{opname} | "
                 f"ROE:{roe} | Debt:{debt} | Marge:{marge} | Vol:{vol} | {status}"
             )
             if status == "zwakker":
@@ -243,13 +342,6 @@ def sla_export_op(getal: str, master: dict) -> list:
     with open(bestand_export(getal), "w", encoding="utf-8") as f:
         f.write(", ".join(export))
     return export
-
-
-# ---------------------------------------------------------------------------
-# LAAG 1 — SUFFIX CHECK
-# ---------------------------------------------------------------------------
-def check_suffix(ticker: str) -> bool:
-    return any(ticker.endswith(s) for s in GELDIGE_SUFFIXEN)
 
 
 # ---------------------------------------------------------------------------
@@ -345,26 +437,57 @@ def update_entry(master: dict, ticker: str, door_filter: bool, metrics: dict) ->
 # SCAN ÉÉN LIJST
 # ---------------------------------------------------------------------------
 def scan_lijst(getal: str) -> dict:
-    bron = bestand_bron(getal)
+    config     = BEURS_CONFIG.get(getal, {"naam": f"Lijst {getal}", "suffixen": []})
+    beurs_naam = config["naam"]
+    suffixen   = config["suffixen"]
+    bron       = bestand_bron(getal)
 
     print(f"\n{'='*60}")
-    print(f"  🔍 LIJST {getal}")
-    print(f"  📋 Bron   : {bron}")
-    print(f"  📁 Master : {bestand_master(getal)}")
-    print(f"  📤 Export : {bestand_export(getal)}")
+    print(f"  🔍 LIJST {getal} — {beurs_naam}")
+    print(f"  📋 Bron     : {bron}")
+    print(f"  📁 Master   : {bestand_master(getal)}")
+    print(f"  📤 Export   : {bestand_export(getal)}")
+    print(f"  🏦 Suffixen : {suffixen if suffixen != [''] else ['geen (Nasdaq/NYSE)']}")
     print(f"{'='*60}")
 
+    # Bronbestand laden
     with open(bron, "r", encoding="utf-8") as f:
-        inhoud = f.read().replace("\n", ",").replace("$", "")
-    alle_tickers = sorted(set(
+        inhoud = f.read().replace("\n", ",").replace(";", ",").replace("$", "")
+    ruwe_tickers = sorted(set(
         t.strip().upper() for t in inhoud.split(",") if t.strip()
     ))
 
-    # Suffix filter
-    tickers      = [t for t in alle_tickers if check_suffix(t)]
-    afgew_suffix = [t for t in alle_tickers if not check_suffix(t)]
-    if afgew_suffix:
-        print(f"  🚫 {len(afgew_suffix)} tickers zonder geldig suffix overgeslagen")
+    print(f"  📊 {len(ruwe_tickers)} tickers geladen uit bronbestand")
+
+    # --- SUFFIX CORRECTIE ---
+    gecorrigeerde_tickers = []
+    correcties            = []
+    niet_gevonden         = []
+
+    print(f"\n  🔧 Suffix-correctie...")
+    for ticker in ruwe_tickers:
+        if heeft_geldig_suffix(ticker, suffixen):
+            gecorrigeerde_tickers.append(ticker)
+        else:
+            # Probeer te corrigeren
+            gecorrigeerd, was_gewijzigd, reden = corrigeer_suffix(ticker, suffixen)
+            if was_gewijzigd:
+                gecorrigeerde_tickers.append(gecorrigeerd)
+                correcties.append((ticker, gecorrigeerd))
+                print(f"     ✏️  {ticker} → {gecorrigeerd}")
+            elif niet reden:
+                # Geen suffix nodig (Nasdaq) of al correct
+                gecorrigeerde_tickers.append(gecorrigeerd)
+            else:
+                niet_gevonden.append((ticker, reden))
+                print(f"     ❌ {ticker}: {reden}")
+
+    if correcties:
+        print(f"  ✏️  {len(correcties)} tickers gecorrigeerd")
+    if niet_gevonden:
+        print(f"  ❌ {len(niet_gevonden)} tickers niet te corrigeren")
+
+    tickers = gecorrigeerde_tickers
 
     # Delisted cache
     delisted_cache     = laad_delisted(getal)
@@ -378,7 +501,7 @@ def scan_lijst(getal: str) -> dict:
     eerste_run = len(master) == 0
     print(f"  {'Eerste run' if eerste_run else f'{len(master)} tickers gekend in master'}")
 
-    # Stap 1: Batch OHLCV download
+    # Batch OHLCV download
     ohlcv_cache = batch_download_ohlcv(tickers_te_scannen)
 
     # Detecteer nieuw gedenoteerde tickers
@@ -390,7 +513,7 @@ def scan_lijst(getal: str) -> dict:
     print(f"\n  ✅ {len(tickers_actief)} tickers met data | "
           f"❌ {len(nieuw_delisted)} nieuw gedenoteerd\n")
 
-    # Stap 2: Munger + Volatiliteit
+    # Munger + Volatiliteit
     print(f"{'='*60}")
     tellers = {
         "nieuw":       [],
@@ -402,7 +525,7 @@ def scan_lijst(getal: str) -> dict:
     }
 
     for ticker in tickers_actief:
-        print(f"  {ticker:<14} ", end="", flush=True)
+        print(f"  {ticker:<16} ", end="", flush=True)
 
         munger_ok, munger_metrics, munger_reden = check_munger(ticker)
         if not munger_ok:
@@ -435,21 +558,25 @@ def scan_lijst(getal: str) -> dict:
         tellers[status].append(ticker)
 
     # Opslaan
-    sla_master_op(getal, master)
+    sla_master_op(getal, master, beurs_naam)
     export_lijst = sla_export_op(getal, master)
 
-    print(f"\n  ✅ {getal} klaar: {len(export_lijst)} tickers → {bestand_export(getal)}")
+    print(f"\n  ✅ {getal} ({beurs_naam}) klaar: "
+          f"{len(export_lijst)} tickers → {bestand_export(getal)}")
 
     return {
-        "getal":   getal,
-        "tellers": tellers,
-        "master":  master,
-        "export":  export_lijst,
+        "getal":      getal,
+        "naam":       beurs_naam,
+        "tellers":    tellers,
+        "master":     master,
+        "export":     export_lijst,
+        "correcties": correcties,
+        "niet_gevonden": niet_gevonden,
     }
 
 
 # ---------------------------------------------------------------------------
-# HOOFD SCAN — alle lijsten 041 tot 060
+# HOOFD SCAN
 # ---------------------------------------------------------------------------
 def scan_alle() -> None:
     start_tijd   = time.time()
@@ -489,10 +616,11 @@ def scan_alle() -> None:
     print(f"\n{'='*60}")
     print(f"  ✅ ALLE SCANS VOLTOOID in {minuten}m {seconden}s")
     print(f"  📋 Verwerkt    : {len(verwerkt)} lijsten ({', '.join(verwerkt)})")
-    print(f"  ⏭️  Overgeslagen: {len(overgeslagen)} lijsten ({', '.join(overgeslagen)})")
+    print(f"  ⏭️  Overgeslagen: {len(overgeslagen)} lijsten")
     for getal, res in alle_resultaten.items():
         t = res["tellers"]
-        print(f"     {getal}: 🆕{len(t['nieuw'])} ✅{len(t['actief'])} "
+        print(f"     {getal} ({res['naam']}): "
+              f"🆕{len(t['nieuw'])} ✅{len(t['actief'])} "
               f"⚠️{len(t['zwakker'])} ❌{len(t['verwijderd'])} "
               f"→ {len(res['export'])} export")
     print(f"{'='*60}\n")
@@ -506,9 +634,18 @@ def scan_alle() -> None:
     for getal, res in alle_resultaten.items():
         t      = res["tellers"]
         export = res["export"]
-        rapport += f"*{getal}* — {len(export)} tickers\n"
+        naam   = res["naam"]
+        rapport += f"*{getal} — {naam}* ({len(export)} tickers)\n"
+
+        if res.get("correcties"):
+            rapport += f"  ✏️ {len(res['correcties'])} suffix-correcties\n"
+        if res.get("niet_gevonden"):
+            rapport += f"  ⚠️ {len(res['niet_gevonden'])} niet te corrigeren\n"
         if t["nieuw"]:
-            rapport += f"  🆕 {', '.join(f'`{x}`' for x in t['nieuw'])}\n"
+            rapport += f"  🆕 {', '.join(f'`{x}`' for x in t['nieuw'][:10])}"
+            if len(t["nieuw"]) > 10:
+                rapport += f" +{len(t['nieuw'])-10}"
+            rapport += "\n"
         if t["verwijderd"]:
             rapport += f"  ❌ {', '.join(f'`{x}`' for x in t['verwijderd'])}\n"
         if t["zwakker"]:
