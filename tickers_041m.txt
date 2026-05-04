@@ -1,18 +1,18 @@
 # MASTERLIJST — bron: tickers_041a.txt
-# Laatste update: 03/05/2026
+# Laatste update: 04/05/2026
 # Criteria (soepel): ROE>10% | Debt<100 | Marge>7% | Vol 18%-65%
 # Status: actief | zwakker (max 2 weken) | verwijderd
 # ----------------------------------------------------------------------
-ADYEN.AS       | opname:2026-05-03 | ROE:22% | Debt:4.8 | Marge:45% | Vol:40% | nieuw
-AGN.AS         | opname:2026-05-03 | ROE:10% | Debt:56.9 | Marge:8% | Vol:25% | nieuw
-ASML.AS        | opname:2026-05-03 | ROE:52% | Debt:13.0 | Marge:30% | Vol:38% | nieuw
-CVC.AS         | opname:2026-05-03 | ROE:60% | Debt:79.3 | Marge:64% | Vol:34% | nieuw
-FERGR.AS       | opname:2026-05-03 | ROE:24% | Debt:19.9 | Marge:14% | Vol:35% | nieuw
-GLPG.AS        | opname:2026-05-03 | ROE:10% | Debt:21.4 | Marge:29% | Vol:31% | nieuw
-HYDRA.AS       | opname:2026-05-03 | ROE:22% | Debt:10.6 | Marge:9% | Vol:26% | nieuw
-NEDAP.AS       | opname:2026-05-03 | ROE:28% | Debt:4.9 | Marge:9% | Vol:25% | nieuw
-NRP.AS         | opname:2026-05-03 | ROE:10% | Debt:62.0 | Marge:54% | Vol:29% | nieuw
-PRX.AS         | opname:2026-05-03 | ROE:26% | Debt:32.1 | Marge:196% | Vol:30% | nieuw
-THEON.AS       | opname:2026-05-03 | ROE:25% | Debt:31.6 | Marge:18% | Vol:55% | nieuw
-UMG.AS         | opname:2026-05-03 | ROE:34% | Debt:74.6 | Marge:12% | Vol:31% | nieuw
-VALUE.AS       | opname:2026-05-03 | ROE:15% | Debt:15.6 | Marge:83% | Vol:26% | nieuw
+ADYEN.AS       | opname:2026-05-03 | ROE:22% | Debt:4.8 | Marge:45% | Vol:40% | actief
+AGN.AS         | opname:2026-05-03 | ROE:10% | Debt:56.9 | Marge:8% | Vol:25% | actief
+ASML.AS        | opname:2026-05-03 | ROE:52% | Debt:13.0 | Marge:30% | Vol:38% | actief
+CVC.AS         | opname:2026-05-03 | ROE:60% | Debt:79.3 | Marge:64% | Vol:34% | actief
+FERGR.AS       | opname:2026-05-03 | ROE:24% | Debt:19.9 | Marge:14% | Vol:35% | actief
+GLPG.AS        | opname:2026-05-03 | ROE:10% | Debt:21.4 | Marge:29% | Vol:31% | actief
+HYDRA.AS       | opname:2026-05-03 | ROE:22% | Debt:10.6 | Marge:9% | Vol:26% | actief
+NEDAP.AS       | opname:2026-05-03 | ROE:28% | Debt:4.9 | Marge:9% | Vol:25% | actief
+NRP.AS         | opname:2026-05-03 | ROE:10% | Debt:62.0 | Marge:54% | Vol:29% | actief
+PRX.AS         | opname:2026-05-03 | ROE:26% | Debt:32.1 | Marge:196% | Vol:30% | actief
+THEON.AS       | opname:2026-05-03 | ROE:25% | Debt:31.6 | Marge:18% | Vol:55% | actief
+UMG.AS         | opname:2026-05-03 | ROE:34% | Debt:74.6 | Marge:12% | Vol:31% | actief
+VALUE.AS       | opname:2026-05-03 | ROE:15% | Debt:15.6 | Marge:83% | Vol:26% | actief

@@ -1,0 +1,17 @@
+# MASTERLIJST — bron: tickers_046a.txt
+# Laatste update: 04/05/2026
+# Criteria (soepel): ROE>10% | Debt<100 | Marge>7% | Vol 18%-65%
+# Status: actief | zwakker (max 2 weken) | verwijderd
+# ----------------------------------------------------------------------
+ADB.MI         | opname:2026-05-04 | ROE:11% | Debt:47.0 | Marge:14% | Vol:25% | nieuw
+AGP.MI         | opname:2026-05-04 | ROE:21% | Debt:48.4 | Marge:37% | Vol:34% | nieuw
+BZU.MI         | opname:2026-05-04 | ROE:13% | Debt:6.2 | Marge:20% | Vol:35% | nieuw
+DIS.MI         | opname:2026-05-04 | ROE:12% | Debt:27.6 | Marge:26% | Vol:42% | nieuw
+DLG.MI         | opname:2026-05-04 | ROE:15% | Debt:24.0 | Marge:8% | Vol:31% | nieuw
+ELN.MI         | opname:2026-05-04 | ROE:12% | Debt:7.4 | Marge:7% | Vol:29% | nieuw
+IP.MI          | opname:2026-05-04 | ROE:10% | Debt:33.5 | Marge:10% | Vol:36% | nieuw
+MONC.MI        | opname:2026-05-04 | ROE:17% | Debt:29.3 | Marge:20% | Vol:32% | nieuw
+RACE.MI        | opname:2026-05-04 | ROE:43% | Debt:73.7 | Marge:22% | Vol:34% | nieuw
+SL.MI          | opname:2026-05-04 | ROE:23% | Debt:32.0 | Marge:10% | Vol:30% | nieuw
+TEN.MI         | opname:2026-05-04 | ROE:12% | Debt:2.7 | Marge:16% | Vol:27% | nieuw
+UNI.MI         | opname:2026-05-04 | ROE:15% | Debt:46.7 | Marge:14% | Vol:25% | nieuw

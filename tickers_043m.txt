@@ -1,5 +1,5 @@
-# MASTERLIJST — bron: tickers_041a.txt
-# Laatste update: 03/05/2026
+# MASTERLIJST — bron: tickers_043a.txt
+# Laatste update: 04/05/2026
 # Criteria (soepel): ROE>10% | Debt<100 | Marge>7% | Vol 18%-65%
 # Status: actief | zwakker (max 2 weken) | verwijderd
 # ----------------------------------------------------------------------
