@@ -3,10 +3,10 @@
 # Criteria (soepel): ROE>10% | Debt<100 | Marge>7% | Vol 18%-65%
 # Status: actief | zwakker (max 2 weken) | verwijderd
 # ----------------------------------------------------------------------
-AENA.MC          | opname:2026-05-04 | ROE:24% | Debt:83.5 | Marge:34% | Vol:21% | actief
+AENA.MC          | opname:2026-05-04 | ROE:24% | Debt:83.5 | Marge:34% | Vol:20% | actief
 AMS.MC           | opname:2026-05-04 | ROE:27% | Debt:66.5 | Marge:20% | Vol:26% | actief
 ANE.MC           | opname:2026-05-04 | ROE:11% | Debt:82.8 | Marge:16% | Vol:31% | actief
-ARM.MC           | opname:2026-05-04 | ROE:18% | Debt:85.3 | Marge:204% | Vol:45% | actief
+ARM.MC           | opname:2026-05-04 | ROE:18% | Debt:85.3 | Marge:204% | Vol:46% | actief
 AZK.MC           | opname:2026-05-04 | ROE:13% | Debt:8.7 | Marge:8% | Vol:26% | actief
 CBAV.MC          | opname:2026-05-04 | ROE:41% | Debt:62.3 | Marge:14% | Vol:28% | actief
 FAE.MC           | opname:2026-05-04 | ROE:11% | Debt:58.1 | Marge:13% | Vol:21% | actief
@@ -16,7 +16,7 @@ ISUR.MC          | opname:2026-05-04 | ROE:15% | Debt:84.3 | Marge:16% | Vol:27%
 ITX.MC           | opname:2026-05-04 | ROE:31% | Debt:29.1 | Marge:16% | Vol:25% | actief
 LDA.MC           | opname:2026-05-04 | ROE:22% | Debt:61.8 | Marge:8% | Vol:23% | actief
 MCM.MC           | opname:2026-05-04 | ROE:11% | Debt:11.5 | Marge:14% | Vol:20% | actief
-MFEA.MC          | opname:2026-05-04 | ROE:10% | Debt:96.9 | Marge:7% | Vol:36% | actief
+MFEA.MC          | opname:2026-05-04 | ROE:10% | Debt:96.9 | Marge:7% | Vol:35% | actief
 MRL.LS           | opname:2026-05-04 | ROE:10% | Debt:62.8 | Marge:139% | Vol:41% | actief
 MRL.MC           | opname:2026-05-04 | ROE:10% | Debt:62.8 | Marge:139% | Vol:21% | actief
 PHM.MC           | opname:2026-05-04 | ROE:36% | Debt:19.0 | Marge:36% | Vol:38% | actief

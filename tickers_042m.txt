@@ -14,7 +14,7 @@ ENX.PA           | opname:2026-05-04 | ROE:15% | Debt:71.8 | Marge:35% | Vol:20%
 EXENS.PA         | opname:2026-05-04 | ROE:16% | Debt:59.8 | Marge:9% | Vol:47% | actief
 GTT.PA           | opname:2026-05-04 | ROE:79% | Debt:21.4 | Marge:52% | Vol:23% | actief
 HO.PA            | opname:2026-05-04 | ROE:21% | Debt:76.7 | Marge:8% | Vol:31% | actief
-IAM.PA           | opname:2026-05-04 | ROE:36% | Debt:79.1 | Marge:19% | Vol:24% | actief
+IAM.PA           | opname:2026-05-04 | ROE:36% | Debt:79.1 | Marge:19% | Vol:25% | actief
 IPN.PA           | opname:2026-05-04 | ROE:10% | Debt:22.4 | Marge:11% | Vol:26% | actief
 IPS.PA           | opname:2026-05-04 | ROE:12% | Debt:43.1 | Marge:7% | Vol:33% | actief
 ITP.PA           | opname:2026-05-04 | ROE:18% | Debt:20.8 | Marge:14% | Vol:30% | actief

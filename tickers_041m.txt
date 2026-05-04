@@ -3,29 +3,29 @@
 # Criteria (soepel): ROE>10% | Debt<100 | Marge>7% | Vol 18%-65%
 # Status: actief | zwakker (max 2 weken) | verwijderd
 # ----------------------------------------------------------------------
-ACKB.BR          | opname:2026-05-04 | ROE:11% | Debt:30.5 | Marge:10% | Vol:20% | nieuw
+ACKB.BR          | opname:2026-05-04 | ROE:11% | Debt:30.5 | Marge:10% | Vol:20% | actief
 ADYEN.AS         | opname:2026-05-03 | ROE:22% | Debt:4.8 | Marge:45% | Vol:40% | actief
 AGN.AS           | opname:2026-05-03 | ROE:10% | Debt:56.9 | Marge:8% | Vol:25% | actief
-ARGX.BR          | opname:2026-05-04 | ROE:20% | Debt:64.4 | Marge:30% | Vol:33% | nieuw
+ARGX.BR          | opname:2026-05-04 | ROE:20% | Debt:64.4 | Marge:30% | Vol:33% | actief
 ASML.AS          | opname:2026-05-03 | ROE:52% | Debt:13.0 | Marge:30% | Vol:38% | actief
 CVC.AS           | opname:2026-05-03 | ROE:60% | Debt:79.3 | Marge:64% | Vol:34% | actief
-DEME.BR          | opname:2026-05-04 | ROE:15% | Debt:51.1 | Marge:8% | Vol:30% | nieuw
-EVS.BR           | opname:2026-05-04 | ROE:17% | Debt:6.2 | Marge:19% | Vol:24% | nieuw
-FAGR.BR          | opname:2026-05-04 | ROE:17% | Debt:84.3 | Marge:10% | Vol:19% | nieuw
+DEME.BR          | opname:2026-05-04 | ROE:15% | Debt:51.1 | Marge:8% | Vol:30% | actief
+EVS.BR           | opname:2026-05-04 | ROE:17% | Debt:6.2 | Marge:19% | Vol:24% | actief
+FAGR.BR          | opname:2026-05-04 | ROE:17% | Debt:84.3 | Marge:10% | Vol:19% | actief
 FERGR.AS         | opname:2026-05-03 | ROE:24% | Debt:19.9 | Marge:14% | Vol:35% | actief
 GLPG.AS          | opname:2026-05-03 | ROE:10% | Debt:21.4 | Marge:29% | Vol:31% | actief
 HYDRA.AS         | opname:2026-05-03 | ROE:22% | Debt:10.6 | Marge:9% | Vol:26% | actief
-JEN.BR           | opname:2026-05-04 | ROE:20% | Debt:22.2 | Marge:11% | Vol:28% | nieuw
-LOTB.BR          | opname:2026-05-04 | ROE:21% | Debt:36.3 | Marge:13% | Vol:26% | nieuw
-MELE.BR          | opname:2026-05-04 | ROE:21% | Debt:50.4 | Marge:13% | Vol:36% | nieuw
+JEN.BR           | opname:2026-05-04 | ROE:20% | Debt:22.2 | Marge:11% | Vol:28% | actief
+LOTB.BR          | opname:2026-05-04 | ROE:21% | Debt:36.3 | Marge:13% | Vol:26% | actief
+MELE.BR          | opname:2026-05-04 | ROE:21% | Debt:50.4 | Marge:13% | Vol:36% | actief
 NEDAP.AS         | opname:2026-05-03 | ROE:28% | Debt:4.9 | Marge:9% | Vol:25% | actief
 NRP.AS           | opname:2026-05-03 | ROE:10% | Debt:62.0 | Marge:54% | Vol:29% | actief
-PRX.AS           | opname:2026-05-03 | ROE:26% | Debt:32.1 | Marge:196% | Vol:30% | actief
-QRF.BR           | opname:2026-05-04 | ROE:13% | Debt:77.0 | Marge:127% | Vol:20% | nieuw
-SHUR.BR          | opname:2026-05-04 | ROE:14% | Debt:37.6 | Marge:133% | Vol:24% | nieuw
-SIP.BR           | opname:2026-05-04 | ROE:13% | Debt:48.0 | Marge:22% | Vol:20% | nieuw
+PRX.AS           | opname:2026-05-03 | ROE:26% | Debt:32.1 | Marge:196% | Vol:29% | actief
+QRF.BR           | opname:2026-05-04 | ROE:13% | Debt:77.0 | Marge:127% | Vol:20% | actief
+SHUR.BR          | opname:2026-05-04 | ROE:14% | Debt:37.6 | Marge:133% | Vol:24% | actief
+SIP.BR           | opname:2026-05-04 | ROE:13% | Debt:48.0 | Marge:22% | Vol:20% | actief
 THEON.AS         | opname:2026-05-03 | ROE:25% | Debt:31.6 | Marge:18% | Vol:55% | actief
-UCB.BR           | opname:2026-05-04 | ROE:15% | Debt:20.7 | Marge:20% | Vol:34% | nieuw
+UCB.BR           | opname:2026-05-04 | ROE:15% | Debt:20.7 | Marge:20% | Vol:34% | actief
 UMG.AS           | opname:2026-05-03 | ROE:34% | Debt:74.6 | Marge:12% | Vol:31% | actief
-VALUE.AS         | opname:2026-05-03 | ROE:15% | Debt:15.6 | Marge:83% | Vol:26% | actief
-VGP.BR           | opname:2026-05-04 | ROE:12% | Debt:90.7 | Marge:151% | Vol:26% | nieuw
+VALUE.AS         | opname:2026-05-03 | ROE:15% | Debt:15.6 | Marge:83% | Vol:27% | actief
+VGP.BR           | opname:2026-05-04 | ROE:12% | Debt:90.7 | Marge:151% | Vol:26% | actief
