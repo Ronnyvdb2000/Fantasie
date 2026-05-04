@@ -1,4 +1,4 @@
-name: "Bot 041: Frankfurt Munger Ticker Filter"
+name: "Bot 041: Full Munger Ticker Filter"
 
 on:
   schedule:
