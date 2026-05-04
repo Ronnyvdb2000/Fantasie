@@ -1,35 +1,35 @@
-# MASTERLIJST — bron: tickers_042a.txt
+# MASTERLIJST — Parijs | bron: tickers_042a.txt
 # Laatste update: 04/05/2026
 # Criteria (soepel): ROE>10% | Debt<100 | Marge>7% | Vol 18%-65%
 # Status: actief | zwakker (max 2 weken) | verwijderd
 # ----------------------------------------------------------------------
-ALPAT.PA       | opname:2026-05-04 | ROE:10% | Debt:40.2 | Marge:42% | Vol:39% | nieuw
-AM.PA          | opname:2026-05-04 | ROE:15% | Debt:3.0 | Marge:13% | Vol:31% | nieuw
-ANTIN.PA       | opname:2026-05-04 | ROE:22% | Debt:14.1 | Marge:37% | Vol:32% | nieuw
-ARG.PA         | opname:2026-05-04 | ROE:11% | Debt:73.8 | Marge:97% | Vol:22% | nieuw
-CAP.PA         | opname:2026-05-04 | ROE:14% | Debt:81.0 | Marge:7% | Vol:32% | nieuw
-CBE.PA         | opname:2026-05-04 | ROE:18% | Debt:42.1 | Marge:12% | Vol:38% | nieuw
-DSY.PA         | opname:2026-05-04 | ROE:13% | Debt:26.9 | Marge:20% | Vol:36% | nieuw
-ENX.PA         | opname:2026-05-04 | ROE:15% | Debt:71.8 | Marge:35% | Vol:20% | nieuw
-EXENS.PA       | opname:2026-05-04 | ROE:16% | Debt:59.8 | Marge:9% | Vol:47% | nieuw
-GTT.PA         | opname:2026-05-04 | ROE:79% | Debt:21.4 | Marge:52% | Vol:23% | nieuw
-HO.PA          | opname:2026-05-04 | ROE:21% | Debt:76.7 | Marge:8% | Vol:31% | nieuw
-IAM.PA         | opname:2026-05-04 | ROE:36% | Debt:79.1 | Marge:19% | Vol:24% | nieuw
-IPN.PA         | opname:2026-05-04 | ROE:10% | Debt:22.4 | Marge:11% | Vol:26% | nieuw
-IPS.PA         | opname:2026-05-04 | ROE:12% | Debt:43.1 | Marge:7% | Vol:33% | nieuw
-ITP.PA         | opname:2026-05-04 | ROE:18% | Debt:20.8 | Marge:14% | Vol:30% | nieuw
-LR.PA          | opname:2026-05-04 | ROE:17% | Debt:90.0 | Marge:13% | Vol:29% | nieuw
-MAU.PA         | opname:2026-05-04 | ROE:31% | Debt:18.5 | Marge:71% | Vol:42% | nieuw
-MC.PA          | opname:2026-05-04 | ROE:16% | Debt:53.3 | Marge:13% | Vol:31% | nieuw
-OR.PA          | opname:2026-05-04 | ROE:18% | Debt:34.0 | Marge:14% | Vol:26% | nieuw
-PLNW.PA        | opname:2026-05-04 | ROE:24% | Debt:8.3 | Marge:25% | Vol:38% | nieuw
-PUB.PA         | opname:2026-05-04 | ROE:15% | Debt:54.3 | Marge:10% | Vol:27% | nieuw
-RBT.PA         | opname:2026-05-04 | ROE:18% | Debt:42.1 | Marge:12% | Vol:24% | nieuw
-RMS.PA         | opname:2026-05-04 | ROE:25% | Debt:12.3 | Marge:28% | Vol:29% | nieuw
-SAF.PA         | opname:2026-05-04 | ROE:56% | Debt:34.4 | Marge:23% | Vol:29% | nieuw
-SU.PA          | opname:2026-05-04 | ROE:16% | Debt:81.4 | Marge:10% | Vol:30% | nieuw
-TTE.PA         | opname:2026-05-04 | ROE:13% | Debt:51.3 | Marge:8% | Vol:21% | nieuw
-VIRP.PA        | opname:2026-05-04 | ROE:14% | Debt:25.7 | Marge:10% | Vol:25% | nieuw
-VK.PA          | opname:2026-05-04 | ROE:15% | Debt:38.6 | Marge:9% | Vol:26% | nieuw
-VU.PA          | opname:2026-05-04 | ROE:41% | Debt:12.1 | Marge:10% | Vol:50% | nieuw
-WAVE.PA        | opname:2026-05-04 | ROE:13% | Debt:6.3 | Marge:8% | Vol:36% | nieuw
+ALPAT.PA         | opname:2026-05-04 | ROE:10% | Debt:40.2 | Marge:42% | Vol:39% | actief
+AM.PA            | opname:2026-05-04 | ROE:15% | Debt:3.0 | Marge:13% | Vol:31% | actief
+ANTIN.PA         | opname:2026-05-04 | ROE:22% | Debt:14.1 | Marge:37% | Vol:32% | actief
+ARG.PA           | opname:2026-05-04 | ROE:11% | Debt:73.8 | Marge:97% | Vol:22% | actief
+CAP.PA           | opname:2026-05-04 | ROE:14% | Debt:81.0 | Marge:7% | Vol:32% | actief
+CBE.PA           | opname:2026-05-04 | ROE:18% | Debt:42.1 | Marge:12% | Vol:38% | actief
+DSY.PA           | opname:2026-05-04 | ROE:13% | Debt:26.9 | Marge:20% | Vol:36% | actief
+ENX.PA           | opname:2026-05-04 | ROE:15% | Debt:71.8 | Marge:35% | Vol:20% | actief
+EXENS.PA         | opname:2026-05-04 | ROE:16% | Debt:59.8 | Marge:9% | Vol:47% | actief
+GTT.PA           | opname:2026-05-04 | ROE:79% | Debt:21.4 | Marge:52% | Vol:23% | actief
+HO.PA            | opname:2026-05-04 | ROE:21% | Debt:76.7 | Marge:8% | Vol:31% | actief
+IAM.PA           | opname:2026-05-04 | ROE:36% | Debt:79.1 | Marge:19% | Vol:24% | actief
+IPN.PA           | opname:2026-05-04 | ROE:10% | Debt:22.4 | Marge:11% | Vol:26% | actief
+IPS.PA           | opname:2026-05-04 | ROE:12% | Debt:43.1 | Marge:7% | Vol:33% | actief
+ITP.PA           | opname:2026-05-04 | ROE:18% | Debt:20.8 | Marge:14% | Vol:30% | actief
+LR.PA            | opname:2026-05-04 | ROE:17% | Debt:90.0 | Marge:13% | Vol:29% | actief
+MAU.PA           | opname:2026-05-04 | ROE:31% | Debt:18.5 | Marge:71% | Vol:42% | actief
+MC.PA            | opname:2026-05-04 | ROE:16% | Debt:53.3 | Marge:13% | Vol:31% | actief
+OR.PA            | opname:2026-05-04 | ROE:18% | Debt:34.0 | Marge:14% | Vol:26% | actief
+PLNW.PA          | opname:2026-05-04 | ROE:24% | Debt:8.3 | Marge:25% | Vol:38% | actief
+PUB.PA           | opname:2026-05-04 | ROE:15% | Debt:54.3 | Marge:10% | Vol:27% | actief
+RBT.PA           | opname:2026-05-04 | ROE:18% | Debt:42.1 | Marge:12% | Vol:24% | actief
+RMS.PA           | opname:2026-05-04 | ROE:25% | Debt:12.3 | Marge:28% | Vol:29% | actief
+SAF.PA           | opname:2026-05-04 | ROE:56% | Debt:34.4 | Marge:23% | Vol:29% | actief
+SU.PA            | opname:2026-05-04 | ROE:16% | Debt:81.4 | Marge:10% | Vol:30% | actief
+TTE.PA           | opname:2026-05-04 | ROE:13% | Debt:51.3 | Marge:8% | Vol:21% | actief
+VIRP.PA          | opname:2026-05-04 | ROE:14% | Debt:25.7 | Marge:10% | Vol:25% | actief
+VK.PA            | opname:2026-05-04 | ROE:15% | Debt:38.6 | Marge:9% | Vol:26% | actief
+VU.PA            | opname:2026-05-04 | ROE:41% | Debt:12.1 | Marge:10% | Vol:50% | actief
+WAVE.PA          | opname:2026-05-04 | ROE:13% | Debt:6.3 | Marge:8% | Vol:36% | actief

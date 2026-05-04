@@ -1,5 +1,43 @@
-# MASTERLIJST — bron: tickers_047a.txt
+# MASTERLIJST — Toronto | bron: tickers_047a.txt
 # Laatste update: 04/05/2026
 # Criteria (soepel): ROE>10% | Debt<100 | Marge>7% | Vol 18%-65%
 # Status: actief | zwakker (max 2 weken) | verwijderd
 # ----------------------------------------------------------------------
+ABX.TO           | opname:2026-05-04 | ROE:21% | Debt:14.5 | Marge:29% | Vol:42% | nieuw
+AGI.TO           | opname:2026-05-04 | ROE:26% | Debt:4.8 | Marge:51% | Vol:49% | nieuw
+ARX.TO           | opname:2026-05-04 | ROE:17% | Debt:43.6 | Marge:23% | Vol:36% | nieuw
+ATRL.TO          | opname:2026-05-04 | ROE:56% | Debt:23.5 | Marge:24% | Vol:34% | nieuw
+ATZ.TO           | opname:2026-05-04 | ROE:30% | Debt:77.4 | Marge:10% | Vol:39% | nieuw
+BAM.TO           | opname:2026-05-04 | ROE:22% | Debt:28.5 | Marge:52% | Vol:29% | nieuw
+BTO.TO           | opname:2026-05-04 | ROE:13% | Debt:16.4 | Marge:13% | Vol:52% | nieuw
+CNQ.TO           | opname:2026-05-04 | ROE:26% | Debt:44.5 | Marge:28% | Vol:28% | nieuw
+CS.TO            | opname:2026-05-04 | ROE:12% | Debt:42.3 | Marge:17% | Vol:55% | nieuw
+CVE.TO           | opname:2026-05-04 | ROE:13% | Debt:44.9 | Marge:8% | Vol:35% | nieuw
+DFY.TO           | opname:2026-05-04 | ROE:11% | Debt:27.1 | Marge:9% | Vol:24% | nieuw
+DPM.TO           | opname:2026-05-04 | ROE:19% | Debt:48.3 | Marge:39% | Vol:45% | nieuw
+DSG.TO           | opname:2026-05-04 | ROE:11% | Debt:51.7 | Marge:22% | Vol:37% | nieuw
+EDV.TO           | opname:2026-05-04 | ROE:31% | Debt:20.1 | Marge:19% | Vol:47% | nieuw
+ELD.TO           | opname:2026-05-04 | ROE:14% | Debt:28.8 | Marge:29% | Vol:49% | nieuw
+FFH.TO           | opname:2026-05-04 | ROE:17% | Debt:45.8 | Marge:12% | Vol:22% | nieuw
+GMIN.TO          | opname:2026-05-04 | ROE:24% | Debt:10.0 | Marge:50% | Vol:65% | nieuw
+HBM.TO           | opname:2026-05-04 | ROE:19% | Debt:29.5 | Marge:28% | Vol:52% | nieuw
+IAG.TO           | opname:2026-05-04 | ROE:14% | Debt:38.3 | Marge:12% | Vol:22% | nieuw
+IFC.TO           | opname:2026-05-04 | ROE:17% | Debt:25.2 | Marge:13% | Vol:19% | nieuw
+IGM.TO           | opname:2026-05-04 | ROE:13% | Debt:28.4 | Marge:26% | Vol:22% | nieuw
+IMG.TO           | opname:2026-05-04 | ROE:19% | Debt:17.9 | Marge:23% | Vol:58% | nieuw
+K.TO             | opname:2026-05-04 | ROE:35% | Debt:8.2 | Marge:36% | Vol:49% | nieuw
+LUN.TO           | opname:2026-05-04 | ROE:21% | Debt:5.7 | Marge:32% | Vol:49% | nieuw
+MFC.TO           | opname:2026-05-04 | ROE:11% | Debt:48.3 | Marge:19% | Vol:19% | nieuw
+NGD.TO           | opname:2026-05-04 | ROE:58% | Debt:20.7 | Marge:58% | Vol:59% | nieuw
+OGC.TO           | opname:2026-05-04 | ROE:30% | Debt:2.1 | Marge:33% | Vol:50% | nieuw
+OR.TO            | opname:2026-05-04 | ROE:16% | Debt:34.9 | Marge:74% | Vol:43% | nieuw
+OVV.TO           | opname:2026-05-04 | ROE:12% | Debt:57.4 | Marge:14% | Vol:36% | nieuw
+PAAS.TO          | opname:2026-05-04 | ROE:17% | Debt:12.5 | Marge:27% | Vol:53% | nieuw
+SLF.TO           | opname:2026-05-04 | ROE:14% | Debt:90.3 | Marge:10% | Vol:19% | nieuw
+STN.TO           | opname:2026-05-04 | ROE:16% | Debt:78.6 | Marge:7% | Vol:25% | nieuw
+SU.TO            | opname:2026-05-04 | ROE:13% | Debt:33.0 | Marge:12% | Vol:22% | nieuw
+TFPM.TO          | opname:2026-05-04 | ROE:13% | Debt:7.2 | Marge:62% | Vol:41% | nieuw
+TIH.TO           | opname:2026-05-04 | ROE:16% | Debt:25.2 | Marge:10% | Vol:23% | nieuw
+TRI.TO           | opname:2026-05-04 | ROE:12% | Debt:20.0 | Marge:20% | Vol:38% | nieuw
+WCP.TO           | opname:2026-05-04 | ROE:10% | Debt:33.0 | Marge:14% | Vol:27% | nieuw
+WPM.TO           | opname:2026-05-04 | ROE:18% | Debt:9.1 | Marge:64% | Vol:42% | nieuw
