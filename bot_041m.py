@@ -2,7 +2,7 @@
 MRA Filter Bot — bot_041m.py
 =============================
 Verwerkt tickerlijsten per beurs met automatische suffix-correctie:
-  041 → Benelux     (.AS / .BR)
+  041 → Benelux     (.AS / .BR / .LU)
   042 → Parijs      (.PA)
   043 → Frankfurt   (.DE)
   044 → Spanje/Portugal (.MC / .LS)
@@ -49,7 +49,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 BEURS_CONFIG = {
     "041": {
         "naam":     "Benelux",
-        "suffixen": [".AS", ".BR"],          # Amsterdam eerst, dan Brussel
+        "suffixen": [".AS", ".BR", ".LU"],          # Amsterdam eerst, dan Brussel
     },
     "042": {
         "naam":     "Parijs",
