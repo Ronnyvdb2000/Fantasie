@@ -2,14 +2,14 @@
 MRA Filter Bot — bot_041m.py
 =============================
 Verwerkt tickerlijsten per beurs met automatische suffix-correctie:
-  041 → Benelux     (.AS / .BR / .LU)
-  042 → Parijs      (.PA)
-  043 → Frankfurt   (.DE)
-  044 → Spanje/Portugal (.MC / .LS)
-  045 → Londen      (.L)
-  046 → Milaan      (.MI)
-  047 → Toronto     (.TO)
-  048 → Nasdaq/NYSE (geen suffix)
+  041 → Benelux          (.AS / .BR / .LU)
+  042 → Parijs           (.PA)
+  043 → Frankfurt        (.DE)
+  044 → Spanje/Portugal  (.MC / .LS)
+  045 → Londen           (.L)
+  046 → Milaan           (.MI)
+  047 → Toronto          (.TO / .V)
+  048 → Nasdaq/NYSE      (geen suffix)
 
 Suffix-correctie: als een ticker het verkeerde of geen suffix heeft,
 wordt automatisch het correcte suffix voor de betreffende beurs geprobeerd.
@@ -49,7 +49,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 BEURS_CONFIG = {
     "041": {
         "naam":     "Benelux",
-        "suffixen": [".AS", ".BR", ".LU"],          # Amsterdam eerst, dan Brussel
+        "suffixen": [".AS", ".BR", ".LU"],
     },
     "042": {
         "naam":     "Parijs",
@@ -73,15 +73,15 @@ BEURS_CONFIG = {
     },
     "047": {
         "naam":     "Toronto",
-        "suffixen": [".TO", ".V"],           # TSX eerst, dan TSX Venture
+        "suffixen": [".TO", ".V"],
     },
     "048": {
         "naam":     "Nasdaq/NYSE",
-        "suffixen": [""],                    # Geen suffix voor Amerikaanse beurzen
+        "suffixen": [""],
     },
 }
 
-# Alle geldige suffixen gecombineerd (voor globale check)
+# Alle geldige suffixen gecombineerd
 ALLE_SUFFIXEN = set()
 for cfg in BEURS_CONFIG.values():
     for s in cfg["suffixen"]:
@@ -91,16 +91,16 @@ for cfg in BEURS_CONFIG.values():
 # ---------------------------------------------------------------------------
 # CONFIG — criteria
 # ---------------------------------------------------------------------------
-ROE_MIN          = 0.10   # ROE > 10%
-DEBT_MAX         = 100.0  # Debt/Equity < 100
-MARGE_MIN        = 0.07   # Winstmarge > 7%
-VOL_MIN          = 0.18   # Jaarlijkse volatiliteit > 18%
-VOL_MAX          = 0.65   # Jaarlijkse volatiliteit < 65%
-MAX_WEKEN_BUITEN = 2      # Weken buiten filter voor verwijdering
+ROE_MIN          = 0.10
+DEBT_MAX         = 100.0
+MARGE_MIN        = 0.07
+VOL_MIN          = 0.18
+VOL_MAX          = 0.65
+MAX_WEKEN_BUITEN = 2
 
-BATCH_SIZE       = 50     # tickers per batch OHLCV download
-SLEEP_BATCH      = 2.0    # seconden tussen batches
-SLEEP_INFO       = 0.3    # seconden tussen Munger info-calls
+BATCH_SIZE       = 50
+SLEEP_BATCH      = 2.0
+SLEEP_INFO       = 0.3
 
 REEKS_START      = 41
 REEKS_EINDE      = 60
@@ -132,10 +132,10 @@ def send_telegram(bericht: str) -> None:
 # ---------------------------------------------------------------------------
 # BESTANDSNAMEN
 # ---------------------------------------------------------------------------
-def bestand_bron(getal):    return f"tickers_{getal}a.txt"
-def bestand_master(getal):  return f"tickers_{getal}m.txt"
-def bestand_export(getal):  return f"tickers_{getal}x.txt"
-def bestand_delisted(getal):return f"tickers_{getal}d.txt"
+def bestand_bron(getal):     return f"tickers_{getal}a.txt"
+def bestand_master(getal):   return f"tickers_{getal}m.txt"
+def bestand_export(getal):   return f"tickers_{getal}x.txt"
+def bestand_delisted(getal): return f"tickers_{getal}d.txt"
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +143,7 @@ def bestand_delisted(getal):return f"tickers_{getal}d.txt"
 # ---------------------------------------------------------------------------
 def heeft_geldig_suffix(ticker: str, suffixen: list) -> bool:
     """Controleert of ticker al een geldig suffix voor deze beurs heeft."""
-    if "" in suffixen:
+    if suffixen == [""]:
         # Nasdaq/NYSE: ticker mag geen Europees/.TO suffix hebben
         return not any(ticker.endswith(s) for s in ALLE_SUFFIXEN if s)
     return any(ticker.endswith(s) for s in suffixen)
@@ -161,7 +161,6 @@ def corrigeer_suffix(ticker: str, suffixen: list) -> tuple:
     """
     Probeert de ticker te corrigeren naar het juiste suffix voor deze beurs.
     Geeft (gecorrigeerde_ticker, was_gecorrigeerd, reden) terug.
-    Valideert via yfinance fast_info.
     """
     # Al correct?
     if heeft_geldig_suffix(ticker, suffixen):
@@ -176,10 +175,11 @@ def corrigeer_suffix(ticker: str, suffixen: list) -> tuple:
             fi = yf.Ticker(kandidaat).fast_info
             prijs = getattr(fi, "last_price", None)
             if prijs and prijs > 0:
-                return kandidaat, ticker != kandidaat, ""
+                was_gewijzigd = ticker != kandidaat
+                return kandidaat, was_gewijzigd, ""
         except Exception:
             pass
-        return ticker, False, f"niet gevonden op Nasdaq/NYSE"
+        return ticker, False, "niet gevonden op Nasdaq/NYSE"
 
     # Probeer elk geldig suffix voor deze beurs
     for suffix in suffixen:
@@ -447,7 +447,8 @@ def scan_lijst(getal: str) -> dict:
     print(f"  📋 Bron     : {bron}")
     print(f"  📁 Master   : {bestand_master(getal)}")
     print(f"  📤 Export   : {bestand_export(getal)}")
-    print(f"  🏦 Suffixen : {suffixen if suffixen != [''] else ['geen (Nasdaq/NYSE)']}")
+    suffix_label = suffixen if suffixen != [""] else ["geen (Nasdaq/NYSE)"]
+    print(f"  🏦 Suffixen : {suffix_label}")
     print(f"{'='*60}")
 
     # Bronbestand laden
@@ -469,14 +470,13 @@ def scan_lijst(getal: str) -> dict:
         if heeft_geldig_suffix(ticker, suffixen):
             gecorrigeerde_tickers.append(ticker)
         else:
-            # Probeer te corrigeren
             gecorrigeerd, was_gewijzigd, reden = corrigeer_suffix(ticker, suffixen)
             if was_gewijzigd:
                 gecorrigeerde_tickers.append(gecorrigeerd)
                 correcties.append((ticker, gecorrigeerd))
                 print(f"     ✏️  {ticker} → {gecorrigeerd}")
             elif not reden:
-                # Geen suffix nodig (Nasdaq) of al correct
+                # Geen suffix nodig of al correct
                 gecorrigeerde_tickers.append(gecorrigeerd)
             else:
                 niet_gevonden.append((ticker, reden))
@@ -565,12 +565,12 @@ def scan_lijst(getal: str) -> dict:
           f"{len(export_lijst)} tickers → {bestand_export(getal)}")
 
     return {
-        "getal":      getal,
-        "naam":       beurs_naam,
-        "tellers":    tellers,
-        "master":     master,
-        "export":     export_lijst,
-        "correcties": correcties,
+        "getal":         getal,
+        "naam":          beurs_naam,
+        "tellers":       tellers,
+        "master":        master,
+        "export":        export_lijst,
+        "correcties":    correcties,
         "niet_gevonden": niet_gevonden,
     }
 
