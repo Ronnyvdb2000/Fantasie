@@ -1,4 +1,4 @@
-name: Trading Bot Run
+name: Bot 00 FULL (0-9)mail
 
 on:
   schedule:
@@ -36,7 +36,7 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
-        run: python bot_00ultrev.py
+        run: python bot_00mail.py
 
       - name: Commit and Push changes
         if: always() # Zorg dat de data altijd wordt opgeslagen, ook als de bot een foutmelding geeft
