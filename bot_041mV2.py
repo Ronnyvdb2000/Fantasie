@@ -1,50 +1,53 @@
 """
-MRA Filter Bot — bot_041m.py  (v2 — Action-Quality filter)
-============================================================
-WIJZIGINGEN t.o.v. v1:
-  - VOL_MIN verhoogd van 0.18 → 0.25  (saaie aandelen eruit)
-  - VOL_MAX verlaagd  van 0.65 → 0.60  (extreme outliers begrenzen)
-  - ROE_MIN verlaagd  van 0.10 → 0.07  (groeiaandelen meepakken)
-  - DEBT_MAX verhoogd van 100  → 120   (iets soepeler voor tech/groei)
-  - MARGE_MIN ongewijzigd: 0.07
-  - MIN_DAGOMZET toegevoegd: €500.000  (liquiditeitsfilter — NIEUW)
-  - MAX_WEKEN_BUITEN verhoogd van 2 → 3 (minder snel verwijderd)
+bot_041m_diagnose.py
+====================
+Diagnostische tool: toont per ticker WAAROM hij de filter niet haalt.
+Geeft statistieken per filter zodat je ziet welke parameter het meeste
+aandelen weggooit.
 
-Verwerkt tickerlijsten per beurs met automatische suffix-correctie:
-  041 → Benelux          (.AS / .BR / .LU)
-  042 → Parijs           (.PA)
-  043 → Frankfurt        (.DE)
-  044 → Spanje/Portugal  (.MC / .LS)
-  045 → Londen           (.L)
-  046 → Milaan           (.MI)
-  047 → Toronto          (.TO / .V)
-  048 → Nasdaq/NYSE      (geen suffix)
+Gebruik lokaal:   python bot_041m_diagnose.py
+Gebruik via CI:   DIAGNOSE_LIJST=041 python bot_041m_diagnose.py
+
+Output: diagnose_GETAL_DATUM.txt  (+ Telegram samenvatting per lijst)
+
+Via GitHub Actions wordt elke lijst als aparte stap uitgevoerd
+met een pauze ertussen (zie bot_041m_diagnose.yml).
 """
 
 import os
 import time
 import logging
-import requests
 import numpy as np
 import pandas as pd
 import yfinance as yf
+import requests
 from datetime import date
 
-# ---------------------------------------------------------------------------
-# LOGGING
-# ---------------------------------------------------------------------------
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logging.getLogger("peewee").setLevel(logging.CRITICAL)
 
-# ---------------------------------------------------------------------------
-# TELEGRAM
-# ---------------------------------------------------------------------------
+# ── Telegram ──────────────────────────────────────────────────────────────────
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN",   "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-# ---------------------------------------------------------------------------
-# BEURS CONFIGURATIE
-# ---------------------------------------------------------------------------
+def send_telegram(tekst: str) -> None:
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={
+                "chat_id":    TELEGRAM_CHAT_ID,
+                "text":       tekst[:4096],
+                "parse_mode": "Markdown",
+            },
+            timeout=15,
+        ).raise_for_status()
+    except Exception as e:
+        print(f"Telegram fout: {e}")
+
+
+# ── Beursconfiguratie ─────────────────────────────────────────────────────────
 BEURS_CONFIG = {
     "041": {"naam": "Benelux",         "suffixen": [".AS", ".BR", ".LU"]},
     "042": {"naam": "Parijs",          "suffixen": [".PA"]},
@@ -56,621 +59,258 @@ BEURS_CONFIG = {
     "048": {"naam": "Nasdaq/NYSE",     "suffixen": [""]},
 }
 
-ALLE_SUFFIXEN = set()
-for cfg in BEURS_CONFIG.values():
-    for s in cfg["suffixen"]:
-        if s:
-            ALLE_SUFFIXEN.add(s)
+# ── Criteria per beurstype ────────────────────────────────────────────────────
+EUROPA_BEURZEN = {"041", "042", "043", "044", "045", "046"}
 
-# ---------------------------------------------------------------------------
-# CONFIG — filterparameters (v2)
-# ---------------------------------------------------------------------------
-ROE_MIN          = 0.07   # was 0.10 — groeiaandelen meepakken
-DEBT_MAX         = 120.0  # was 100  — iets soepeler voor tech/groei
-MARGE_MIN        = 0.07   # ongewijzigd
+CRITERIA = {
+    "europa": {
+        "ROE_MIN":      0.07,
+        "DEBT_MAX":     130.0,
+        "MARGE_MIN":    0.04,
+        "VOL_MIN":      0.18,
+        "VOL_MAX":      0.65,
+        "MIN_DAGOMZET": 150_000,
+    },
+    "noordamerika": {
+        "ROE_MIN":      0.08,
+        "DEBT_MAX":     120.0,
+        "MARGE_MIN":    0.07,
+        "VOL_MIN":      0.22,
+        "VOL_MAX":      0.70,
+        "MIN_DAGOMZET": 500_000,
+    },
+}
 
-VOL_MIN          = 0.25   # was 0.18 — saaie kwaliteitsaandelen eruit
-VOL_MAX          = 0.60   # was 0.65 — extreme outliers begrenzen
-
-MIN_DAGOMZET     = 500_000  # NIEUW: minimale dagomzet in € (liquiditeit)
-
-MAX_WEKEN_BUITEN = 3      # was 2 — iets meer geduld voor tijdelijke zwakte
-
-BATCH_SIZE       = 50
-SLEEP_BATCH      = 2.0
-SLEEP_INFO       = 0.3
-
-REEKS_START      = 41
-REEKS_EINDE      = 60
+def get_criteria(getal: str) -> dict:
+    return CRITERIA["europa"] if getal in EUROPA_BEURZEN else CRITERIA["noordamerika"]
 
 
-# ---------------------------------------------------------------------------
-# TELEGRAM
-# ---------------------------------------------------------------------------
-def send_telegram(bericht: str) -> None:
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️  Telegram niet geconfigureerd.")
-        return
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    try:
-        r = requests.post(
-            url,
-            json={
-                "chat_id":    TELEGRAM_CHAT_ID,
-                "text":       bericht,
-                "parse_mode": "Markdown",
-            },
-            timeout=15,
-        )
-        r.raise_for_status()
-    except Exception as e:
-        print(f"⚠️  Telegram fout: {e}")
-
-
-# ---------------------------------------------------------------------------
-# BESTANDSNAMEN
-# ---------------------------------------------------------------------------
-def bestand_bron(getal):     return f"tickers_{getal}a.txt"
-def bestand_master(getal):   return f"tickers_{getal}m.txt"
-def bestand_export(getal):   return f"tickers_{getal}x.txt"
-def bestand_delisted(getal): return f"tickers_{getal}d.txt"
-
-
-# ---------------------------------------------------------------------------
-# SUFFIX CORRECTIE
-# ---------------------------------------------------------------------------
-def heeft_geldig_suffix(ticker: str, suffixen: list) -> bool:
-    if suffixen == [""]:
-        return not any(ticker.endswith(s) for s in ALLE_SUFFIXEN if s)
-    return any(ticker.endswith(s) for s in suffixen)
-
-
-def strip_suffix(ticker: str) -> str:
-    for s in sorted(ALLE_SUFFIXEN, key=len, reverse=True):
-        if ticker.endswith(s):
-            return ticker[:-len(s)]
-    return ticker
-
-
-def corrigeer_suffix(ticker: str, suffixen: list) -> tuple:
-    if heeft_geldig_suffix(ticker, suffixen):
-        return ticker, False, ""
-
-    basis = strip_suffix(ticker)
-
-    if suffixen == [""]:
-        kandidaat = basis
-        try:
-            fi = yf.Ticker(kandidaat).fast_info
-            prijs = getattr(fi, "last_price", None)
-            if prijs and prijs > 0:
-                was_gewijzigd = ticker != kandidaat
-                return kandidaat, was_gewijzigd, ""
-        except Exception:
-            pass
-        return ticker, False, "niet gevonden op Nasdaq/NYSE"
-
-    for suffix in suffixen:
-        kandidaat = basis + suffix
-        try:
-            fi = yf.Ticker(kandidaat).fast_info
-            prijs = getattr(fi, "last_price", None)
-            if prijs and prijs > 0:
-                return kandidaat, True, ""
-        except Exception:
-            pass
-        time.sleep(0.2)
-
-    return ticker, False, f"niet gevonden met {suffixen}"
-
-
-# ---------------------------------------------------------------------------
-# DELISTED CACHE
-# ---------------------------------------------------------------------------
-def laad_delisted(getal: str) -> set:
-    pad = bestand_delisted(getal)
+# ── Tickers laden ─────────────────────────────────────────────────────────────
+def laad_tickers(getal: str) -> list:
+    pad = f"tickers_{getal}a.txt"
     if not os.path.exists(pad):
-        return set()
+        print(f"  ⚠️  {pad} niet gevonden — overgeslagen")
+        return []
     with open(pad, "r", encoding="utf-8") as f:
-        return set(t.strip().upper() for t in f.read().split(",") if t.strip())
+        inhoud = f.read().replace("\n", ",").replace(";", ",").replace("$", "")
+    tickers = sorted(set(t.strip().upper() for t in inhoud.split(",") if t.strip()))
+    print(f"  📋 {len(tickers)} tickers geladen uit {pad}")
+    return tickers
 
 
-def sla_delisted_op(getal: str, delisted: set) -> None:
-    with open(bestand_delisted(getal), "w", encoding="utf-8") as f:
-        f.write(", ".join(sorted(delisted)))
-
-
-# ---------------------------------------------------------------------------
-# BATCH OHLCV DOWNLOAD
-# ---------------------------------------------------------------------------
-def batch_download_ohlcv(tickers: list) -> dict:
+# ── Batch OHLCV download ──────────────────────────────────────────────────────
+def batch_download(tickers: list) -> dict:
     resultaat = {}
-    if not tickers:
-        return resultaat
-
-    batches = [tickers[i:i+BATCH_SIZE] for i in range(0, len(tickers), BATCH_SIZE)]
-    print(f"\n  📥 OHLCV batch download: {len(tickers)} tickers "
-          f"in {len(batches)} batches van {BATCH_SIZE}...")
+    batches   = [tickers[i:i+50] for i in range(0, len(tickers), 50)]
+    print(f"  📥 OHLCV download: {len(tickers)} tickers in {len(batches)} batches...")
 
     for i, batch in enumerate(batches):
-        print(f"     Batch {i+1}/{len(batches)} ({len(batch)} tickers)...", end="", flush=True)
+        print(f"     Batch {i+1}/{len(batches)}...", end="", flush=True)
         try:
             raw = yf.download(
-                batch,
-                period="1y",
-                progress=False,
-                auto_adjust=True,
-                multi_level_index=True,
+                batch, period="1y", progress=False,
+                auto_adjust=True, multi_level_index=True,
             )
-            for ticker in batch:
+            for t in batch:
                 try:
                     if len(batch) == 1:
                         df = raw.copy()
                         if isinstance(df.columns[0], tuple):
                             df.columns = [c[0] for c in df.columns]
                     else:
-                        df = raw.xs(ticker, axis=1, level=1).dropna(how="all")
-                    resultaat[ticker] = df if len(df) >= 50 else None
+                        df = raw.xs(t, axis=1, level=1).dropna(how="all")
+                    resultaat[t] = df if len(df) >= 50 else None
                 except Exception:
-                    resultaat[ticker] = None
-            print(f" ✅")
+                    resultaat[t] = None
+            print(" ✅")
         except Exception as e:
             print(f" ❌ {e}")
-            for ticker in batch:
-                resultaat[ticker] = None
+            for t in batch:
+                resultaat[t] = None
 
         if i < len(batches) - 1:
-            time.sleep(SLEEP_BATCH)
+            time.sleep(3)
 
     return resultaat
 
 
-# ---------------------------------------------------------------------------
-# MASTERLIJST — lezen
-# ---------------------------------------------------------------------------
-def laad_master(getal: str) -> dict:
-    master = {}
-    pad    = bestand_master(getal)
-    if not os.path.exists(pad):
-        return master
-    with open(pad, "r", encoding="utf-8") as f:
-        for regel in f:
-            regel = regel.strip()
-            if not regel or regel.startswith("#"):
-                continue
-            delen = [d.strip() for d in regel.split("|")]
-            if not delen:
-                continue
-            ticker = delen[0].strip().upper()
-            entry  = {"ticker": ticker}
-            for deel in delen[1:]:
-                if ":" in deel:
-                    sleutel, waarde = deel.split(":", 1)
-                    entry[sleutel.strip()] = waarde.strip()
-                else:
-                    entry["status"] = deel.strip()
-            entry["weken_buiten"] = int(entry.get("weken_buiten", 0))
-            master[ticker] = entry
-    return master
-
-
-# ---------------------------------------------------------------------------
-# MASTERLIJST — schrijven
-# ---------------------------------------------------------------------------
-def sla_master_op(getal: str, master: dict, beurs_naam: str) -> None:
-    vandaag = date.today().strftime("%d/%m/%Y")
-    regels  = [
-        f"# MASTERLIJST — {beurs_naam} | bron: {bestand_bron(getal)}",
-        f"# Laatste update: {vandaag}",
-        f"# Criteria (v2): ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | "
-        f"Marge>{MARGE_MIN:.0%} | Vol {VOL_MIN:.0%}-{VOL_MAX:.0%} | "
-        f"Dagomzet>€{MIN_DAGOMZET:,.0f}",
-        f"# Status: actief | zwakker (max {MAX_WEKEN_BUITEN} weken) | verwijderd",
-        "# " + "-" * 70,
-    ]
-
-    volgorde   = {"nieuw": 0, "actief": 0, "zwakker": 1, "verwijderd": 2}
-    gesorteerd = sorted(
-        master.values(),
-        key=lambda e: (volgorde.get(e.get("status", "verwijderd"), 3), e["ticker"]),
-    )
-
-    for entry in gesorteerd:
-        t      = entry["ticker"]
-        status = entry.get("status", "?")
-        opname = entry.get("opname", "?")
-
-        if status == "verwijderd":
-            verw = entry.get("verwijderd", date.today().isoformat())
-            regels.append(f"{t:<16} | opname:{opname} | verwijderd:{verw}")
-        else:
-            roe   = entry.get("ROE",     "?")
-            debt  = entry.get("Debt",    "?")
-            marge = entry.get("Marge",   "?")
-            vol   = entry.get("Vol",     "?")
-            omzet = entry.get("Omzet",   "?")
-            regel = (
-                f"{t:<16} | opname:{opname} | "
-                f"ROE:{roe} | Debt:{debt} | Marge:{marge} | "
-                f"Vol:{vol} | Omzet:{omzet} | {status}"
-            )
-            if status == "zwakker":
-                regel += f" | weken_buiten:{entry.get('weken_buiten', 1)}"
-            regels.append(regel)
-
-    with open(bestand_master(getal), "w", encoding="utf-8") as f:
-        f.write("\n".join(regels) + "\n")
-
-
-# ---------------------------------------------------------------------------
-# EXPORT — schrijven
-# ---------------------------------------------------------------------------
-def sla_export_op(getal: str, master: dict) -> list:
-    export = sorted(
-        t for t, e in master.items()
-        if e.get("status") in ("nieuw", "actief", "zwakker")
-    )
-    with open(bestand_export(getal), "w", encoding="utf-8") as f:
-        f.write(", ".join(export))
-    return export
-
-
-# ---------------------------------------------------------------------------
-# LAAG 2 — MUNGER KWALITEITSFILTER (v2: soepeler)
-# ---------------------------------------------------------------------------
-def check_munger(ticker: str) -> tuple:
+# ── Filter checks ─────────────────────────────────────────────────────────────
+def check_fundamenteel(ticker: str, crit: dict) -> tuple:
     try:
         info = yf.Ticker(ticker).info
         if not info or "returnOnEquity" not in info:
-            return False, {}, "geen fundamentele data"
+            return None, None, None, ["geen_fundamentele_data"]
 
         roe   = info.get("returnOnEquity", 0)    or 0
         debt  = info.get("debtToEquity",   9999) or 9999
         marge = info.get("profitMargins",  0)    or 0
-
-        # yfinance geeft soms debt als ratio i.p.v. percentage
         if 0 < debt < 2:
-            debt = debt * 100
+            debt *= 100
 
-        metrics = {
-            "ROE":   f"{roe:.0%}",
-            "Debt":  f"{debt:.1f}",
-            "Marge": f"{marge:.0%}",
-        }
-
-        if roe >= ROE_MIN and debt <= DEBT_MAX and marge >= MARGE_MIN:
-            return True, metrics, ""
-
-        redenen = []
-        if roe   < ROE_MIN:   redenen.append(f"ROE {roe:.1%}<{ROE_MIN:.0%}")
-        if debt  > DEBT_MAX:  redenen.append(f"Debt {debt:.0f}>{DEBT_MAX:.0f}")
-        if marge < MARGE_MIN: redenen.append(f"Marge {marge:.1%}<{MARGE_MIN:.0%}")
-        return False, metrics, " | ".join(redenen)
+        falen = []
+        if roe   < crit["ROE_MIN"]:   falen.append(f"ROE={roe:.1%}<{crit['ROE_MIN']:.0%}")
+        if debt  > crit["DEBT_MAX"]:  falen.append(f"Debt={debt:.0f}>{crit['DEBT_MAX']:.0f}")
+        if marge < crit["MARGE_MIN"]: falen.append(f"Marge={marge:.1%}<{crit['MARGE_MIN']:.0%}")
+        return roe, debt, marge, falen
 
     except Exception as e:
-        return False, {}, str(e)
+        return None, None, None, [f"api_fout:{e}"]
 
 
-# ---------------------------------------------------------------------------
-# LAAG 3 — VOLATILITEITSFILTER (v2: hogere drempel + liquiditeitscheck)
-# ---------------------------------------------------------------------------
-def check_volatiliteit(ticker: str, ohlcv_cache: dict) -> tuple:
-    df = ohlcv_cache.get(ticker)
+def check_vol_liq(ticker: str, ohlcv: dict, crit: dict) -> tuple:
+    df = ohlcv.get(ticker)
     if df is None or len(df) < 50:
-        return False, 0.0, 0.0, "te weinig data"
+        return None, None, ["te_weinig_koersdata"]
     try:
-        closes = df["Close"].ffill().dropna()
-        vol    = float(closes.pct_change().dropna().std() * np.sqrt(252))
+        vol   = float(df["Close"].ffill().pct_change().dropna().std() * np.sqrt(252))
+        omzet = float((df["Close"] * df["Volume"]).mean()) if "Volume" in df.columns else 0.0
 
-        # Liquiditeitscheck: gemiddelde dagomzet (Close × Volume)
-        if "Volume" in df.columns:
-            gem_omzet = float((df["Close"] * df["Volume"]).mean())
-        else:
-            gem_omzet = 0.0
-
-        # Volatiliteit te laag?
-        if vol < VOL_MIN:
-            return False, vol, gem_omzet, f"te laag ({vol:.0%}<{VOL_MIN:.0%})"
-        # Volatiliteit te hoog?
-        if vol > VOL_MAX:
-            return False, vol, gem_omzet, f"te hoog ({vol:.0%}>{VOL_MAX:.0%})"
-        # Liquiditeit te laag?
-        if gem_omzet < MIN_DAGOMZET:
-            return False, vol, gem_omzet, f"te illiquide (€{gem_omzet:,.0f}<€{MIN_DAGOMZET:,.0f})"
-
-        return True, vol, gem_omzet, ""
+        falen = []
+        if vol < crit["VOL_MIN"]:
+            falen.append(f"Vol={vol:.0%}<{crit['VOL_MIN']:.0%}")
+        elif vol > crit["VOL_MAX"]:
+            falen.append(f"Vol={vol:.0%}>{crit['VOL_MAX']:.0%}")
+        if omzet < crit["MIN_DAGOMZET"]:
+            falen.append(f"Omzet=€{omzet:,.0f}<€{crit['MIN_DAGOMZET']:,.0f}")
+        return vol, omzet, falen
 
     except Exception as e:
-        return False, 0.0, 0.0, str(e)
+        return None, None, [f"vol_fout:{e}"]
 
 
-# ---------------------------------------------------------------------------
-# MASTER BIJWERKEN
-# ---------------------------------------------------------------------------
-def update_entry(master: dict, ticker: str, door_filter: bool, metrics: dict) -> str:
-    vandaag = date.today().isoformat()
+# ── Diagnose één lijst ────────────────────────────────────────────────────────
+def diagnose_lijst(getal: str) -> dict:
+    vandaag = date.today().strftime("%d/%m/%Y")
+    config  = BEURS_CONFIG.get(getal, {"naam": f"Lijst {getal}"})
+    naam    = config["naam"]
+    crit    = get_criteria(getal)
 
-    if ticker not in master:
-        if door_filter:
-            master[ticker] = {
-                "ticker":       ticker,
-                "status":       "nieuw",
-                "opname":       vandaag,
-                "weken_buiten": 0,
-                **metrics,
-            }
-            return "nieuw"
-        return "onbekend"
+    print(f"\n{'='*65}")
+    print(f"  🔍 DIAGNOSE {getal} — {naam}")
+    print(f"  Criteria: ROE>{crit['ROE_MIN']:.0%} | Debt<{crit['DEBT_MAX']:.0f} | "
+          f"Marge>{crit['MARGE_MIN']:.0%} | "
+          f"Vol {crit['VOL_MIN']:.0%}-{crit['VOL_MAX']:.0%} | "
+          f"Omzet>€{crit['MIN_DAGOMZET']:,.0f}")
+    print(f"{'='*65}")
 
-    entry = master[ticker]
-    entry.update({k: v for k, v in metrics.items()})
+    tickers = laad_tickers(getal)
+    if not tickers:
+        return {}
 
-    if door_filter:
-        entry["status"]       = "actief"
-        entry["weken_buiten"] = 0
-        return "actief"
-    else:
-        entry["weken_buiten"] = entry.get("weken_buiten", 0) + 1
-        if entry["weken_buiten"] >= MAX_WEKEN_BUITEN:
-            entry["status"]     = "verwijderd"
-            entry["verwijderd"] = vandaag
-            return "verwijderd"
-        else:
-            entry["status"] = "zwakker"
-            return "zwakker"
+    ohlcv = batch_download(tickers)
 
-
-# ---------------------------------------------------------------------------
-# SCAN ÉÉN LIJST
-# ---------------------------------------------------------------------------
-def scan_lijst(getal: str) -> dict:
-    config     = BEURS_CONFIG.get(getal, {"naam": f"Lijst {getal}", "suffixen": []})
-    beurs_naam = config["naam"]
-    suffixen   = config["suffixen"]
-    bron       = bestand_bron(getal)
-
-    print(f"\n{'='*60}")
-    print(f"  🔍 LIJST {getal} — {beurs_naam}")
-    print(f"  📋 Bron     : {bron}")
-    print(f"  📁 Master   : {bestand_master(getal)}")
-    print(f"  📤 Export   : {bestand_export(getal)}")
-    print(f"  ⚙️  Criteria : ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | "
-          f"Marge>{MARGE_MIN:.0%} | Vol {VOL_MIN:.0%}-{VOL_MAX:.0%} | "
-          f"Omzet>€{MIN_DAGOMZET:,.0f}")
-    suffix_label = suffixen if suffixen != [""] else ["geen (Nasdaq/NYSE)"]
-    print(f"  🏦 Suffixen : {suffix_label}")
-    print(f"{'='*60}")
-
-    # Bronbestand laden
-    with open(bron, "r", encoding="utf-8") as f:
-        inhoud = f.read().replace("\n", ",").replace(";", ",").replace("$", "")
-    ruwe_tickers = sorted(set(
-        t.strip().upper() for t in inhoud.split(",") if t.strip()
-    ))
-
-    print(f"  📊 {len(ruwe_tickers)} tickers geladen uit bronbestand")
-
-    # --- SUFFIX CORRECTIE ---
-    gecorrigeerde_tickers = []
-    correcties            = []
-    niet_gevonden         = []
-
-    print(f"\n  🔧 Suffix-correctie...")
-    for ticker in ruwe_tickers:
-        if heeft_geldig_suffix(ticker, suffixen):
-            gecorrigeerde_tickers.append(ticker)
-        else:
-            gecorrigeerd, was_gewijzigd, reden = corrigeer_suffix(ticker, suffixen)
-            if was_gewijzigd:
-                gecorrigeerde_tickers.append(gecorrigeerd)
-                correcties.append((ticker, gecorrigeerd))
-                print(f"     ✏️  {ticker} → {gecorrigeerd}")
-            elif not reden:
-                gecorrigeerde_tickers.append(gecorrigeerd)
-            else:
-                niet_gevonden.append((ticker, reden))
-                print(f"     ❌ {ticker}: {reden}")
-
-    if correcties:
-        print(f"  ✏️  {len(correcties)} tickers gecorrigeerd")
-    if niet_gevonden:
-        print(f"  ❌ {len(niet_gevonden)} tickers niet te corrigeren")
-
-    tickers = gecorrigeerde_tickers
-
-    # Delisted cache
-    delisted_cache     = laad_delisted(getal)
-    tickers_te_scannen = [t for t in tickers if t not in delisted_cache]
-    if delisted_cache:
-        print(f"  ⚡ {len(delisted_cache)} gedenoteerde tickers overgeslagen (cache)")
-    print(f"  📊 {len(tickers_te_scannen)} tickers te scannen")
-
-    # Master laden
-    master     = laad_master(getal)
-    eerste_run = len(master) == 0
-    print(f"  {'Eerste run' if eerste_run else f'{len(master)} tickers gekend in master'}")
-
-    # Batch OHLCV download
-    ohlcv_cache = batch_download_ohlcv(tickers_te_scannen)
-
-    # Detecteer nieuw gedenoteerde tickers
-    nieuw_delisted = {t for t, df in ohlcv_cache.items() if df is None or len(df) == 0}
-    delisted_cache.update(nieuw_delisted)
-    sla_delisted_op(getal, delisted_cache)
-
-    tickers_actief = [t for t in tickers_te_scannen if t not in nieuw_delisted]
-    print(f"\n  ✅ {len(tickers_actief)} tickers met data | "
-          f"❌ {len(nieuw_delisted)} nieuw gedenoteerd\n")
-
-    # Munger + Volatiliteit + Liquiditeit
-    print(f"{'='*60}")
-    tellers = {
-        "nieuw":        [],
-        "actief":       [],
-        "zwakker":      [],
-        "verwijderd":   [],
-        "munger_fail":  [],
-        "vol_fail":     [],
-        "liq_fail":     [],
+    stats = {
+        "totaal": len(tickers), "geslaagd": 0, "geen_data": 0,
+        "roe_fail": 0, "debt_fail": 0, "marge_fail": 0,
+        "vol_laag": 0, "vol_hoog": 0, "liq_fail": 0, "meerdere": 0,
     }
 
-    for ticker in tickers_actief:
-        print(f"  {ticker:<16} ", end="", flush=True)
+    regels   = []
+    geslaagd = []
 
-        # Laag 1: Munger fundamentelen
-        munger_ok, munger_metrics, munger_reden = check_munger(ticker)
-        if not munger_ok:
-            print(f"❌ Munger: {munger_reden}")
-            update_entry(master, ticker, False, munger_metrics)
-            tellers["munger_fail"].append(ticker)
-            time.sleep(SLEEP_INFO)
+    for ticker in tickers:
+        roe, debt, marge, fund_falen = check_fundamenteel(ticker, crit)
+        time.sleep(0.3)
+
+        if any("geen_fundamentele_data" in f or "api_fout" in f for f in fund_falen):
+            stats["geen_data"] += 1
+            regels.append(f"  {ticker:<16} ❓ Geen fundamentele data")
             continue
 
-        print(
-            f"✅ ROE:{munger_metrics['ROE']} "
-            f"Debt:{munger_metrics['Debt']} "
-            f"Marge:{munger_metrics['Marge']}  ",
-            end="", flush=True,
-        )
-        time.sleep(SLEEP_INFO)
+        vol, omzet, vol_falen = check_vol_liq(ticker, ohlcv, crit)
+        alle_falen = (fund_falen or []) + (vol_falen or [])
 
-        # Laag 2: Volatiliteit + liquiditeit
-        vol_ok, vol, omzet, vol_reden = check_volatiliteit(ticker, ohlcv_cache)
-        vol_str   = f"{vol:.0%}"
-        omzet_str = f"€{omzet:,.0f}"
-
-        if not vol_ok:
-            # Onderscheid liquiditeit vs volatiliteit in tellers
-            if "illiquide" in vol_reden:
-                print(f"❌ Liq:{omzet_str} {vol_reden}")
-                tellers["liq_fail"].append(ticker)
-            else:
-                print(f"❌ Vol:{vol_str} {vol_reden}")
-                tellers["vol_fail"].append(ticker)
-            update_entry(master, ticker, False, {**munger_metrics, "Vol": vol_str, "Omzet": omzet_str})
+        if not alle_falen:
+            stats["geslaagd"] += 1
+            geslaagd.append(ticker)
+            regels.append(
+                f"  {ticker:<16} ✅ "
+                f"ROE={roe:.0%} Debt={debt:.0f} Marge={marge:.0%} "
+                f"Vol={vol:.0%} Omzet=€{omzet:,.0f}"
+            )
             continue
 
-        print(f"✅ Vol:{vol_str} Omzet:{omzet_str}")
-        metrics = {**munger_metrics, "Vol": vol_str, "Omzet": omzet_str}
-        status  = update_entry(master, ticker, True, metrics)
-        tellers[status].append(ticker)
+        if len(alle_falen) > 1:
+            stats["meerdere"] += 1
+        for f in alle_falen:
+            if "ROE"   in f: stats["roe_fail"]   += 1
+            if "Debt"  in f: stats["debt_fail"]  += 1
+            if "Marge" in f: stats["marge_fail"] += 1
+            if "Vol="  in f and "<" in f: stats["vol_laag"] += 1
+            if "Vol="  in f and ">" in f: stats["vol_hoog"] += 1
+            if "Omzet" in f: stats["liq_fail"]   += 1
 
-    # Opslaan
-    sla_master_op(getal, master, beurs_naam)
-    export_lijst = sla_export_op(getal, master)
+        regels.append(f"  {ticker:<16} ❌ {' | '.join(alle_falen)}")
 
-    print(f"\n  ✅ {getal} ({beurs_naam}) klaar: "
-          f"{len(export_lijst)} tickers → {bestand_export(getal)}")
+    # Samenvatting
+    n   = stats["totaal"]
+    ok  = stats["geslaagd"]
+    pct = ok / n * 100 if n else 0
 
-    return {
-        "getal":         getal,
-        "naam":          beurs_naam,
-        "tellers":       tellers,
-        "master":        master,
-        "export":        export_lijst,
-        "correcties":    correcties,
-        "niet_gevonden": niet_gevonden,
-    }
+    samenvatting = [
+        "",
+        f"  ── SAMENVATTING {getal} — {naam} ──",
+        f"  Totaal gescand  : {n}",
+        f"  ✅ Door filter   : {ok} ({pct:.0f}%)",
+        f"  ❓ Geen data     : {stats['geen_data']}",
+        f"  ❌ ROE te laag   : {stats['roe_fail']}",
+        f"  ❌ Debt te hoog  : {stats['debt_fail']}",
+        f"  ❌ Marge te laag : {stats['marge_fail']}",
+        f"  ❌ Vol te laag   : {stats['vol_laag']}",
+        f"  ❌ Vol te hoog   : {stats['vol_hoog']}",
+        f"  ❌ Illiquide     : {stats['liq_fail']}",
+        f"  ⚠️  Meerdere fail : {stats['meerdere']} (tellen dubbel hierboven)",
+    ]
+    if geslaagd:
+        samenvatting.append(f"\n  ✅ Geslaagd: {', '.join(geslaagd)}")
 
+    print("\n".join(samenvatting))
 
-# ---------------------------------------------------------------------------
-# HOOFD SCAN
-# ---------------------------------------------------------------------------
-def scan_alle() -> None:
-    start_tijd   = time.time()
-    nu           = date.today().strftime("%d/%m/%Y")
-    verwerkt     = []
-    overgeslagen = []
-
-    print(f"\n{'='*60}")
-    print(f"  🔍 MRA FILTER BOT v2 — ALLE LIJSTEN 041-060")
-    print(f"  📅 Datum  : {nu}")
-    print(f"  ⚙️  Criteria: ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | "
-          f"Marge>{MARGE_MIN:.0%} | Vol {VOL_MIN:.0%}-{VOL_MAX:.0%} | "
-          f"Omzet>€{MIN_DAGOMZET:,.0f}")
-    print(f"{'='*60}")
-
-    alle_resultaten = {}
-
-    for nr in range(REEKS_START, REEKS_EINDE + 1):
-        getal = f"0{nr}"
-        bron  = bestand_bron(getal)
-
-        if not os.path.exists(bron):
-            print(f"\n  ⏭️  {bron} niet gevonden — overgeslagen")
-            overgeslagen.append(getal)
-            continue
-
-        verwerkt.append(getal)
-        resultaat = scan_lijst(getal)
-        alle_resultaten[getal] = resultaat
-        time.sleep(1)
-
-    # Timing
-    elapsed  = time.time() - start_tijd
-    minuten  = int(elapsed // 60)
-    seconden = int(elapsed % 60)
-
-    # Console samenvatting
-    print(f"\n{'='*60}")
-    print(f"  ✅ ALLE SCANS VOLTOOID in {minuten}m {seconden}s")
-    print(f"  📋 Verwerkt    : {len(verwerkt)} lijsten ({', '.join(verwerkt)})")
-    print(f"  ⏭️  Overgeslagen: {len(overgeslagen)} lijsten")
-    for getal, res in alle_resultaten.items():
-        t = res["tellers"]
-        print(f"     {getal} ({res['naam']}): "
-              f"🆕{len(t['nieuw'])} ✅{len(t['actief'])} "
-              f"⚠️{len(t['zwakker'])} ❌{len(t['verwijderd'])} "
-              f"→ {len(res['export'])} export")
-    print(f"{'='*60}\n")
-
-    # Telegram rapport
-    rapport  = f"📊 *MRA Filter v2 — Alle lijsten*\n_{nu}_\n"
-    rapport += f"⏱️ _Looptijd: {minuten}m {seconden}s_\n"
-    rapport += (
-        f"⚙️ ROE>{ROE_MIN:.0%} | Debt<{DEBT_MAX:.0f} | "
-        f"Marge>{MARGE_MIN:.0%} | Vol {VOL_MIN:.0%}-{VOL_MAX:.0%} | "
-        f"Omzet>€{MIN_DAGOMZET:,.0f}\n"
+    # Schrijf naar bestand
+    uitvoer = (
+        [f"DIAGNOSE {getal} — {naam} | {vandaag}", "=" * 65,
+         f"Criteria: ROE>{crit['ROE_MIN']:.0%} | Debt<{crit['DEBT_MAX']:.0f} | "
+         f"Marge>{crit['MARGE_MIN']:.0%} | "
+         f"Vol {crit['VOL_MIN']:.0%}-{crit['VOL_MAX']:.0%} | "
+         f"Omzet>€{crit['MIN_DAGOMZET']:,.0f}", ""]
+        + regels
+        + samenvatting
     )
-    rapport += "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    pad = f"diagnose_{getal}_{date.today().isoformat()}.txt"
+    with open(pad, "w", encoding="utf-8") as f:
+        f.write("\n".join(uitvoer))
+    print(f"\n  💾 Opgeslagen: {pad}")
 
-    for getal, res in alle_resultaten.items():
-        t      = res["tellers"]
-        export = res["export"]
-        naam   = res["naam"]
-        rapport += f"*{getal} — {naam}* ({len(export)} tickers)\n"
+    # Telegram
+    tg = (
+        f"🔬 *Diagnose {getal} — {naam}*\n_{vandaag}_\n\n"
+        f"Totaal: {n} | ✅ *{ok} ({pct:.0f}%)*\n\n"
+        f"❌ Marge te laag : *{stats['marge_fail']}*\n"
+        f"❌ Vol te laag   : *{stats['vol_laag']}*\n"
+        f"❌ ROE te laag   : *{stats['roe_fail']}*\n"
+        f"❌ Debt te hoog  : *{stats['debt_fail']}*\n"
+        f"❌ Illiquide     : *{stats['liq_fail']}*\n"
+        f"❓ Geen data     : *{stats['geen_data']}*\n"
+    )
+    if geslaagd:
+        tg += f"\n✅ _Door filter: {', '.join(geslaagd)}_"
 
-        if res.get("correcties"):
-            rapport += f"  ✏️ {len(res['correcties'])} suffix-correcties\n"
-        if res.get("niet_gevonden"):
-            rapport += f"  ⚠️ {len(res['niet_gevonden'])} niet te corrigeren\n"
-        if t["nieuw"]:
-            rapport += f"  🆕 {', '.join(f'`{x}`' for x in t['nieuw'][:10])}"
-            if len(t["nieuw"]) > 10:
-                rapport += f" +{len(t['nieuw'])-10}"
-            rapport += "\n"
-        if t["verwijderd"]:
-            rapport += f"  ❌ {', '.join(f'`{x}`' for x in t['verwijderd'])}\n"
-        if t["zwakker"]:
-            rapport += f"  ⚠️ {', '.join(f'`{x}`' for x in t['zwakker'])}\n"
-        if t.get("liq_fail"):
-            rapport += f"  💧 {len(t['liq_fail'])} te illiquide\n"
-        if not t["nieuw"] and not t["verwijderd"] and not t["zwakker"]:
-            rapport += f"  ✅ Geen wijzigingen\n"
-        rapport += "\n"
-
-    rapport += "_Volgende run: volgende zondag_"
-
-    if len(rapport) <= 4096:
-        send_telegram(rapport)
-    else:
-        send_telegram(rapport[:4000] + "\n_...zie master voor volledig overzicht_")
-        time.sleep(1)
-        send_telegram("_(vervolg)_\n" + rapport[4000:])
+    send_telegram(tg)
+    return stats
 
 
-# ---------------------------------------------------------------------------
-# START
-# ---------------------------------------------------------------------------
+# ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    scan_alle()
+    # GitHub Actions modus: DIAGNOSE_LIJST=041 → scan alleen lijst 041
+    # Lokale modus: geen variabele → scan alle beschikbare lijsten
+    lijst_env = os.environ.get("DIAGNOSE_LIJST", "").strip()
+
+    if lijst_env:
+        diagnose_lijst(lijst_env)
+    else:
+        for nr in range(41, 61):
+            getal = f"0{nr}"
+            if os.path.exists(f"tickers_{getal}a.txt"):
+                diagnose_lijst(getal)
+                print("\n  ⏳ Pauze 60s voor volgende lijst...")
+                time.sleep(60)
