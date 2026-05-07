@@ -11,6 +11,8 @@ on:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
+    permissions:
+     contents: write    # ← dit ontbreekt in de diagnose workflow
     timeout-minutes: 350   # max ~6 uur voor alle lijsten
 
     steps:
