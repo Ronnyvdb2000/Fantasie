@@ -47,7 +47,7 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DIAGNOSE_LIJST: "042"
-        run: python bot_041m_diagnose.py
+        run: python bot_041mV2.py
 
       - name: Pauze na 042
         if: ${{ github.event.inputs.lijsten == 'alle' }}
