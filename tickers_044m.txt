@@ -1,25 +1,35 @@
-# MASTERLIJST — Spanje/Portugal | bron: tickers_044a.txt
-# Laatste update: 07/05/2026
-# Criteria (soepel): ROE>10% | Debt<100 | Marge>7% | Vol 18%-65%
-# Status: actief | zwakker (max 2 weken) | verwijderd
-# ----------------------------------------------------------------------
-AENA.MC          | opname:2026-05-04 | ROE:24% | Debt:83.5 | Marge:34% | Vol:21% | actief
-AMS.MC           | opname:2026-05-04 | ROE:27% | Debt:66.5 | Marge:20% | Vol:26% | actief
-ANE.MC           | opname:2026-05-04 | ROE:11% | Debt:82.8 | Marge:16% | Vol:31% | actief
-ARM.MC           | opname:2026-05-04 | ROE:18% | Debt:85.3 | Marge:204% | Vol:45% | actief
-AZK.MC           | opname:2026-05-04 | ROE:13% | Debt:8.7 | Marge:8% | Vol:26% | actief
-CBAV.MC          | opname:2026-05-04 | ROE:41% | Debt:62.3 | Marge:14% | Vol:28% | actief
-FDR.MC           | opname:2026-05-04 | ROE:11% | Debt:76.5 | Marge:8% | Vol:27% | actief
-IDR.MC           | opname:2026-05-04 | ROE:27% | Debt:87.9 | Marge:8% | Vol:48% | actief
-ISUR.MC          | opname:2026-05-04 | ROE:15% | Debt:84.3 | Marge:16% | Vol:27% | actief
-ITX.MC           | opname:2026-05-04 | ROE:31% | Debt:29.1 | Marge:16% | Vol:25% | actief
-LDA.MC           | opname:2026-05-04 | ROE:22% | Debt:61.8 | Marge:8% | Vol:23% | actief
-MCM.MC           | opname:2026-05-04 | ROE:11% | Debt:11.5 | Marge:14% | Vol:19% | actief
-MFEA.MC          | opname:2026-05-04 | ROE:10% | Debt:96.9 | Marge:7% | Vol:35% | actief
-MRL.LS           | opname:2026-05-04 | ROE:10% | Debt:62.8 | Marge:139% | Vol:41% | actief
-MRL.MC           | opname:2026-05-04 | ROE:10% | Debt:62.8 | Marge:139% | Vol:22% | actief
-PHM.MC           | opname:2026-05-04 | ROE:36% | Debt:19.0 | Marge:36% | Vol:38% | actief
-ROVI.MC          | opname:2026-05-04 | ROE:22% | Debt:18.0 | Marge:19% | Vol:29% | actief
-VID.MC           | opname:2026-05-04 | ROE:15% | Debt:18.6 | Marge:14% | Vol:19% | actief
-VIS.MC           | opname:2026-05-04 | ROE:17% | Debt:37.7 | Marge:13% | Vol:19% | actief
-FAE.MC           | opname:2026-05-04 | ROE:11% | Debt:58.1 | Marge:13% | Vol:21% | zwakker | weken_buiten:1
+# MASTERLIJST 044 — Spanje/Portugal
+# Laatste update: 08/05/2026
+# Criteria: ROE>7% | Debt<130 | Marge>4% | Vol 18%-65% | Omzet>€150,000
+# Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
+# --------------------------------------------------------------------------------
+A3M.MC           | opname:2026-05-08 | ROE:7.9% | Debt:27.5 | Marge:6.9% | Vol:20.1% | Omzet:2,099,837 | actief
+AENA.MC          | opname:2026-05-04 | ROE:24.4% | Debt:83.5 | Marge:33.5% | Vol:20.9% | Omzet:43,829,669 | actief
+AIR.MC           | opname:2026-05-08 | ROE:19.7% | Debt:55.7 | Marge:6.9% | Vol:27.1% | Omzet:881,698 | actief
+ALNT.MC          | opname:2026-05-08 | ROE:8.9% | Debt:11.4 | Marge:9.6% | Vol:21.4% | Omzet:253,359 | actief
+AMS.MC           | opname:2026-05-04 | ROE:26.9% | Debt:66.5 | Marge:20.5% | Vol:26.0% | Omzet:50,078,842 | actief
+ANE.MC           | opname:2026-05-04 | ROE:11.1% | Debt:82.8 | Marge:16.0% | Vol:30.6% | Omzet:8,072,183 | actief
+ART.MC           | opname:2026-05-08 | ROE:46.3% | Debt:118.6 | Marge:8.8% | Vol:46.8% | Omzet:713,832 | actief
+CBAV.MC          | opname:2026-05-04 | ROE:41.0% | Debt:62.3 | Marge:13.8% | Vol:27.8% | Omzet:193,810 | actief
+CIE.MC           | opname:2026-05-08 | ROE:19.6% | Debt:113.0 | Marge:8.5% | Vol:25.0% | Omzet:1,717,777 | actief
+COR.LS           | opname:2026-05-08 | ROE:7.5% | Debt:9.0 | Marge:6.5% | Vol:19.0% | Omzet:951,124 | actief
+ELE.MC           | opname:2026-05-08 | ROE:23.9% | Debt:108.7 | Marge:10.5% | Vol:20.2% | Omzet:26,153,312 | actief
+ENG.MC           | opname:2026-05-08 | ROE:14.8% | Debt:118.5 | Marge:33.9% | Vol:22.6% | Omzet:14,488,803 | actief
+FDR.MC           | opname:2026-05-04 | ROE:11.0% | Debt:76.5 | Marge:7.8% | Vol:26.9% | Omzet:6,954,593 | actief
+HOME.MC          | opname:2026-05-08 | ROE:10.9% | Debt:111.4 | Marge:17.5% | Vol:29.2% | Omzet:3,410,781 | actief
+IDR.MC           | opname:2026-05-04 | ROE:26.5% | Debt:87.9 | Marge:7.8% | Vol:48.3% | Omzet:48,630,325 | actief
+ITX.MC           | opname:2026-05-04 | ROE:31.0% | Debt:29.1 | Marge:15.6% | Vol:25.0% | Omzet:114,843,715 | actief
+LDA.MC           | opname:2026-05-04 | ROE:22.5% | Debt:61.8 | Marge:7.6% | Vol:22.9% | Omzet:601,138 | actief
+MRL.MC           | opname:2026-05-04 | ROE:10.1% | Debt:62.8 | Marge:138.6% | Vol:21.6% | Omzet:12,627,226 | actief
+PHM.MC           | opname:2026-05-04 | ROE:36.0% | Debt:19.0 | Marge:35.7% | Vol:38.2% | Omzet:4,657,221 | actief
+REP.MC           | opname:2026-05-08 | ROE:9.5% | Debt:49.2 | Marge:5.0% | Vol:28.8% | Omzet:80,392,573 | actief
+ROVI.MC          | opname:2026-05-04 | ROE:22.3% | Debt:18.0 | Marge:18.9% | Vol:29.4% | Omzet:8,067,616 | actief
+VID.MC           | opname:2026-05-04 | ROE:15.4% | Debt:18.6 | Marge:13.8% | Vol:19.4% | Omzet:2,703,333 | actief
+VIS.MC           | opname:2026-05-04 | ROE:17.0% | Debt:37.7 | Marge:13.0% | Vol:19.4% | Omzet:4,423,218 | actief
+ARM.MC           | opname:2026-05-04 | ROE:18.3% | Debt:85.3 | Marge:204.4% | Vol:48.8% | Omzet:1,637 | zwakker | weken_buiten:1
+AZK.MC           | opname:2026-05-04 | ROE:13.4% | Debt:8.7 | Marge:8.2% | Vol:25.8% | Omzet:68,047 | zwakker | weken_buiten:1
+FAE.MC           | opname:2026-05-04 | ROE:11% | Debt:58.1 | Marge:13% | Vol:21% | Omzet:? | zwakker | weken_buiten:1
+ISUR.MC          | opname:2026-05-04 | ROE:14.9% | Debt:84.3 | Marge:15.9% | Vol:26.7% | Omzet:47,449 | zwakker | weken_buiten:1
+MCM.MC           | opname:2026-05-04 | ROE:11.4% | Debt:11.5 | Marge:14.3% | Vol:19.4% | Omzet:93,967 | zwakker | weken_buiten:1
+MFEA.MC          | opname:2026-05-04 | ROE:10.0% | Debt:96.9 | Marge:7.5% | Vol:34.5% | Omzet:79,107 | zwakker | weken_buiten:1
+MRL.LS           | opname:2026-05-04 | ROE:10.1% | Debt:62.8 | Marge:138.6% | Vol:41.0% | Omzet:5,652 | zwakker | weken_buiten:1
