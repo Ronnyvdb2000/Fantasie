@@ -1,4 +1,4 @@
-name: "Bot 041: Full Munger Ticker Filter V3"
+name: "Bot 041: Full Munger Ticker Filter"
 
 on:
   schedule:
@@ -30,7 +30,7 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python bot_041mV3.py
+        run: python bot_041m.py
 
       - name: Commit en Push resultaten
         run: |
