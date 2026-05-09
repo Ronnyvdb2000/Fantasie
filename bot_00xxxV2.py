@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MRA SIGNAL ENGINE v5.1
-- Per ticker download (sequential)
+MRA SIGNAL ENGINE v5.2
+- Sequential per ticker
 - auto_adjust=False (correcte IBS, BB, ATR, ADX)
 - Mixed tickerlijst input
-- Versoepelde filters (OPTIE A):
-  - ADX > 10
-  - Volume > 0.3 x MA20
-  - EMA200-filter alleen voor T en S
-  - Trailing stop 1.5 x ATR
+- Versoepelde filters (OPTIE A)
+- Multi-index FIX voor yfinance 1.2.0
 """
 
 import os
@@ -75,10 +72,10 @@ INZET = 2500.0
 KOSTEN = 15.0 + (INZET * 0.0035)
 
 # -----------------------------------------------------------------------------
-# DOWNLOAD ENGINE
+# DOWNLOAD ENGINE + MULTI-INDEX FIX
 # -----------------------------------------------------------------------------
 def download_ticker(ticker: str):
-    """Yahoo-proof download, sequential, auto_adjust=False."""
+    """Yahoo-proof download, sequential, auto_adjust=False + multi-index fix."""
     try:
         df = yf.download(
             ticker,
@@ -86,9 +83,23 @@ def download_ticker(ticker: str):
             auto_adjust=False,
             progress=False
         )
+
         if df is None or len(df) < 250:
             return None
+
+        # -------------------------------
+        # MULTI-INDEX FIX
+        # -------------------------------
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [c[0] for c in df.columns]
+
+        # Forceer kolommen naar Series
+        for col in ["Close", "High", "Low", "Open", "Volume"]:
+            if col in df.columns and isinstance(df[col], pd.DataFrame):
+                df[col] = df[col].iloc[:, 0]
+
         return df.dropna()
+
     except Exception as e:
         logger.error(f"Download fout {ticker}: {e}")
         return None
@@ -103,25 +114,20 @@ def indicators(df: pd.DataFrame):
     l = df["Low"].ffill()
     v = df["Volume"].ffill()
 
-    # MA / EMA
     ema200 = p.ewm(span=200, adjust=False).mean()
     ma20   = p.rolling(20).mean()
     ma5    = p.rolling(5).mean()
 
-    # Bollinger
     std20 = p.rolling(20).std()
     lower_bb = ma20 - (MRA_BB_STD * std20)
 
-    # IBS
     ibs = (p - l) / (h - l + 1e-10)
 
-    # RSI
     delta = p.diff()
     gain = delta.where(delta > 0, 0).ewm(alpha=1/14, adjust=False).mean()
     loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
     rsi = 100 - (100 / (1 + gain / (loss + 1e-10)))
 
-    # ATR
     tr = pd.concat([
         h - l,
         (h - p.shift()).abs(),
@@ -129,7 +135,6 @@ def indicators(df: pd.DataFrame):
     ], axis=1).max(axis=1)
     atr = tr.ewm(alpha=1/14, adjust=False).mean()
 
-    # ADX
     up = h.diff().clip(lower=0)
     dn = (-l.diff()).clip(lower=0)
     plus_di = 100 * (up.ewm(alpha=1/14, adjust=False).mean() / (atr + 1e-10))
@@ -143,26 +148,23 @@ def indicators(df: pd.DataFrame):
 # STRATEGIE-ENGINE
 # -----------------------------------------------------------------------------
 def run_strategy(df: pd.DataFrame, ticker: str):
-    """Draait alle strategieën en geeft resultaten + signalen terug."""
-
     p, ema200, rsi, atr, adx, ibs, lower_bb, ma5 = indicators(df)
 
-    # Resultaten
     res = {"T":0, "S":0, "HT":0, "HS":0, "MRAS":0, "MRAT":0}
     trades = {"T":0, "S":0, "HT":0, "HS":0, "MRAS":0, "MRAT":0}
     sig = {"T":[], "S":[], "HT":[], "HS":[], "MRAS":[], "MRAT":[]}
 
-    # MA-lijnen voor T/S
     f50  = p.ewm(span=50, adjust=False).mean()
     s200 = p.ewm(span=200, adjust=False).mean()
     f20  = p.ewm(span=20, adjust=False).mean()
     s50  = p.ewm(span=50, adjust=False).mean()
 
-    # Hyper lijnen
     f9  = p.ewm(span=9, adjust=False).mean()
     s21 = p.ewm(span=21, adjust=False).mean()
 
-    # --- Helper voor T/S/HT/HS ---
+    # -------------------------------
+    # MA STRATEGIE (T, S, HT, HS)
+    # -------------------------------
     def run_ma_strategy(fast, slow, use_trend, key):
         pr = 0.0
         pos = False
@@ -175,15 +177,17 @@ def run_strategy(df: pd.DataFrame, ticker: str):
             cp = p.iloc[i]
 
             if not pos:
-                # Cross up
                 if fast.iloc[i] > slow.iloc[i] and fast.iloc[i-1] <= slow.iloc[i-1]:
+
                     # EMA200-filter alleen voor T en S
                     if use_trend and key in ["T", "S"] and cp <= ema200.iloc[i]:
                         continue
-                    # ADX-filter versoepeld: >10
+
+                    # ADX versoepeld
                     if adx.iloc[i] < 10:
                         continue
-                    # Volume-filter versoepeld: >0.3 x MA20
+
+                    # Volume versoepeld
                     if df["Volume"].iloc[i] < vol_ma20.iloc[i] * 0.3:
                         continue
 
@@ -192,9 +196,11 @@ def run_strategy(df: pd.DataFrame, ticker: str):
                     hi  = cp
                     pr -= KOSTEN
                     trades[key] += 1
+
             else:
                 hi = max(hi, cp)
-                # Trailing stop strakker: 1.5 x ATR
+
+                # Trailing stop 1.5 ATR
                 if cp < hi - 1.5 * atr.iloc[i] or fast.iloc[i] < slow.iloc[i]:
                     pr += (INZET * (cp / ins) - INZET) - KOSTEN
                     pos = False
@@ -207,20 +213,21 @@ def run_strategy(df: pd.DataFrame, ticker: str):
         # Signalen
         if fast.iloc[-1] > slow.iloc[-1] and fast.iloc[-2] <= slow.iloc[-2]:
             sig[key].append(
-                f"• `{ticker}`: 🟢 *KOOP* | €{p.iloc[-1]:.2f} | ⚡ ATR: {atr.iloc[-1]:.2f} | 📊 RSI: {rsi.iloc[-1]:.1f} | 🛡️ SL: €{p.iloc[-1] - 1.5*atr.iloc[-1]:.2f} | [Grafiek](https://finance.yahoo.com/quote/{ticker})"
+                f"• `{ticker}`: 🟢 *KOOP* | €{p.iloc[-1]:.2f} | ATR {atr.iloc[-1]:.2f}"
             )
         elif fast.iloc[-1] < slow.iloc[-1] and fast.iloc[-2] >= slow.iloc[-2]:
             sig[key].append(
-                f"• `{ticker}`: 🔴 *VERKOOP* | €{p.iloc[-1]:.2f} | ⚡ ATR: {atr.iloc[-1]:.2f} | 📊 RSI: {rsi.iloc[-1]:.1f} | 🛡️ SL: €{p.iloc[-1] - 1.5*atr.iloc[-1]:.2f} | [Grafiek](https://finance.yahoo.com/quote/{ticker})"
+                f"• `{ticker}`: 🔴 *VERKOOP* | €{p.iloc[-1]:.2f} | ATR {atr.iloc[-1]:.2f}"
             )
 
-    # Draai T/S/HT/HS
     run_ma_strategy(f50, s200, True,  "T")
     run_ma_strategy(f20, s50,  True,  "S")
-    run_ma_strategy(f9,  s21,  False, "HT")  # geen EMA200-filter
-    run_ma_strategy(f9,  s21,  False, "HS")  # geen EMA200-filter
+    run_ma_strategy(f9,  s21,  False, "HT")
+    run_ma_strategy(f9,  s21,  False, "HS")
 
-    # --- MRA SNEL ---
+    # -------------------------------
+    # MRA SNEL
+    # -------------------------------
     pr = 0.0
     pos = False
     ins = 0.0
@@ -247,13 +254,12 @@ def run_strategy(df: pd.DataFrame, ticker: str):
 
     res["MRAS"] += pr
 
-    # Signaal
     if p.iloc[-1] < lower_bb.iloc[-1] and ibs.iloc[-1] < MRA_IBS_MAX:
-        sig["MRAS"].append(
-            f"• `{ticker}`: 🛡️ *Munger Snel* | €{p.iloc[-1]:.2f} | 📊 RSI: {rsi.iloc[-1]:.1f} | [Grafiek](https://finance.yahoo.com/quote/{ticker})"
-        )
+        sig["MRAS"].append(f"• `{ticker}`: 🛡️ MRA SNEL")
 
-    # --- MRA TRAAG ---
+    # -------------------------------
+    # MRA TRAAG
+    # -------------------------------
     pr = 0.0
     pos = False
     ins = 0.0
@@ -281,11 +287,8 @@ def run_strategy(df: pd.DataFrame, ticker: str):
 
     res["MRAT"] += pr
 
-    # Signaal
     if p.iloc[-1] < lower_bb.iloc[-1] and ibs.iloc[-1] < MRA_IBS_MAX:
-        sig["MRAT"].append(
-            f"• `{ticker}`: 🐢 *Munger Traag* | €{p.iloc[-1]:.2f} | 📊 RSI: {rsi.iloc[-1]:.1f} | [Grafiek](https://finance.yahoo.com/quote/{ticker})"
-        )
+        sig["MRAT"].append(f"• `{ticker}`: 🐢 MRA TRAAG")
 
     return res, trades, sig
 
@@ -297,44 +300,40 @@ def rapport(label, naam, nu, res, trades, sig):
     def block(lst): return "\n".join(lst) if lst else "Geen actie"
 
     deel1 = [
-        f"📊 *{label} {naam} RAPPORT triplex*",
+        f"📊 *{label} {naam} RAPPORT*",
         f"_{nu}_",
         "----------------------------------",
-        f"🐢 *Traag (50/200):* {fmt(res['T'])} ({trades['T']} trades)",
-        f"⚡ *Snel (20/50):* {fmt(res['S'])} ({trades['S']} trades)",
-        f"🚀 *Hyper Trend:* {fmt(res['HT'])} ({trades['HT']} trades)",
-        f"🔥 *Hyper Scalp:* {fmt(res['HS'])} ({trades['HS']} trades)",
-        f"🛡️ *MRA Snel:* {fmt(res['MRAS'])} ({trades['MRAS']} trades)",
-        f"🐢 *MRA Traag:* {fmt(res['MRAT'])} ({trades['MRAT']} trades)",
+        f"🐢 Traag (50/200): {fmt(res['T'])} ({trades['T']} trades)",
+        f"⚡ Snel (20/50): {fmt(res['S'])} ({trades['S']} trades)",
+        f"🚀 Hyper Trend: {fmt(res['HT'])} ({trades['HT']} trades)",
+        f"🔥 Hyper Scalp: {fmt(res['HS'])} ({trades['HS']} trades)",
+        f"🛡️ MRA Snel: {fmt(res['MRAS'])} ({trades['MRAS']} trades)",
+        f"🐢 MRA Traag: {fmt(res['MRAT'])} ({trades['MRAT']} trades)",
         "",
-        "🛡️ *SIGNALEN TRAAG (RSI):*",
+        "🛡️ SIGNALEN TRAAG:",
         block(sig["T"]),
         "",
-        "🎯 *SIGNALEN SNEL (RSI):*",
+        "🎯 SIGNALEN SNEL:",
         block(sig["S"]),
     ]
 
     deel2 = [
         f"📊 *{label} {naam} (2/2)*",
         "",
-        "📈 *SIGNALEN HYPER TREND (CRSI):*",
+        "📈 SIGNALEN HYPER TREND:",
         block(sig["HT"]),
         "",
-        "⚡ *SIGNALEN HYPER SCALP (CRSI):*",
+        "⚡ SIGNALEN HYPER SCALP:",
         block(sig["HS"]),
         "",
-        "🛡️ *SIGNALEN MRA SNEL:*",
+        "🛡️ SIGNALEN MRA SNEL:",
         block(sig["MRAS"]),
         "",
-        "🐢 *SIGNALEN MRA TRAAG:*",
+        "🐢 SIGNALEN MRA TRAAG:",
         block(sig["MRAT"]),
         "",
-        "⚙️ *PARAMETERS:*",
-        f"_Trend: ADX>10 | Vol>0.3x MA20 | EMA200 filter enkel T/S | Trailing stop 1.5x ATR_",
-        f"_MRA instap: BB {MRA_BB_STD}σ | IBS<{MRA_IBS_MAX}_",
-        f"_MRA Snel: uitstap MA{MRA_SNEL_MA} of +{int((MRA_SNEL_WINST-1)*100)}%_",
-        f"_MRA Traag: min {MRA_TRAAG_HOLD}d, uitstap MA{MRA_TRAAG_MA} of +{int((MRA_TRAAG_WINST-1)*100)}%_",
-        f"_Inzet: €{INZET:.0f} | Kosten: €{KOSTEN:.2f}/trade_",
+        "⚙️ PARAMETERS:",
+        "_ADX>10 | Vol>0.3×MA20 | EMA200 alleen T/S | SL=1.5×ATR_",
     ]
 
     telegram_send("\n".join(deel1))
