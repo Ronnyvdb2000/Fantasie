@@ -62,6 +62,18 @@ EXCHANGES = {
     "048 Nasdaq/NYSE": "tickers_048.txt",
 }
 
+# Fallback tickers als .txt bestanden ontbreken in de repo
+FALLBACK_TICKERS = {
+    "048 Nasdaq/NYSE": [
+        "AAPL", "MSFT", "NVDA", "META", "GOOGL",
+        "AMZN", "TSLA", "AMD", "INTC", "NFLX",
+    ],
+    "041 Benelux": [
+        "ASML", "AD.AS", "INGA.AS", "PHIA.AS", "UNA.AS",
+        "ABN.AS", "NN.AS", "RAND.AS", "WKL.AS", "BESI.AS",
+    ],
+}
+
 # Backtest periode
 BACKTEST_START = "2019-01-01"
 BACKTEST_END   = dt.date.today().isoformat()
@@ -637,8 +649,10 @@ def run_backtest():
         all_tickers.extend(load_tickers_from_file(path))
     all_tickers = sorted(set(all_tickers))
     if not all_tickers:
-        all_tickers = ["AAPL", "MSFT", "AMZN", "GOOGL", "NVDA"]
-        print(f"Geen ticker-bestanden -> demo: {all_tickers}")
+        print("[WARN] Geen tickerbestanden gevonden, gebruik fallback tickers.")
+        for tlist in FALLBACK_TICKERS.values():
+            all_tickers.extend(tlist)
+        all_tickers = sorted(set(all_tickers))
     print(f"Tickers  : {len(all_tickers)}")
 
     # Data
@@ -900,8 +914,11 @@ def run_live_engine():
         all_tickers.extend(tlist)
     all_tickers = sorted(set(all_tickers))
     if not all_tickers:
-        print("Geen tickers gevonden.")
-        return
+        print("[WARN] Geen tickerbestanden gevonden, gebruik fallback tickers.")
+        for ex_name, tlist in FALLBACK_TICKERS.items():
+            exchange_tickers[ex_name] = tlist
+            all_tickers.extend(tlist)
+        all_tickers = sorted(set(all_tickers))
 
     df = download_history(all_tickers, period="5y")
     if df.empty:
