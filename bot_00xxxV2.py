@@ -203,6 +203,7 @@ def download_history(
                     if df_t.empty:
                         print(f"[WARN] {t}: lege data, overgeslagen.")
                         continue
+                    df_t = df_t.reset_index()  # Date van index naar kolom
                     df_t["Ticker"] = t
                     frames.append(df_t)
                 except Exception as e:
@@ -211,6 +212,7 @@ def download_history(
             # Slechts 1 ticker teruggegeven
             df_single = data.dropna(how="all").copy()
             if not df_single.empty:
+                df_single = df_single.reset_index()  # Date van index naar kolom
                 df_single["Ticker"] = tickers[0]
                 frames.append(df_single)
 
@@ -234,6 +236,7 @@ def download_history(
                     continue
                 if isinstance(df_t.columns, pd.MultiIndex):
                     df_t.columns = df_t.columns.get_level_values(0)
+                df_t = df_t.reset_index()  # Date van index naar kolom
                 df_t["Ticker"] = t
                 frames.append(df_t)
                 time.sleep(0.2)
@@ -276,7 +279,9 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ADX gebruikt correcte Wilder-smoothing (FIX t.o.v. v3).
     """
     def _calc(group: pd.DataFrame) -> pd.DataFrame:
-        g     = group.copy().reset_index(drop=True)
+        # Bewaar Ticker voor na de berekening (FutureWarning fix zonder include_groups)
+        ticker_val = group["Ticker"].iloc[0] if "Ticker" in group.columns else None
+        g = group.drop(columns=["Ticker"], errors="ignore").copy().reset_index(drop=True)
         close = g["Close"]
         high  = g["High"]
         low   = g["Low"]
@@ -320,9 +325,12 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         dx       = (abs(plus_di - minus_di) / (plus_di + minus_di + 1e-9)) * 100
         g["ADX14"] = _wilder_smooth(dx, 14)
 
+        # Voeg Ticker terug toe na indicatorberekening
+        if ticker_val is not None:
+            g["Ticker"] = ticker_val
         return g
 
-    return df.groupby("Ticker", group_keys=False).apply(_calc, include_groups=False)
+    return df.groupby("Ticker", group_keys=False).apply(_calc)
 
 
 # ============================================================
