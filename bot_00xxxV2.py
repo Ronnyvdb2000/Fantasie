@@ -57,9 +57,17 @@ LIVE_POSITIONS_FILE = "positions_live.csv"
 LIVE_PORTFOLIO_FILE = "portfolio_live.csv"
 
 # Ticker-lijsten per beurs
+# Bestandsnamen volgen de conventie tickers_0XXx.txt (identiek aan de andere bot)
+# Voeg hier extra beurzen toe van 041 t/m 060
 EXCHANGES = {
-    "041 Benelux":     "tickers_041.txt",
-    "048 Nasdaq/NYSE": "tickers_048.txt",
+    "041 Benelux":       "tickers_041x.txt",
+    "042 Parijs":        "tickers_042x.txt",
+    "043 Frankfurt":     "tickers_043x.txt",
+    "044 Spanje/Port":   "tickers_044x.txt",
+    "045 Londen":        "tickers_045x.txt",
+    "046 Milaan":        "tickers_046x.txt",
+    "047 Toronto":       "tickers_047x.txt",
+    "048 Nasdaq/NYSE":   "tickers_048x.txt",
 }
 
 # Fallback tickers als .txt bestanden ontbreken in de repo
@@ -67,10 +75,12 @@ FALLBACK_TICKERS = {
     "048 Nasdaq/NYSE": [
         "AAPL", "MSFT", "NVDA", "META", "GOOGL",
         "AMZN", "TSLA", "AMD", "INTC", "NFLX",
+        "ORCL", "CRM", "ADBE", "QCOM", "TXN",
     ],
     "041 Benelux": [
         "ASML", "AD.AS", "INGA.AS", "PHIA.AS", "UNA.AS",
         "ABN.AS", "NN.AS", "RAND.AS", "WKL.AS", "BESI.AS",
+        "AKZA.AS", "HEIA.AS", "IMCD.AS", "DSM.AS", "AGN.AS",
     ],
 }
 
@@ -107,11 +117,17 @@ def format_price(val: Optional[float]) -> str:
 
 
 def load_tickers_from_file(path: str) -> List[str]:
+    """Leest tickers uit bestand: newline of komma-gescheiden, strips $, negeert #."""
     if not os.path.exists(path):
         return []
     with open(path, "r", encoding="utf-8") as f:
-        lines = [x.strip() for x in f.readlines()]
-    return [x for x in lines if x and not x.startswith("#")]
+        raw = f.read().replace(",", "\n").replace("$", "")
+    result = []
+    for line in raw.splitlines():
+        t = line.strip().upper()
+        if t and not t.startswith("#"):
+            result.append(t)
+    return sorted(list(set(result)))
 
 
 def send_telegram_message(text: str) -> None:
