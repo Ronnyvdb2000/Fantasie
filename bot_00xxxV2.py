@@ -25,7 +25,7 @@ import csv
 import datetime as dt
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
