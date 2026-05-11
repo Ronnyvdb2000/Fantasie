@@ -23,6 +23,7 @@ import sys
 import math
 import csv
 import datetime as dt
+import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
@@ -162,14 +163,16 @@ def download_history(
 ) -> pd.DataFrame:
     """
     Download OHLCV data van yfinance.
-    auto_adjust=True -> correcte prijzen na splits/dividenden (BUG FIX v3).
+    - auto_adjust=True: correcte prijzen na splits/dividenden
+    - Robuust: gedeeltelijk gefaalde tickers worden overgeslagen (niet gestopt)
+    - Fallback: als batch-download faalt, probeer tickers 1 voor 1
     """
     if not tickers:
         return pd.DataFrame()
 
     kwargs: Dict = dict(
         tickers=tickers,
-        auto_adjust=True,   # FIX: was False in v3
+        auto_adjust=True,
         group_by="ticker",
         progress=False,
         threads=True,
@@ -180,23 +183,62 @@ def download_history(
     else:
         kwargs["period"] = period
 
-    data = yf.download(**kwargs)
-    if data.empty:
-        return pd.DataFrame()
-
     frames = []
-    if isinstance(data.columns, pd.MultiIndex):
-        available = data.columns.get_level_values(1).unique()
-        for t in tickers:
-            if t not in available:
-                continue
-            df_t = data.xs(t, axis=1, level=1).copy()
-            df_t["Ticker"] = t
-            frames.append(df_t)
-    else:
-        df_single = data.copy()
-        df_single["Ticker"] = tickers[0]
-        frames.append(df_single)
+
+    try:
+        data = yf.download(**kwargs)
+    except Exception as e:
+        print(f"[WARN] Batch download mislukt ({e}), probeer 1-voor-1...")
+        data = pd.DataFrame()
+
+    if not data.empty:
+        if isinstance(data.columns, pd.MultiIndex):
+            available = data.columns.get_level_values(1).unique()
+            for t in tickers:
+                if t not in available:
+                    print(f"[WARN] {t}: geen data in batch (mogelijk delisted), overgeslagen.")
+                    continue
+                try:
+                    df_t = data.xs(t, axis=1, level=1).dropna(how="all").copy()
+                    if df_t.empty:
+                        print(f"[WARN] {t}: lege data, overgeslagen.")
+                        continue
+                    df_t["Ticker"] = t
+                    frames.append(df_t)
+                except Exception as e:
+                    print(f"[WARN] {t}: fout bij verwerken ({e}), overgeslagen.")
+        else:
+            # Slechts 1 ticker teruggegeven
+            df_single = data.dropna(how="all").copy()
+            if not df_single.empty:
+                df_single["Ticker"] = tickers[0]
+                frames.append(df_single)
+
+    # Fallback: probeer mislukte tickers 1 voor 1
+    succeeded = {f["Ticker"].iloc[0] for f in frames} if frames else set()
+    failed = [t for t in tickers if t not in succeeded]
+    if failed and not frames:
+        # Alleen 1-voor-1 als batch volledig leeg was
+        print(f"[INFO] Probeer {len(failed)} tickers 1-voor-1...")
+        for t in failed:
+            try:
+                kw = dict(tickers=t, auto_adjust=True, progress=False)
+                if start and end:
+                    kw["start"] = start
+                    kw["end"]   = end
+                else:
+                    kw["period"] = period
+                df_t = yf.download(**kw).dropna(how="all")
+                if df_t.empty:
+                    print(f"[WARN] {t}: geen data, overgeslagen.")
+                    continue
+                if isinstance(df_t.columns, pd.MultiIndex):
+                    df_t.columns = df_t.columns.get_level_values(0)
+                df_t["Ticker"] = t
+                frames.append(df_t)
+                time.sleep(0.2)
+            except Exception as e:
+                print(f"[WARN] {t}: download mislukt ({e}), overgeslagen.")
 
     if not frames:
         return pd.DataFrame()
@@ -938,8 +980,12 @@ def run_live_engine():
 
     df = download_history(all_tickers, period="5y")
     if df.empty:
-        print("Geen data.")
+        print("[ERROR] Geen data beschikbaar voor alle tickers. Bot gestopt.")
         return
+    n_ok = df["Ticker"].nunique()
+    n_total = len(all_tickers)
+    if n_ok < n_total:
+        print(f"[WARN] Data beschikbaar voor {n_ok}/{n_total} tickers. Mogelijk delisted tickers overgeslagen.")
     df = add_indicators(df)
 
     last_date = df["Date"].max().date()
