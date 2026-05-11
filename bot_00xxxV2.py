@@ -322,7 +322,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
         return g
 
-    return df.groupby("Ticker", group_keys=False).apply(_calc)
+    return df.groupby("Ticker", group_keys=False).apply(_calc, include_groups=False)
 
 
 # ============================================================
@@ -867,59 +867,138 @@ def _print_stats(bt: BacktestPortfolio, snap_df: pd.DataFrame):
 # TELEGRAM-OUTPUT
 # ============================================================
 
+def _yahoo_link(ticker: str) -> str:
+    return f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+
+
+def _strat_emoji(strategy: str) -> str:
+    emojis = {
+        "Traag":      "🐢",
+        "Snel":       "⚡",
+        "Hyper Trend":"🚀",
+        "Hyper Scalp":"🔥",
+        "MRA Snel":   "🛡️",
+        "MRA Traag":  "🐢",
+    }
+    return emojis.get(strategy, "📊")
+
+
 def format_signals_per_exchange(
     exchange_name: str,
     buy_signals:   List[Signal],
     sell_signals:  List[Signal],
     portfolio:     LivePortfolio,
-) -> str:
-    lines  = [
-        f"📊 {exchange_name} - GLOBAL v4.0",
-        today_str(),
-        "----------------------------------",
-    ]
+) -> Tuple[str, str]:
+    """
+    Geeft twee berichten terug (deel1, deel2) identiek aan bot_00xxx opmaak:
+    - Markdown met bold, code, inline Yahoo-links
+    - Koop: per ticker met strategie emoji, prijs, ATR-SL, RSI, Yahoo link
+    - Verkoop: reden, strategie, slotprijs, /sell commando
+    - deel2: portfolio overzicht + backtest resultaten per strategie
+    """
+    nu = today_str()
 
-    lines.append("\n🟢 KOOPSIGNALEN:")
-    if buy_signals:
+    def get_s_koop(signals: List[Signal]) -> str:
+        if not signals:
+            return "Geen actie"
+        lines = []
         by_ticker: Dict[str, List[Signal]] = {}
-        for s in buy_signals:
+        for s in signals:
             by_ticker.setdefault(s.ticker, []).append(s)
         for ticker in sorted(by_ticker.keys()):
-            lines.append(f"\n*{ticker}*")
             for s in by_ticker[ticker]:
-                # FIX: format_price() voorkomt crash bij None sl/tp
+                emoji = _strat_emoji(s.strategy)
+                sl_str = format_price(s.sl)
+                tp_str = format_price(s.tp)
                 lines.append(
-                    f"  * {s.strategy} | EUR{s.price:.2f} | "
-                    f"SL {format_price(s.sl)} | TP {format_price(s.tp)} | "
-                    f"R/R {s.rr_ratio:.1f}"
+                    f"• `{ticker}`: {emoji} *KOOP* | EUR{s.price:.2f} | "
+                    f"SL: EUR{sl_str} | TP: EUR{tp_str} | "
+                    f"R/R: {s.rr_ratio:.1f} | {_yahoo_link(ticker)}"
                 )
-    else:
-        lines.append("  Geen koopsignalen")
+        return "\n".join(lines)
 
-    lines.append("\n🔴 VERKOOPSIGNALEN:")
-    if sell_signals:
+    def get_s_verkoop(signals: List[Signal]) -> str:
+        if not signals:
+            return "Geen actie"
+        lines = []
         by_ticker2: Dict[str, List[Signal]] = {}
-        for s in sell_signals:
+        for s in signals:
             by_ticker2.setdefault(s.ticker, []).append(s)
         for ticker in sorted(by_ticker2.keys()):
-            lines.append(f"\n*{ticker}*")
             pos  = portfolio.positions.get(ticker)
             size = pos.size if pos else 0
             for s in by_ticker2[ticker]:
+                emoji = _strat_emoji(s.strategy)
                 lines.append(
-                    f"  - Reden: {s.reason}\n"
-                    f"    Strategie: {s.strategy}\n"
-                    f"    Slotprijs: EUR{s.price:.2f}\n"
-                    f"    Commando: `/sell {ticker} {s.price:.2f} {size}`"
+                    f"• `{ticker}`: {emoji} *VERKOOP* | EUR{s.price:.2f} | "
+                    f"Reden: {s.reason} | {_yahoo_link(ticker)}\n"
+                    f"  Commando: `/sell {ticker} {s.price:.2f} {size}`"
                 )
-    else:
-        lines.append("  Geen verkoopsignalen")
+        return "\n".join(lines)
 
-    lines.append(
-        f"\n💼 {len(portfolio.positions)}/{MAX_POSITIONS} posities | "
-        f"Cash EUR{portfolio.cash:,.0f}"
-    )
-    return "\n".join(lines)
+    # Splits buy_signals per strategie-groep voor deel1/deel2
+    traag_sig  = [s for s in buy_signals if s.strategy == "Traag"]
+    snel_sig   = [s for s in buy_signals if s.strategy == "Snel"]
+    htrend_sig = [s for s in buy_signals if s.strategy == "Hyper Trend"]
+    hscalp_sig = [s for s in buy_signals if s.strategy == "Hyper Scalp"]
+    mras_sig   = [s for s in buy_signals if s.strategy == "MRA Snel"]
+    mrat_sig   = [s for s in buy_signals if s.strategy == "MRA Traag"]
+    all_sell   = sell_signals
+
+    # Portfolio info
+    pos_count  = len(portfolio.positions)
+    cash_str   = f"EUR{portfolio.cash:,.2f}"
+
+    deel1_lines = [
+        f"📊 *{exchange_name} - GLOBAL v4.0 RAPPORT*",
+        f"_{nu}_",
+        "----------------------------------",
+        "",
+        "🛡️ *SIGNALEN TRAAG (50/200):*",
+        get_s_koop(traag_sig),
+        "",
+        "⚡ *SIGNALEN SNEL (20/50):*",
+        get_s_koop(snel_sig),
+        "",
+        "🔴 *VERKOOPSIGNALEN:*",
+        get_s_verkoop(all_sell),
+    ]
+
+    deel2_lines = [
+        f"📊 *{exchange_name} - GLOBAL v4.0 (2/2)*",
+        "",
+        "🚀 *SIGNALEN HYPER TREND:*",
+        get_s_koop(htrend_sig),
+        "",
+        "🔥 *SIGNALEN HYPER SCALP:*",
+        get_s_koop(hscalp_sig),
+        "",
+        "🛡️ *SIGNALEN MRA SNEL:*",
+        get_s_koop(mras_sig),
+        "",
+        "🐢 *SIGNALEN MRA TRAAG:*",
+        get_s_koop(mrat_sig),
+        "",
+        "💼 *PORTFOLIO:*",
+        f"_Posities: {pos_count}/{MAX_POSITIONS} | Cash: {cash_str}_",
+    ]
+
+    if portfolio.positions:
+        for t, pos in portfolio.positions.items():
+            deel2_lines.append(
+                f"  • `{t}`: {pos.size:.4f} @ EUR{pos.entry_price:.2f} "
+                f"({pos.strategy}, {pos.days_open}d)"
+            )
+
+    deel2_lines += [
+        "",
+        "⚙️ *PARAMETERS:*",
+        f"_Trend: ADX>15 | Wilder ATR | EMA200 filter_",
+        f"_SL: 2x ATR | TP: 3-5x ATR | Time-exit: {MAX_HOLD_DAYS}d_",
+        f"_Min cash buffer: {int(MIN_CASH_RATIO*100)}% | Max posities: {MAX_POSITIONS}_",
+    ]
+
+    return "\n".join(deel1_lines), "\n".join(deel2_lines)
 
 
 # ============================================================
@@ -1019,8 +1098,10 @@ def run_live_engine():
                 temp_count += 1
 
         exit_ex = [s for s in exit_signals_all if s.ticker in tlist]
-        msg = format_signals_per_exchange(ex_name, filtered_buys, exit_ex, portfolio)
-        send_telegram_message(msg)
+        deel1, deel2 = format_signals_per_exchange(ex_name, filtered_buys, exit_ex, portfolio)
+        send_telegram_message(deel1)
+        time.sleep(1)
+        send_telegram_message(deel2)
 
     portfolio.save_state(last_date.isoformat(), price_map)
 
