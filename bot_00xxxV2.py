@@ -163,9 +163,10 @@ def download_history(
 ) -> pd.DataFrame:
     """
     Download OHLCV data van yfinance.
-    - auto_adjust=True: correcte prijzen na splits/dividenden
-    - Robuust: gedeeltelijk gefaalde tickers worden overgeslagen (niet gestopt)
-    - Fallback: als batch-download faalt, probeer tickers 1 voor 1
+    - auto_adjust=True: splits/dividenden correct
+    - Robuust: gedeeltelijk gefaalde tickers worden overgeslagen
+    - Fallback: als batch leeg is, probeer tickers 1-voor-1
+    - Date staat altijd als gewone kolom (niet als index)
     """
     if not tickers:
         return pd.DataFrame()
@@ -185,6 +186,35 @@ def download_history(
 
     frames = []
 
+    def _normalise(df_raw: pd.DataFrame, ticker: str) -> Optional[pd.DataFrame]:
+        """
+        Zet een ruwe yfinance DataFrame om naar een platte DataFrame
+        met Date als gewone kolom en een Ticker kolom.
+        Verwijdert dubbele Date kolommen (oorzaak van de ValueError).
+        """
+        df = df_raw.dropna(how="all").copy()
+        if df.empty:
+            return None
+
+        # Date uit index halen indien nodig
+        if df.index.name in ("Date", "Datetime") or isinstance(df.index, pd.DatetimeIndex):
+            df = df.reset_index()
+
+        # Verwijder dubbele Date kolommen (als reset_index Date al als kolom had)
+        if "Date" in df.columns:
+            df = df.loc[:, ~df.columns.duplicated()]
+        # Hernoem 'Datetime' naar 'Date' indien aanwezig
+        if "Datetime" in df.columns and "Date" not in df.columns:
+            df = df.rename(columns={"Datetime": "Date"})
+
+        # Verwijder eventuele overige MultiIndex kolommen
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        df["Ticker"] = ticker
+        return df
+
+    # ── Batch download ────────────────────────────────────────────────
     try:
         data = yf.download(**kwargs)
     except Exception as e:
@@ -199,30 +229,24 @@ def download_history(
                     print(f"[WARN] {t}: geen data in batch (mogelijk delisted), overgeslagen.")
                     continue
                 try:
-                    df_t = data.xs(t, axis=1, level=1).dropna(how="all").copy()
-                    if df_t.empty:
+                    raw = data.xs(t, axis=1, level=1).copy()
+                    norm = _normalise(raw, t)
+                    if norm is not None:
+                        frames.append(norm)
+                    else:
                         print(f"[WARN] {t}: lege data, overgeslagen.")
-                        continue
-                    df_t = df_t.reset_index()  # Date van index naar kolom
-                    df_t["Ticker"] = t
-                    frames.append(df_t)
                 except Exception as e:
                     print(f"[WARN] {t}: fout bij verwerken ({e}), overgeslagen.")
         else:
-            # Slechts 1 ticker teruggegeven
-            df_single = data.dropna(how="all").copy()
-            if not df_single.empty:
-                df_single = df_single.reset_index()  # Date van index naar kolom
-                df_single["Ticker"] = tickers[0]
-                frames.append(df_single)
+            # Batch met 1 ticker geeft platte DataFrame
+            norm = _normalise(data, tickers[0])
+            if norm is not None:
+                frames.append(norm)
 
-    # Fallback: probeer mislukte tickers 1 voor 1
-    succeeded = {f["Ticker"].iloc[0] for f in frames} if frames else set()
-    failed = [t for t in tickers if t not in succeeded]
-    if failed and not frames:
-        # Alleen 1-voor-1 als batch volledig leeg was
-        print(f"[INFO] Probeer {len(failed)} tickers 1-voor-1...")
-        for t in failed:
+    # ── Fallback 1-voor-1 (alleen als batch volledig leeg was) ────────
+    if not frames:
+        print(f"[INFO] Probeer {len(tickers)} tickers 1-voor-1...")
+        for t in tickers:
             try:
                 kw = dict(tickers=t, auto_adjust=True, progress=False)
                 if start and end:
@@ -230,15 +254,15 @@ def download_history(
                     kw["end"]   = end
                 else:
                     kw["period"] = period
-                df_t = yf.download(**kw).dropna(how="all")
-                if df_t.empty:
+                raw = yf.download(**kw)
+                # Enkelticker: verwijder eventueel extra level
+                if isinstance(raw.columns, pd.MultiIndex):
+                    raw.columns = raw.columns.get_level_values(0)
+                norm = _normalise(raw, t)
+                if norm is not None:
+                    frames.append(norm)
+                else:
                     print(f"[WARN] {t}: geen data, overgeslagen.")
-                    continue
-                if isinstance(df_t.columns, pd.MultiIndex):
-                    df_t.columns = df_t.columns.get_level_values(0)
-                df_t = df_t.reset_index()  # Date van index naar kolom
-                df_t["Ticker"] = t
-                frames.append(df_t)
                 time.sleep(0.2)
             except Exception as e:
                 print(f"[WARN] {t}: download mislukt ({e}), overgeslagen.")
@@ -246,13 +270,16 @@ def download_history(
     if not frames:
         return pd.DataFrame()
 
-    df = pd.concat(frames)
-    df.reset_index(inplace=True)
-    df.rename(columns={"index": "Date", "Datetime": "Date"}, inplace=True, errors="ignore")
+    # ── Samenvoegen ───────────────────────────────────────────────────
+    df = pd.concat(frames, ignore_index=True)
+
+    # Zorg dat Date een datetime kolom is
+    if "Date" in df.columns:
+        df["Date"] = pd.to_datetime(df["Date"])
+
     df.sort_values(["Ticker", "Date"], inplace=True)
     df.reset_index(drop=True, inplace=True)
     return df
-
 
 def _wilder_smooth(series: pd.Series, period: int) -> pd.Series:
     """
