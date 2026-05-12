@@ -1172,7 +1172,7 @@ def run_live_engine():
         send_telegram_message(deel2)
 
     portfolio.save_state(last_date.isoformat(), price_map)
-
+ 
 
 # ============================================================
 # ENTRYPOINT
@@ -1188,3 +1188,5 @@ if __name__ == "__main__":
         p.save_state(today_str(), {})
     else:
         run_live_engine()
+
+from patch_v21 import download_history, add_indicators
