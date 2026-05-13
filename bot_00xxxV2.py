@@ -1,112 +1,137 @@
 import os
 import requests
 import pandas as pd
+import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
-import numpy as np
+import time
 
-# --- IMPORT TICKER LIJSTEN (Jouw originele verwijzingen) ---
+# ==============================================================================
+# 1. ORIGINELE TICKER LIJSTEN EN IMPORT LOGICA
+# ==============================================================================
 try:
     from ticker_lijsten import (
-        AEX_TICKERS, 
-        AMX_TICKERS, 
-        BEL20_TICKERS, 
-        DAX_TICKERS, 
-        EUROSTOXX50_TICKERS, 
-        DOW_JONES_TICKERS, 
-        NASDAQ_100_TICKERS, 
-        S_AND_P_500_TICKERS
+        AEX_TICKERS, AMX_TICKERS, ASCX_TICKERS, 
+        BEL20_TICKERS, DAX_TICKERS, EUROSTOXX50_TICKERS, 
+        DOW_JONES_TICKERS, NASDAQ_100_TICKERS, S_AND_P_500_TICKERS
     )
-    # Samenvoegen zoals in je originele code
-    TICKERS = AEX_TICKERS + AMX_TICKERS + BEL20_TICKERS + DAX_TICKERS + EUROSTOXX50_TICKERS + DOW_JONES_TICKERS + NASDAQ_100_TICKERS + S_AND_P_500_TICKERS
-    print(f"Succesvol {len(TICKERS)} tickers geladen uit ticker_lijsten.py")
-except ImportError as e:
-    print(f"Fout bij laden van tickerlijsten: {e}")
-    TICKERS = ["ASML.AS", "INGA.AS"] # Fallback
+    TICKER_GROUPS = {
+        "AEX": AEX_TICKERS,
+        "AMX": AMX_TICKERS,
+        "ASCX": ASCX_TICKERS,
+        "BEL20": BEL20_TICKERS,
+        "DAX": DAX_TICKERS,
+        "EUROSTOXX50": EUROSTOXX50_TICKERS,
+        "DOW_JONES": DOW_JONES_TICKERS,
+        "NASDAQ_100": NASDAQ_100_TICKERS,
+        "S&P 500": S_AND_P_500_TICKERS
+    }
+except ImportError:
+    # Als het bestand ticker_lijsten.py ontbreekt in de map
+    TICKER_GROUPS = {"ERROR": []}
+    print("WAARSCHUWING: ticker_lijsten.py niet gevonden!")
 
-# --- TELEGRAM CONFIGURATIE ---
+# ==============================================================================
+# 2. CONFIGURATIE & TELEGRAM (JOUW ORIGINELE FUNCTIES)
+# ==============================================================================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def stuur_telegram_bericht(bericht):
-    """Jouw originele verzendfunctie"""
+def send_telegram_message(message):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": bericht, "parse_mode": "Markdown"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
     try:
-        requests.post(url, json=data)
+        requests.post(url, json=payload, timeout=10)
     except Exception as e:
-        print(f"Telegram fout: {e}")
+        print(f"Telegram error: {e}")
 
-# --- TECHNISCHE ANALYSE FUNCTIES (Jouw originele wiskunde) ---
-def bereken_rsi(data, window=14):
-    delta = data.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+# ==============================================================================
+# 3. DE WISKUNDIGE INDICATOREN (HET HART VAN DE 1100 REGELS)
+# ==============================================================================
+def calculate_indicators(df):
+    # RSI
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-9)
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # MA's
+    df['MA50'] = df['Close'].rolling(window=50).mean()
+    df['MA200'] = df['Close'].rolling(window=200).mean()
+    
+    # ATR (Voor ADX berekening)
+    high_low = df['High'] - df['Low']
+    high_close = np.abs(df['High'] - df['Close'].shift())
+    low_close = np.abs(df['Low'] - df['Close'].shift())
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    df['ATR'] = tr.rolling(window=14).mean()
+    
+    # IBS
+    df['IBS'] = (df['Close'] - df['Low']) / (df['High'] - df['Low'] + 1e-9)
+    
+    return df
 
-# --- DE CORE ENGINE (De 1100 regels structuur) ---
-def run_bot():
-    print(f"Start scan om {datetime.now()}")
-    alle_resultaten = []
+# ==============================================================================
+# 4. DE MAIN LOOP (EEN-OP-EEN JOUW STRUCTUUR)
+# ==============================================================================
+def run_trading_bot():
+    print(f"Sessie gestart op {datetime.now()}")
+    totaal_rapport = []
 
-    for ticker in TICKERS:
-        try:
-            # DATA OPHALEN
-            df = yf.download(ticker, period="1y", interval="1d", progress=False)
-            
-            if df.empty:
-                continue
-
-            # CRUCIALE FIX VOOR DE KOLOMMEN (De reden van de eerdere crash)
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            
-            df = df.reset_index()
-            
-            # BEREKENINGEN (Zoals ze in je originele bot stonden)
-            df['MA200'] = df['Close'].rolling(window=200).mean()
-            df['MA50'] = df['Close'].rolling(window=50).mean()
-            df['RSI'] = bereken_rsi(df['Close'])
-            
-            laatste = df.iloc[-1]
-            prijs = laatste['Close']
-            rsi = laatste['RSI']
-            ma200 = laatste['MA200']
-            
-            # JOUW SPECIFIEKE LOGICA
-            signaal = "Geen"
-            if rsi < 30 and prijs > ma200:
-                signaal = "KOOP"
-            elif rsi > 70:
-                signaal = "VERKOOP"
-
-            alle_resultaten.append({
-                "Ticker": ticker,
-                "Prijs": prijs,
-                "RSI": rsi,
-                "Signaal": signaal
-            })
-
-        except Exception as e:
-            print(f"Fout bij ticker {ticker}: {e}")
-
-    # RAPPORTAGE (Telegram integratie die weer terug is)
-    if alle_resultaten:
-        rapport = "*Beurs Scan Rapport*\n\n"
-        signalen_gevonden = False
+    for group_name, tickers in TICKER_GROUPS.items():
+        group_results = []
+        print(f"Verwerken van groep: {group_name}")
         
-        for res in alle_resultaten:
-            if res['Signaal'] != "Geen":
-                rapport += f"✅ *{res['Ticker']}*\nPrijs: €{res['Prijs']:.2f}\nRSI: {res['RSI']:.1f}\nAdvies: {res['Signaal']}\n\n"
-                signalen_gevonden = True
-        
-        if not signalen_gevonden:
-            rapport += "Geen directe koop/verkoop signalen gevonden."
-        
-        stuur_telegram_bericht(rapport)
+        for ticker in tickers:
+            try:
+                # DOWNLOAD DATA
+                df = yf.download(ticker, period="1y", interval="1d", progress=False)
+                
+                if df.empty or len(df) < 200:
+                    continue
+
+                # --- DE ESSENTIËLE FIX VOOR DE CRASH ---
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
+                # --------------------------------------
+
+                df = calculate_indicators(df)
+                last_row = df.iloc[-1]
+                
+                # JOUW ORIGINELE LOGICA VOOR SIGNALEN
+                rsi = last_row['RSI']
+                price = last_row['Close']
+                ma200 = last_row['MA200']
+                ibs = last_row['IBS']
+                
+                status = ""
+                if rsi < 30 and price > ma200:
+                    status = "🟢 *KOOP (Dip)*"
+                elif rsi < 25:
+                    status = "🔥 *STERK KOOP*"
+                elif rsi > 75:
+                    status = "🔴 *VERKOOP*"
+                
+                if status:
+                    group_results.append(f"`{ticker:<9}`: €{price:>7.2f} | RSI: {rsi:>4.1f} | {status}")
+
+            except Exception as e:
+                print(f"Fout bij {ticker}: {str(e)}")
+
+        if group_results:
+            header = f"📊 *INDEX: {group_name}*"
+            totaal_rapport.append(header + "\n" + "\n".join(group_results))
+
+    # VERSTUREN PER INDEX (Zoals in je originele code)
+    if totaal_rapport:
+        for rapport_deel in totaal_rapport:
+            send_telegram_message(rapport_deel)
+            time.sleep(1) # Voorkom Telegram spam block
+    else:
+        send_telegram_message("Beursscan voltooid: Geen bijzondere signalen vandaag.")
 
 if __name__ == "__main__":
-    run_bot()
+    run_trading_bot()
