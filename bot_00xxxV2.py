@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-GLOBAL ENGINE v5.0 - ATR Sizing + Slippage + Manuele Executie
+bot_00xxxV2.py  —  GLOBAL ENGINE v2.3  (all-in-one, geen externe patches)
 
-Verbeteringen t.o.v. v4.0:
-- ATR-gebaseerde positiesizing: risico = 10% van portfolio per trade
-- Slippage gesimuleerd: entry op Open van T+1 (realistisch)
-- Sizing-advies in elk Telegram signaal (aandelen, stop, max verlies)
-- Backtest gebruikt T+1 open als entry (geen lookahead bias)
-- Slippage van 0.1% per kant in backtest
-- days_open fix: correct bijgehouden in live engine
-- Sharpe per strategie in backtest statistieken
-- Alle v4.0 functionaliteit behouden
-
-Gebruik:
-    python bot_global_v5.py              -> live signaal-engine
-    python bot_global_v5.py backtest     -> volledige backtest
-    python bot_global_v5.py apply        -> verwerk commands.txt
+Fixes t.o.v. v2.2:
+  - TypeError NoneType bij MU, OVV.TO e.a. → _normalise() guard
+  - FutureWarning pandas groupby → include_groups=False
+  - Batch MultiIndex level-detectie robuuster (dynamisch)
+  - ATR-sizing: 10% portfolio risico per trade
+  - Slippage 0.1% per kant in backtest en live
+  - Sizing-advies in elk Telegram koopsignaal
+  - T+1 open als entry (geen lookahead bias)
+  - days_open persistent correct bijgehouden
+  - Sharpe per strategie in backtest statistieken
 """
 
 import os
@@ -39,16 +35,14 @@ import requests
 
 START_CAPITAL        = 50_000.0
 MAX_POSITIONS        = 10
-MIN_CASH_RATIO       = 0.10      # minimum 10% cash buffer
-RISICO_PCT_PER_TRADE = 0.10      # 10% portfolio risico per trade (ATR sizing)
-ATR_STOP_MULT        = 2.0       # stop = entry - 2×ATR
-ATR_TP_MULT_BASIS    = 3.0       # basis TP multiplier (overschreven per strategie)
-SLIPPAGE_PCT         = 0.001     # 0.1% slippage per kant
+MIN_CASH_RATIO       = 0.10
+RISICO_PCT_PER_TRADE = 0.10      # 10% portfolio risico per trade
+ATR_STOP_MULT        = 2.0
+SLIPPAGE_PCT         = 0.001     # 0.1% per kant
 
 TRADE_COST_FIXED     = 15.0
 TRADE_COST_PCT       = 0.0035
 TAX_RATE             = 0.10
-
 MAX_HOLD_DAYS        = 20
 
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
@@ -140,7 +134,7 @@ def send_telegram_message(text: str) -> None:
         print("Telegram niet geconfigureerd.")
         print(text)
         return
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    url     = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
     try:
         requests.post(url, json=payload, timeout=10)
@@ -156,7 +150,7 @@ def ensure_csv_header(path: str, header: List[str]) -> None:
 
 
 # ============================================================
-# ATR SIZING  ← NIEUW in v5.0
+# ATR SIZING
 # ============================================================
 
 def bereken_atr_positie(
@@ -167,40 +161,28 @@ def bereken_atr_positie(
     risico_pct:       float = RISICO_PCT_PER_TRADE,
 ) -> Tuple[int, float, float]:
     """
-    Berekent positiegrootte op basis van ATR-risico.
-
-    Formule:
-        risico_eur  = portfolio × risico_pct
-        stop_afstand = sl_mult × ATR
-        aandelen    = risico_eur / stop_afstand
-
-    Returns:
-        (aandelen, stop_loss_prijs, max_verlies_eur)
+    Berekent aantal aandelen zodat verlies bij stop = risico_pct × portfolio.
+    Returns: (aandelen, stop_loss_prijs, max_verlies_eur)
     """
-    risico_eur    = portfolio_waarde * risico_pct
-    stop_afstand  = sl_mult * atr
+    risico_eur   = portfolio_waarde * risico_pct
+    stop_afstand = sl_mult * atr
     if stop_afstand <= 0 or entry_prijs <= 0:
         return 0, entry_prijs, 0.0
-    aandelen      = max(1, int(risico_eur / stop_afstand))
-    stop_loss     = entry_prijs - stop_afstand
-    max_verlies   = round(stop_afstand * aandelen, 2)
+    aandelen   = max(1, int(risico_eur / stop_afstand))
+    stop_loss  = entry_prijs - stop_afstand
+    max_verlies = round(stop_afstand * aandelen, 2)
     return aandelen, stop_loss, max_verlies
 
 
 def sizing_tekst(
     ticker:           str,
-    richting:         str,
     prijs:            float,
     atr:              float,
     portfolio_waarde: float,
     sl_mult:          float,
     tp_mult:          float,
 ) -> str:
-    """
-    Genereert sizing-advies tekst voor Telegram.
-    Gebruikt T+1 open schatting (prijs + slippage).
-    """
-    entry       = prijs * (1 + SLIPPAGE_PCT)   # geschatte open T+1
+    entry      = prijs * (1 + SLIPPAGE_PCT)
     aandelen, stop, max_loss = bereken_atr_positie(
         portfolio_waarde, entry, atr, sl_mult
     )
@@ -208,10 +190,9 @@ def sizing_tekst(
     investering = round(entry * aandelen, 2)
     slip_est    = round(entry * SLIPPAGE_PCT * aandelen * 2, 2)
     kosten      = round(trade_cost(investering), 2)
-
     return (
-        f"  📐 *Sizing ({richting}):*\n"
-        f"  Entry geschat : EUR{entry:.2f} (+0.1% slip)\n"
+        f"  📐 *Sizing:*\n"
+        f"  Entry geschat : EUR{entry:.2f} (+slip)\n"
         f"  Stop-Loss     : EUR{stop:.2f}  ({sl_mult}×ATR)\n"
         f"  Take-Profit   : EUR{tp:.2f}  ({tp_mult}×ATR)\n"
         f"  ATR(14)       : EUR{atr:.4f}\n"
@@ -219,13 +200,43 @@ def sizing_tekst(
         f"  Investering   : EUR{investering:,.2f}\n"
         f"  Max verlies   : EUR{max_loss:,.2f}  (10% portfolio)\n"
         f"  Slippage est. : EUR{slip_est:.2f}\n"
-        f"  Transactiekosten: EUR{kosten:.2f}"
+        f"  Kosten        : EUR{kosten:.2f}"
     )
 
 
 # ============================================================
-# DATA & INDICATOREN
+# DATA DOWNLOAD
 # ============================================================
+
+def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
+    """
+    Zet ruwe yfinance output om naar platte DataFrame met Ticker kolom.
+    Vangt None, lege DataFrame en ontbrekende Close op.
+    """
+    if df_raw is None:
+        return None
+    if not isinstance(df_raw, pd.DataFrame):
+        return None
+    if df_raw.empty:
+        return None
+    df = df_raw.copy()
+    df = df.dropna(how="all")
+    if df.empty:
+        return None
+    # Date uit index
+    if df.index.name in ("Date", "Datetime") or isinstance(df.index, pd.DatetimeIndex):
+        df = df.reset_index()
+    if "Date" in df.columns:
+        df = df.loc[:, ~df.columns.duplicated()]
+    if "Datetime" in df.columns and "Date" not in df.columns:
+        df = df.rename(columns={"Datetime": "Date"})
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    if "Close" not in df.columns:
+        return None
+    df["Ticker"] = ticker
+    return df
+
 
 def download_history(
     tickers: List[str],
@@ -251,39 +262,34 @@ def download_history(
 
     frames = []
 
-    def _normalise(df_raw: pd.DataFrame, ticker: str) -> Optional[pd.DataFrame]:
-        df = df_raw.dropna(how="all").copy()
-        if df.empty:
-            return None
-        if df.index.name in ("Date", "Datetime") or isinstance(df.index, pd.DatetimeIndex):
-            df = df.reset_index()
-        if "Date" in df.columns:
-            df = df.loc[:, ~df.columns.duplicated()]
-        if "Datetime" in df.columns and "Date" not in df.columns:
-            df = df.rename(columns={"Datetime": "Date"})
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        df["Ticker"] = ticker
-        return df
-
+    # ── Batch download
     try:
         data = yf.download(**kwargs)
     except Exception as e:
         print(f"[WARN] Batch download mislukt ({e}), probeer 1-voor-1...")
         data = pd.DataFrame()
 
-    if not data.empty:
+    if data is not None and not data.empty:
         if isinstance(data.columns, pd.MultiIndex):
-            available = data.columns.get_level_values(1).unique()
+            # Dynamisch correct level vinden met ticker-namen
+            ticker_level = 1
+            for lvl in range(data.columns.nlevels):
+                vals = set(data.columns.get_level_values(lvl))
+                if any(t in vals for t in tickers):
+                    ticker_level = lvl
+                    break
+            available = set(data.columns.get_level_values(ticker_level))
             for t in tickers:
                 if t not in available:
                     print(f"[WARN] {t}: geen data in batch (mogelijk delisted), overgeslagen.")
                     continue
                 try:
-                    raw  = data.xs(t, axis=1, level=1).copy()
+                    raw  = data.xs(t, axis=1, level=ticker_level).copy()
                     norm = _normalise(raw, t)
                     if norm is not None:
                         frames.append(norm)
+                    else:
+                        print(f"[WARN] {t}: lege data, overgeslagen.")
                 except Exception as e:
                     print(f"[WARN] {t}: fout bij verwerken ({e}), overgeslagen.")
         else:
@@ -291,25 +297,31 @@ def download_history(
             if norm is not None:
                 frames.append(norm)
 
+    # ── Fallback 1-voor-1
     if not frames:
         print(f"[INFO] Probeer {len(tickers)} tickers 1-voor-1...")
         for t in tickers:
             try:
-                kw = dict(tickers=t, auto_adjust=True, progress=False)
+                kw: Dict = dict(tickers=t, auto_adjust=True, progress=False)
                 if start and end:
                     kw["start"] = start
                     kw["end"]   = end
                 else:
                     kw["period"] = period
                 raw = yf.download(**kw)
-                if isinstance(raw.columns, pd.MultiIndex):
+                if raw is None or (isinstance(raw, pd.DataFrame) and raw.empty):
+                    print(f"[WARN] {t}: geen data, overgeslagen.")
+                    continue
+                if isinstance(raw, pd.DataFrame) and isinstance(raw.columns, pd.MultiIndex):
                     raw.columns = raw.columns.get_level_values(0)
                 norm = _normalise(raw, t)
                 if norm is not None:
                     frames.append(norm)
                 else:
-                    print(f"[WARN] {t}: geen data, overgeslagen.")
+                    print(f"[WARN] {t}: geen bruikbare data, overgeslagen.")
                 time.sleep(0.2)
+            except TypeError as e:
+                print(f"[WARN] {t}: TypeError ondervangen ({e}), overgeslagen.")
             except Exception as e:
                 print(f"[WARN] {t}: download mislukt ({e}), overgeslagen.")
 
@@ -320,25 +332,34 @@ def download_history(
     if "Date" in df.columns:
         df["Date"] = pd.to_datetime(df["Date"])
 
-    # ── Voeg Next_Open toe voor T+1 entry simulatie ← NIEUW v5.0
+    # Next_Open voor T+1 entry simulatie
     df.sort_values(["Ticker", "Date"], inplace=True)
     df["Next_Open"] = df.groupby("Ticker")["Open"].shift(-1)
-
     df.reset_index(drop=True, inplace=True)
+
+    n_ok = df["Ticker"].nunique()
+    n_total = len(tickers)
+    if n_ok < n_total:
+        print(f"[WARN] Data beschikbaar voor {n_ok}/{n_total} tickers. Mogelijk delisted tickers overgeslagen.")
+
     return df
 
 
+# ============================================================
+# INDICATOREN
+# ============================================================
+
 def _wilder_smooth(series: pd.Series, period: int) -> pd.Series:
-    result = pd.Series(index=series.index, dtype=float)
-    valid  = series.dropna()
+    result    = pd.Series(index=series.index, dtype=float)
+    valid     = series.dropna()
     if len(valid) < period:
         return result
     first_idx         = valid.index[period - 1]
     result[first_idx] = valid.iloc[:period].mean()
     for i in range(period, len(valid)):
-        idx         = valid.index[i]
-        prev_idx    = valid.index[i - 1]
-        result[idx] = result[prev_idx] * (period - 1) / period + valid.iloc[i] / period
+        idx           = valid.index[i]
+        prev_idx      = valid.index[i - 1]
+        result[idx]   = result[prev_idx] * (period - 1) / period + valid.iloc[i] / period
     return result
 
 
@@ -347,6 +368,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
         ticker_val = group["Ticker"].iloc[0] if "Ticker" in group.columns else None
         next_open  = group["Next_Open"].values if "Next_Open" in group.columns else None
         g = group.drop(columns=["Ticker", "Next_Open"], errors="ignore").copy().reset_index(drop=True)
+
         close = g["Close"]
         high  = g["High"]
         low   = g["Low"]
@@ -373,7 +395,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
         up_move   = high.diff()
         down_move = (-low.diff())
-        plus_dm   = np.where((up_move > down_move)  & (up_move > 0),   up_move,   0.0)
+        plus_dm   = np.where((up_move  > down_move) & (up_move  > 0), up_move,   0.0)
         minus_dm  = np.where((down_move > up_move)  & (down_move > 0), down_move, 0.0)
         s_plus_dm  = _wilder_smooth(pd.Series(plus_dm,  index=g.index), 14)
         s_minus_dm = _wilder_smooth(pd.Series(minus_dm, index=g.index), 14)
@@ -389,26 +411,29 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
             g["Next_Open"] = next_open
         return g
 
-    return df.groupby("Ticker", group_keys=False).apply(_calc)
+    # include_groups=False: FutureWarning fix pandas 2.x/3.x
+    return df.groupby("Ticker", group_keys=False).apply(
+        _calc, include_groups=False
+    )
 
 
 # ============================================================
-# STRATEGIE-SIGNALEN
+# SIGNALEN
 # ============================================================
 
 @dataclass
 class Signal:
-    ticker:          str
-    date:            dt.date
-    strategy:        str
-    direction:       str
-    reason:          str
-    price:           float
-    atr:             float        = 0.0   # ← NIEUW v5.0
-    sl:              Optional[float] = None
-    tp:              Optional[float] = None
-    rr_ratio:        float           = 0.0
-    next_open:       Optional[float] = None   # ← NIEUW v5.0 T+1 entry
+    ticker:    str
+    date:      dt.date
+    strategy:  str
+    direction: str
+    reason:    str
+    price:     float
+    atr:       float           = 0.0
+    sl:        Optional[float] = None
+    tp:        Optional[float] = None
+    rr_ratio:  float           = 0.0
+    next_open: Optional[float] = None
 
 
 def _calc_rr(price: float, sl: Optional[float], tp: Optional[float]) -> float:
@@ -441,9 +466,9 @@ def generate_signals_for_day(df: pd.DataFrame, date: dt.date) -> List[Signal]:
             continue
 
         def make(strategy: str, reason: str) -> Signal:
-            cfg    = STRAT_CONFIG.get(strategy, {"sl_mult": 2.0, "tp_mult": 3.0})
-            sl     = close - cfg["sl_mult"] * atr
-            tp     = close + cfg["tp_mult"] * atr
+            cfg = STRAT_CONFIG.get(strategy, {"sl_mult": 2.0, "tp_mult": 3.0})
+            sl  = close - cfg["sl_mult"] * atr
+            tp  = close + cfg["tp_mult"] * atr
             return Signal(
                 ticker=t, date=date, strategy=strategy,
                 direction="BUY", reason=reason, price=close,
@@ -557,26 +582,19 @@ class LivePortfolio:
         return (self.cash - investering) >= min_cash and investering <= self.cash
 
     def open_position(self, sig: Signal, prices: Dict[str, float]) -> Optional[LivePosition]:
-        """
-        v5.0: entry op next_open met slippage, ATR-gebaseerde sizing.
-        """
         if sig.ticker in self.positions:
             return None
         total        = self.current_total_value(prices)
         cfg          = STRAT_CONFIG.get(sig.strategy, {"sl_mult": 2.0, "tp_mult": 3.0})
         entry_prijs  = (sig.next_open or sig.price) * (1 + SLIPPAGE_PCT)
-        aandelen, stop, max_loss = bereken_atr_positie(
-            total, entry_prijs, sig.atr, cfg["sl_mult"]
-        )
+        aandelen, stop, _ = bereken_atr_positie(total, entry_prijs, sig.atr, cfg["sl_mult"])
         if aandelen <= 0:
             return None
         investering = entry_prijs * aandelen
         cost        = trade_cost(investering)
         if not self.can_open_new_position(prices, investering + cost):
             return None
-
         tp = entry_prijs + cfg["tp_mult"] * sig.atr
-
         self.cash -= investering + cost
         p = LivePosition(
             ticker=sig.ticker, strategy=sig.strategy,
@@ -585,22 +603,20 @@ class LivePortfolio:
             atr=sig.atr, days_open=0,
         )
         self.positions[sig.ticker] = p
-        self.log_trade(
-            sig.date.isoformat(), sig.ticker, sig.strategy,
-            "BUY", entry_prijs, aandelen, cost, 0.0, 0.0, 0.0,
-        )
+        self.log_trade(sig.date.isoformat(), sig.ticker, sig.strategy,
+                       "BUY", entry_prijs, aandelen, cost, 0.0, 0.0, 0.0)
         return p
 
     def close_position(self, ticker: str, date: str, exit_price: float, reason: str):
         if ticker not in self.positions:
             return
-        p           = self.positions[ticker]
-        exit_slip   = exit_price * (1 - SLIPPAGE_PCT)   # slippage bij verkoop
-        gross       = exit_slip * p.size
-        cost        = trade_cost(gross)
-        pnl         = gross - cost - (p.entry_price * p.size + p.cost)
-        tax         = pnl * TAX_RATE if pnl > 0 else 0.0
-        self.cash  += gross - cost - tax
+        p          = self.positions[ticker]
+        exit_slip  = exit_price * (1 - SLIPPAGE_PCT)
+        gross      = exit_slip * p.size
+        cost       = trade_cost(gross)
+        pnl        = gross - cost - (p.entry_price * p.size + p.cost)
+        tax        = pnl * TAX_RATE if pnl > 0 else 0.0
+        self.cash += gross - cost - tax
         self.log_trade(date, ticker, p.strategy, "SELL",
                        exit_slip, p.size, cost, pnl, tax, pnl - tax, reason)
         del self.positions[ticker]
@@ -655,15 +671,13 @@ def generate_exit_signals(
         if reason:
             signals.append(Signal(
                 ticker=t, date=date, strategy=p.strategy,
-                direction="SELL", reason=reason, price=close,
-                atr=p.atr,
+                direction="SELL", reason=reason, price=close, atr=p.atr,
             ))
-
     return signals
 
 
 # ============================================================
-# BACKTEST ENGINE  ← v5.0: T+1 open entry + slippage
+# BACKTEST ENGINE
 # ============================================================
 
 @dataclass
@@ -700,14 +714,11 @@ class BacktestPortfolio:
         return (self.cash - investering) >= min_cash and investering <= self.cash
 
     def open_position(self, sig: Signal, prices: Dict[str, float]) -> bool:
-        """
-        v5.0: entry = next_open × (1 + slippage), ATR-sizing.
-        """
         if sig.ticker in self.positions:
             return False
-        total       = self.current_total_value(prices)
-        cfg         = STRAT_CONFIG.get(sig.strategy, {"sl_mult": 2.0, "tp_mult": 3.0})
-        entry       = (sig.next_open or sig.price) * (1 + SLIPPAGE_PCT)
+        total   = self.current_total_value(prices)
+        cfg     = STRAT_CONFIG.get(sig.strategy, {"sl_mult": 2.0, "tp_mult": 3.0})
+        entry   = (sig.next_open or sig.price) * (1 + SLIPPAGE_PCT)
         aandelen, stop, _ = bereken_atr_positie(total, entry, sig.atr, cfg["sl_mult"])
         if aandelen <= 0:
             return False
@@ -766,7 +777,7 @@ class BacktestPortfolio:
 
 def run_backtest():
     print("=" * 60)
-    print("BACKTEST GLOBAL v5.0  —  ATR Sizing + T+1 Slippage")
+    print("BACKTEST  —  ATR Sizing + T+1 Slippage")
     print(f"Periode  : {BACKTEST_START} -> {BACKTEST_END}")
     print(f"Kapitaal : EUR{START_CAPITAL:,.0f}")
     print(f"Risico%  : {int(RISICO_PCT_PER_TRADE*100)}% per trade  |  Slippage: {SLIPPAGE_PCT*100:.1f}%")
@@ -805,11 +816,9 @@ def run_backtest():
             if not math.isnan(safe_float(row.get("Close")))
         }
 
-        # Days_open
         for p in bt.positions.values():
             p.days_open += 1
 
-        # Exit
         for ticker, pos in list(bt.positions.items()):
             if ticker not in prices:
                 continue
@@ -826,19 +835,15 @@ def run_backtest():
                 reason = f"Stoploss ({pos.sl:.2f})"
             elif pos.tp is not None and close >= pos.tp:
                 reason = f"Take Profit ({pos.tp:.2f})"
-            elif (not math.isnan(ma20) and close < ma20
-                  and pos.strategy in ("Traag", "Snel", "Hyper Trend")):
+            elif not math.isnan(ma20) and close < ma20 and pos.strategy in ("Traag", "Snel", "Hyper Trend"):
                 reason = "Trend exit MA20"
-            elif (not math.isnan(rsi) and rsi > 70
-                  and pos.strategy in ("MRA Snel", "MRA Traag", "Hyper Scalp")):
+            elif not math.isnan(rsi) and rsi > 70 and pos.strategy in ("MRA Snel", "MRA Traag", "Hyper Scalp"):
                 reason = f"RSI exit ({rsi:.1f})"
             elif pos.days_open >= MAX_HOLD_DAYS:
                 reason = f"Time exit ({pos.days_open}d)"
-
             if reason:
                 bt.close_position(ticker, date, close, reason)
 
-        # Koop
         buy_signals = generate_signals_for_day(day_df, date)
         for sig in buy_signals:
             total = bt.current_total_value(prices)
@@ -854,21 +859,19 @@ def run_backtest():
 
     if bt.closed_trades:
         trades_df = pd.DataFrame(bt.closed_trades)
-        trades_df.to_csv("backtest_trades_v5.csv", index=False, encoding="utf-8")
-        print(f"\nTrades: backtest_trades_v5.csv ({len(bt.closed_trades)} trades)")
+        trades_df.to_csv("backtest_trades.csv", index=False, encoding="utf-8")
+        print(f"\nTrades: backtest_trades.csv ({len(bt.closed_trades)} trades)")
 
     snap_df = pd.DataFrame(bt.daily_snapshots)
-    snap_df.to_csv("backtest_portfolio_v5.csv", index=False, encoding="utf-8")
-    print("Portfolio: backtest_portfolio_v5.csv")
-
+    snap_df.to_csv("backtest_portfolio.csv", index=False, encoding="utf-8")
+    print("Portfolio: backtest_portfolio.csv")
     _print_stats(bt, snap_df)
 
 
 def _print_stats(bt: BacktestPortfolio, snap_df: pd.DataFrame):
     print("\n" + "=" * 60)
-    print("BACKTEST RESULTATEN v5.0")
+    print("BACKTEST RESULTATEN")
     print("=" * 60)
-
     if snap_df.empty:
         print("Geen data.")
         return
@@ -884,7 +887,6 @@ def _print_stats(bt: BacktestPortfolio, snap_df: pd.DataFrame):
     snap_df["peak"]      = snap_df["total"].cummax()
     snap_df["drawdown"]  = (snap_df["total"] - snap_df["peak"]) / snap_df["peak"] * 100
     max_dd               = snap_df["drawdown"].min()
-
     snap_df["daily_ret"] = snap_df["total"].pct_change()
     avg_d  = snap_df["daily_ret"].mean()
     std_d  = snap_df["daily_ret"].std()
@@ -906,7 +908,7 @@ def _print_stats(bt: BacktestPortfolio, snap_df: pd.DataFrame):
         avg_win  = tdf.loc[tdf["net"] > 0,  "net"].mean() if n_win  else 0.0
         avg_loss = tdf.loc[tdf["net"] <= 0, "net"].mean() if n_loss else 0.0
         pf_denom = abs(tdf.loc[tdf["net"] <= 0, "net"].sum())
-        pf       = abs(tdf.loc[tdf["net"] > 0,  "net"].sum()) / max(pf_denom, 1e-9)
+        pf       = abs(tdf.loc[tdf["net"] > 0, "net"].sum()) / max(pf_denom, 1e-9)
 
         print(f"\nAantal trades    : {n}")
         print(f"Winnaars         : {n_win} ({win_rate:.1f}%)")
@@ -917,10 +919,9 @@ def _print_stats(bt: BacktestPortfolio, snap_df: pd.DataFrame):
         print(f"Betaalde bel.    : EUR{tdf['tax'].sum():,.2f}")
         print(f"Gem. houdduur    : {tdf['days_open'].mean():.1f} dagen")
 
-        # ── PER STRATEGIE met Sharpe ← NIEUW v5.0
-        print(f"\n{'─'*72}")
+        print(f"\n{'─'*68}")
         print(f"{'Strategie':<15} {'#':>4} {'Win%':>6} {'Net PnL':>10} {'Avg':>9} {'Sharpe':>7}")
-        print(f"{'─'*72}")
+        print(f"{'─'*68}")
         for strat, grp in tdf.groupby("strategy"):
             wr    = (grp["net"] > 0).sum() / len(grp) * 100
             net   = grp["net"].sum()
@@ -940,7 +941,7 @@ def _print_stats(bt: BacktestPortfolio, snap_df: pd.DataFrame):
 
 
 # ============================================================
-# TELEGRAM OUTPUT  ← v5.0: sizing-advies in elk signaal
+# TELEGRAM OUTPUT
 # ============================================================
 
 def _yahoo_link(ticker: str) -> str:
@@ -959,13 +960,12 @@ def _strat_emoji(strategy: str) -> str:
 
 
 def format_signals_per_exchange(
-    exchange_name:   str,
-    buy_signals:     List[Signal],
-    sell_signals:    List[Signal],
-    portfolio:       LivePortfolio,
+    exchange_name:    str,
+    buy_signals:      List[Signal],
+    sell_signals:     List[Signal],
+    portfolio:        LivePortfolio,
     portfolio_waarde: float,
 ) -> Tuple[str, str]:
-
     nu = today_str()
 
     def koop_blok(signals: List[Signal]) -> str:
@@ -975,12 +975,10 @@ def format_signals_per_exchange(
         for s in signals:
             cfg = STRAT_CONFIG.get(s.strategy, {"sl_mult": 2.0, "tp_mult": 3.0})
             lines.append(
-                f"• `{s.ticker}` {_strat_emoji(s.strategy)} *{s.strategy}* | "
-                f"EUR{s.price:.2f} | R/R:{s.rr_ratio:.1f} | {_yahoo_link(s.ticker)}\n"
-                + sizing_tekst(
-                    s.ticker, "LONG", s.price, s.atr,
-                    portfolio_waarde, cfg["sl_mult"], cfg["tp_mult"]
-                )
+                f"• `{s.ticker}` {_strat_emoji(s.strategy)} *{s.strategy}*"
+                f" | EUR{s.price:.2f} | R/R:{s.rr_ratio:.1f} | {_yahoo_link(s.ticker)}\n"
+                + sizing_tekst(s.ticker, s.price, s.atr, portfolio_waarde,
+                               cfg["sl_mult"], cfg["tp_mult"])
             )
         return "\n\n".join(lines)
 
@@ -989,11 +987,11 @@ def format_signals_per_exchange(
             return "_Geen signalen_"
         lines = []
         for s in signals:
-            pos  = portfolio.positions.get(s.ticker)
-            size = pos.size if pos else 0
+            pos     = portfolio.positions.get(s.ticker)
+            size    = pos.size if pos else 0
             pnl_str = ""
             if pos:
-                pnl = (s.price * (1 - SLIPPAGE_PCT) - pos.entry_price) * size
+                pnl     = (s.price * (1 - SLIPPAGE_PCT) - pos.entry_price) * size
                 pnl_str = f" | PnL est: EUR{pnl:+.2f}"
             lines.append(
                 f"• `{s.ticker}` {_strat_emoji(s.strategy)} *VERKOOP*\n"
@@ -1010,54 +1008,36 @@ def format_signals_per_exchange(
     mras_sig   = [s for s in buy_signals if s.strategy == "MRA Snel"]
     mrat_sig   = [s for s in buy_signals if s.strategy == "MRA Traag"]
 
-    pos_count = len(portfolio.positions)
-    cash_str  = f"EUR{portfolio.cash:,.2f}"
-
     deel1 = "\n\n".join([
-        f"📊 *{exchange_name} — GLOBAL v5.0*",
-        f"_{nu} | Portefeuille: EUR{portfolio_waarde:,.0f} | Risico: 10%/trade_",
+        f"📊 *{exchange_name}*",
+        f"_{nu} | Portfolio: EUR{portfolio_waarde:,.0f} | Risico: 10%/trade_",
         "─────────────────────────────",
-        "🐢 *TRAAG (50/200 trend):*",
-        koop_blok(traag_sig),
-        "⚡ *SNEL (20/50 trend):*",
-        koop_blok(snel_sig),
-        "🔴 *VERKOOPSIGNALEN:*",
-        verkoop_blok(sell_signals),
+        "🐢 *TRAAG (50/200):*",    koop_blok(traag_sig),
+        "⚡ *SNEL (20/50):*",      koop_blok(snel_sig),
+        "🔴 *VERKOOPSIGNALEN:*",   verkoop_blok(sell_signals),
     ])
 
     deel2_lines = [
-        f"📊 *{exchange_name} — v5.0 (2/2)*",
-        "",
-        "🚀 *HYPER TREND:*",
-        koop_blok(htrend_sig),
-        "",
-        "🔥 *HYPER SCALP:*",
-        koop_blok(hscalp_sig),
-        "",
-        "🛡️ *MRA SNEL:*",
-        koop_blok(mras_sig),
-        "",
-        "🐢 *MRA TRAAG:*",
-        koop_blok(mrat_sig),
-        "",
-        f"💼 *PORTFOLIO:* {pos_count}/{MAX_POSITIONS} posities | Cash: {cash_str}",
+        f"📊 *{exchange_name} (2/2)*", "",
+        "🚀 *HYPER TREND:*",  koop_blok(htrend_sig), "",
+        "🔥 *HYPER SCALP:*",  koop_blok(hscalp_sig), "",
+        "🛡️ *MRA SNEL:*",     koop_blok(mras_sig),   "",
+        "🐢 *MRA TRAAG:*",    koop_blok(mrat_sig),   "",
+        f"💼 *PORTFOLIO:* {len(portfolio.positions)}/{MAX_POSITIONS} "
+        f"posities | Cash: EUR{portfolio.cash:,.2f}",
     ]
-
-    if portfolio.positions:
-        for t, pos in portfolio.positions.items():
-            deel2_lines.append(
-                f"  • `{t}`: {pos.size}x @ EUR{pos.entry_price:.2f} "
-                f"({pos.strategy}, {pos.days_open}d | SL:{format_price(pos.sl)} TP:{format_price(pos.tp)})"
-            )
-
+    for t, pos in portfolio.positions.items():
+        deel2_lines.append(
+            f"  • `{t}`: {pos.size}x @ EUR{pos.entry_price:.2f} "
+            f"({pos.strategy}, {pos.days_open}d | SL:{format_price(pos.sl)} TP:{format_price(pos.tp)})"
+        )
     deel2_lines += [
         "",
-        "⚙️ *PARAMETERS v5.0:*",
+        "⚙️ *PARAMETERS:*",
         f"_ATR-sizing: 10% risico/trade | Slippage: 0.1%_",
         f"_Entry: open T+1 | SL: 2×ATR | TP: 3-5×ATR_",
         f"_ADX>15 filter | Wilder smoothing | Time-exit: {MAX_HOLD_DAYS}d_",
     ]
-
     return deel1, "\n".join(deel2_lines)
 
 
@@ -1122,11 +1102,6 @@ def run_live_engine():
         print("[ERROR] Geen data. Bot gestopt.")
         return
 
-    n_ok = df["Ticker"].nunique()
-    n_total = len(all_tickers)
-    if n_ok < n_total:
-        print(f"[WARN] Data beschikbaar voor {n_ok}/{n_total} tickers.")
-
     df = add_indicators(df)
 
     last_date = df["Date"].max().date()
@@ -1139,7 +1114,7 @@ def run_live_engine():
         if not math.isnan(safe_float(row.get("Close")))
     }
 
-    # ── days_open correct bijhouden ← FIX v5.0
+    # days_open correct bijhouden
     for p in portfolio.positions.values():
         p.days_open += 1
 
@@ -1172,7 +1147,7 @@ def run_live_engine():
         send_telegram_message(deel2)
 
     portfolio.save_state(last_date.isoformat(), price_map)
- 
+
 
 # ============================================================
 # ENTRYPOINT
@@ -1188,5 +1163,3 @@ if __name__ == "__main__":
         p.save_state(today_str(), {})
     else:
         run_live_engine()
-
-from patch_v21 import download_history, add_indicators
