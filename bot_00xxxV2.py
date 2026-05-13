@@ -261,7 +261,10 @@ else:
 frames = []  
 
 try:  
-    data = yf.download(**kwargs)  
+    data = yf.download(**kwargs) 
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
+
 except Exception as e:  
     print(f"[WARN] Batch download mislukt ({e}), probeer 1-voor-1...")  
     data = pd.DataFrame()  
