@@ -2,7 +2,7 @@ name: "Bot 041: Full Munger Ticker Filter V2"
 
 on:
   schedule:
-    - cron: '0 7 * * 0'   # elke zondag om 07:00 UTC
+    - cron: '0 8 * * 0'   # elke zondag om 07:00 UTC
   workflow_dispatch:
 
 jobs:
