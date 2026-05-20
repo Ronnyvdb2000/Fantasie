@@ -1,4 +1,4 @@
-from __future__ import annotations
+gfrom __future__ import annotations
 
 import yfinance as yf
 import pandas as pd
@@ -252,7 +252,7 @@ def voer_lijst_uit(bestandsnaam: str, label: str, naam_sector: str) -> None:
     def get_s(lst): return "\n".join(lst) if lst else "Geen actie"
 
     deel1 = [
-        f"📊 *{label} {naam_sector} RAPPORT triplex*",
+        f"📊 *{label} {naam_sector} RAPPORT xxx*",
         f"_{nu}_",
         "----------------------------------",
         f"🐢 *Traag (50/200):* {fmt(res['T'])} ({num_trades['T']} trades)",
