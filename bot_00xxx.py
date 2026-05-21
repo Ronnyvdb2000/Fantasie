@@ -309,11 +309,11 @@ def main():
         "046": "Milaan",
         "047": "Toronto",
         "048": "Nasdaq/NYSE",
-        # Je kunt hier 049 t/m 060 toevoegen indien gewenst
+        # Je kunt hier 049 t/m 059 toevoegen indien gewenst
     }
     
-    # Loop voor 041 t/m 060
-    for i in range(41, 61):
+    # Loop voor 041 t/m 059
+    for i in range(41, 60):
         nr = f"0{i}"
         bestandsnaam = f"tickers_{nr}x.txt"
         naam = sectoren.get(nr, f"Lijst {nr}")
