@@ -1,9 +1,9 @@
 name: "Bot 00: FULL Scanner (01-09) ult+mail"
 
-on:
-  schedule:
-    - cron: '30 21 * * *'
-  workflow_dispatch:
+    #on:
+    #  schedule:
+    #    - cron: '30 21 * * *'
+    #  workflow_dispatch:
 
 jobs:
   run_trading_bot:
