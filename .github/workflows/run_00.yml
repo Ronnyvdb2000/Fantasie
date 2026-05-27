@@ -1,7 +1,7 @@
 name: "Bot 00: FULL Scanner (01-09)"
 
-    #on:
-    #  workflow_dispatch: # Handmatige start mogelijk via GitHub UI
+on:
+  workflow_dispatch: # Handmatige start mogelijk via GitHub UI
     #  schedule:
     # Draait elke 9 uur (00, 03, 06, 09, 12, 15, 18, 21) 
     # Op de 15ste minuut van het uur
