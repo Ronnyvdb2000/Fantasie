@@ -2,7 +2,7 @@ name: "Bot 00: FULL Scanner (041-059) xxx"
 
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions    #  schedule:
-    #    - cron: '40 19 * * 0-6'
+    - cron: '40 19 * * 0-6'
 
 jobs:
   run_global:
