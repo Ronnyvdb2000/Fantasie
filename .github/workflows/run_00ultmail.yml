@@ -3,7 +3,7 @@ name: "Bot 00: FULL Scanner (01-09) ult+mail"
 on:
   workflow_dispatch: # Handmatige startknop in GitHub Actions
     #  schedule:
-    #    - cron: '30 21 * * *'
+    - cron: '30 21 * * *'
 
 jobs:
   run_trading_bot:
