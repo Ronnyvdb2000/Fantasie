@@ -1,7 +1,7 @@
 name: "Bot 00: FULL Scanner (01-09) mail"
 
-    #on:
-    #  schedule:
+on:
+  workflow_dispatch: # Handmatige startknop in GitHub Actions
     # Draait elke dag om 21:30 UTC (22:30 of 23:30 Belgische tijd afhankelijk van zomer/wintertijd)
     #    - cron: '30 21 * * *'
     #  workflow_dispatch: # Hiermee kun je de bot handmatig starten via het "Actions" tabblad
