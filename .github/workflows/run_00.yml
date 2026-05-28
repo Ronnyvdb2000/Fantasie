@@ -3,7 +3,7 @@ name: "Bot 00: FULL Scanner (01-09)"
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 19 * * 1-6'
+    - cron: '30 3 * * 1-6'
  
 jobs:
   run_global:
