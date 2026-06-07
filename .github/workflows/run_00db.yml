@@ -1,0 +1,44 @@
+name: bot_00db Darvas Box
+
+on:
+  schedule:
+    - cron: "55 21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "live of backtest"
+        required: false
+        default: "live"
+
+jobs:
+  bot-00db:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Dependencies
+        run: pip install yfinance pandas numpy requests
+
+      - name: Run bot_00db
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_00db.py ${{ github.event.inputs.mode || 'live' }}
+
+      - name: Opslaan CSV
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f db_signalen_*.csv db_backtest_trades.csv 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "bot_00db scan $(date '+%Y-%m-%d')"
+          git push
