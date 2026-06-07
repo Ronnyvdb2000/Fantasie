@@ -1,0 +1,44 @@
+name: bot_00kr Kritische Selectie
+
+on:
+  schedule:
+    - cron: "45 21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "live of backtest"
+        required: false
+        default: "live"
+
+jobs:
+  bot-00kr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Dependencies
+        run: pip install yfinance pandas numpy requests
+
+      - name: Run bot_00kr
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_00kr.py ${{ github.event.inputs.mode || 'live' }}
+
+      - name: Opslaan CSV
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f ks_signalen_*.csv ks_backtest_trades.csv 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "bot_00kr scan $(date '+%Y-%m-%d')"
+          git push
