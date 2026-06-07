@@ -1,4 +1,4 @@
-name: bot_00ms Minervini SEPA
+name: "Bot 00: FULL Scanner (041-059) Minervini SEPA"
 
 on:
   schedule:
