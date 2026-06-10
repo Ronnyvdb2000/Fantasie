@@ -1,4 +1,4 @@
-name: bot_00mr EOD
+name: "bot_00mr EOD"
 
 on:
   schedule:
