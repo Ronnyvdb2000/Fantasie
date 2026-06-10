@@ -3,7 +3,8 @@ name: "bot_00mr ORB"
 on:
   schedule:
     - cron: "30 09 * * 1-5"
-
+  workflow_dispatch:
+  
 jobs:
   bot-00mr-orb:
     runs-on: ubuntu-latest
