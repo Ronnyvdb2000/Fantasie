@@ -368,7 +368,7 @@ def download_intraday(tickers: List[str], interval: str = "15m") -> pd.DataFrame
     if not frames:
         return pd.DataFrame()
     df = pd.concat(frames, ignore_index=True)
-    df["Date"] = pd.to_datetime(df["Date"])
+    df["Date"] = pd.to_datetime(df["Date"], utc=True).dt.tz_localize(None)
     df.sort_values(["Ticker", "Date"], inplace=True)
     df.reset_index(drop=True, inplace=True)
     return df
