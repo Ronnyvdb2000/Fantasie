@@ -1,0 +1,30 @@
+name: bot_00mr ORB
+
+on:
+  schedule:
+    - cron: "30 09 * * 1-5"
+
+jobs:
+  bot-00mr-orb:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install yfinance pandas numpy requests
+      - name: Run ORB
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bot_00mr.py orb
+      - name: Opslaan state
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f mr_portfolio.json mr_trades.csv 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "bot_00mr ORB $(date '+%Y-%m-%d')"
+          git push
