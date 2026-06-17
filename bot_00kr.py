@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_kritische_selectie.py  —  KRITISCHE SELECTIE ENGINE v1.0
+bot_00kr.py  —  KRITISCHE SELECTIE ENGINE v1.0
 Gebaseerd op de publiek bekende criteria van Satilmis Ersintepe.
 Zelfde structuur, tickerbestanden en Telegram output als bot_00xxxV2.py.
 
@@ -13,8 +13,8 @@ Criteria (score 0-5):
   5. Dividend yield   — yield > 0% (bonus)
 
 Gebruik:
-  python bot_kritische_selectie.py          # live rapport
-  python bot_kritische_selectie.py backtest # backtest modus
+  python bot_00kr.py          # live rapport
+  python bot_00kr.py backtest # backtest modus
 
 GitHub Actions: dagelijks of wekelijks via cron
 """
@@ -33,6 +33,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -53,6 +56,9 @@ TAX_RATE             = 0.10
 
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+EMAIL_USER       = os.getenv("EMAIL_USER", "")
+EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
+EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 
 # Zelfde exchange/ticker structuur als bot_00xxxV2.py
 EXCHANGES = {
@@ -135,6 +141,26 @@ def send_telegram_message(text: str) -> None:
         )
     except Exception as e:
         print(f"Telegram fout: {e}")
+
+def send_email(subject: str, body: str) -> None:
+    """Verstuurt rapport via Gmail SMTP."""
+    if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
+        return
+    try:
+        msg = MIMEMultipart()
+        msg["From"]    = EMAIL_USER
+        msg["To"]      = EMAIL_RECEIVER
+        msg["Subject"] = subject
+        clean = body.replace("*", "").replace("`", "").replace("•", "-").replace("_", "")
+        msg.attach(MIMEText(clean, "plain", "utf-8"))
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.send_message(msg)
+        server.quit()
+        print(f"Email verzonden naar {EMAIL_RECEIVER}")
+    except Exception as e:
+        print(f"Email fout: {e}")
 
 def ensure_csv_header(path: str, header: List[str]) -> None:
     if not os.path.exists(path):
@@ -465,9 +491,6 @@ def analyse_ticker(ticker: str, df_ticker: pd.DataFrame) -> Optional[KSSignaal]:
         except Exception:
             pass
 
-        if score < KS_CFG["min_score"]:
-            return None
-
         return KSSignaal(
             ticker=ticker,
             price=round(current_price, 2),
@@ -504,17 +527,17 @@ def _score_bar(score: int) -> str:
 
 def format_ks_per_exchange(
     exchange_name: str,
-    signalen: List[KSSignaal],
+    signalen: List[KSSignaal],       # alleen score >= min_score
+    alle_signalen: List[KSSignaal],  # alle tickers (voor top-2)
     portfolio_waarde: float,
-) -> Tuple[str, str]:
+) -> Optional[str]:
     nu = today_str()
 
-    def blok(sigs: List[KSSignaal], min_score: int = 5) -> str:
-        filtered = [s for s in sigs if s.score >= min_score]
-        if not filtered:
+    def blok(sigs: List[KSSignaal]) -> str:
+        if not sigs:
             return "_Geen kandidaten_"
         lines = []
-        for s in filtered:
+        for s in sigs:
             lines.append(
                 f"• `{s.ticker}` | Score: {_score_bar(s.score)} | EUR{s.price:.2f} | {_yahoo_link(s.ticker)}\n"
                 + sizing_tekst(s.ticker, s.price, s.atr, portfolio_waarde, KS_CFG["atr_stop_mult"], s.tp_pct)
@@ -537,17 +560,32 @@ def format_ks_per_exchange(
             )
         return "\n\n".join(lines)
 
-    top5    = [s for s in signalen if s.score == 5]
-    score4  = [s for s in signalen if s.score == 4]
-    score3  = [s for s in signalen if s.score == 3]
+    def top2_blok(sigs: List[KSSignaal]) -> str:
+        """Top 2 op gecombineerde score: (score * 10) + rr_pct — ongeacht min_score filter."""
+        ranked = sorted(sigs, key=lambda s: (s.score * 10 + s.rr_pct), reverse=True)[:2]
+        if not ranked:
+            return "_Geen data_"
+        lines = []
+        for i, s in enumerate(ranked, 1):
+            lines.append(
+                f"*#{i}* `{s.ticker}` | Score: {_score_bar(s.score)} | RR: {s.rr_pct:.1f}% | EUR{s.price:.2f} | {_yahoo_link(s.ticker)}\n"
+                + sizing_tekst(s.ticker, s.price, s.atr, portfolio_waarde, KS_CFG["atr_stop_mult"], s.tp_pct)
+            )
+        return "\n\n".join(lines)
+
+    top5   = [s for s in signalen if s.score == 5]
+    score4 = [s for s in signalen if s.score == 4]
+    score3 = [s for s in signalen if s.score == 3]
 
     deel1 = "\n\n".join([
         f"🔍 *KRITISCHE SELECTIE — {exchange_name}*",
-        f"_{nu} | Universum: {exchange_name} | Min score: {KS_CFG['min_score']}/5_",
-        f"_Criteria: RSI↓ | MACD bull | RR≥25% | Support | Dividend_",
+        f"_{nu} | Min score: {KS_CFG['min_score']}/5 | Criteria: RSI↓ | MACD bull | RR≥25% | Support | Dividend_",
+        "─────────────────────────────",
+        f"🏆 *TOP 2 HOOGSTE POTENTIEEL ({exchange_name}):*",
+        top2_blok(alle_signalen),
         "─────────────────────────────",
         f"⭐ *PERFECTE SCORE (5/5):*",
-        blok(signalen, min_score=5) if top5 else "_Geen_",
+        blok(top5) if top5 else "_Geen_",
         f"🟡 *STERKE KANDIDATEN (4/5):*",
         detail_blok(score4) if score4 else "_Geen_",
     ])
@@ -560,15 +598,16 @@ def format_ks_per_exchange(
         "",
         "─────────────────────────────",
         f"📊 *SAMENVATTING:*",
-        f"  Totaal kandidaten : {len(signalen)}",
-        f"  Score 5/5         : {len(top5)}",
-        f"  Score 4/5         : {len(score4)}",
-        f"  Score 3/5         : {len(score3)}",
+        f"  Totaal geanalyseerd : {len(alle_signalen)}",
+        f"  Score 5/5           : {len(top5)}",
+        f"  Score 4/5           : {len(score4)}",
+        f"  Score 3/5           : {len(score3)}",
         "",
         "⚙️ *PARAMETERS:*",
         f"_RSI(14) maandelijks | MACD(12/26/9) maandelijks_",
         f"_RR≥25% naar jaarweerstand | Support binnen 3%_",
         f"_Stop: 2×ATR | Risico: 5% portfolio | Slippage: 0.1%_",
+        f"_Top 2: ranking op score×10 + RR%_",
     ]
 
     return deel1, "\n".join(deel2_parts)
@@ -610,23 +649,30 @@ def run_live_engine():
 
     portfolio_waarde = START_CAPITAL  # vervang door live portfolio waarde indien beschikbaar
 
+    email_delen: List[str] = []
+
     for ex_name, tlist in exchange_tickers.items():
         print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
         df_ex = df[df["Ticker"].isin(tlist)].copy()
 
-        signalen: List[KSSignaal] = []
+        alle: List[KSSignaal] = []
         for ticker, group in df_ex.groupby("Ticker", sort=False):
             sig = analyse_ticker(ticker, group)
-            if sig:
-                signalen.append(sig)
-                print(f"  ✓ {ticker}: score {sig.score}/5 | RSI={sig.rsi_monthly:.1f} | RR={sig.rr_pct:.1f}%")
+            if sig is not None:
+                alle.append(sig)
+                if sig.score >= KS_CFG["min_score"]:
+                    print(f"  ✓ {ticker}: score {sig.score}/5 | RSI={sig.rsi_monthly:.1f} | RR={sig.rr_pct:.1f}%")
 
-        # Sorteren: score hoog→laag, dan RR% hoog→laag
+        # Gefilterd: alleen score >= min_score
+        signalen = [s for s in alle if s.score >= KS_CFG["min_score"]]
         signalen.sort(key=lambda s: (s.score, s.rr_pct), reverse=True)
 
-        print(f"  → {len(signalen)} kandidaten gevonden (score ≥ {KS_CFG['min_score']})")
+        # Alle tickers gesorteerd op potentieel (voor top-2)
+        alle.sort(key=lambda s: (s.score * 10 + s.rr_pct), reverse=True)
 
-        deel1, deel2 = format_ks_per_exchange(ex_name, signalen, portfolio_waarde)
+        print(f"  → {len(signalen)} kandidaten (score ≥ {KS_CFG['min_score']}) | top-2 uit {len(alle)} geanalyseerd")
+
+        deel1, deel2 = format_ks_per_exchange(ex_name, signalen, alle, portfolio_waarde)
         send_telegram_message(deel1)
         time.sleep(1)
         send_telegram_message(deel2)
