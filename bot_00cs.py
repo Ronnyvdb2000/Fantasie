@@ -35,6 +35,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -55,6 +58,9 @@ MAX_HOLD_DAYS        = 60
 
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+EMAIL_USER       = os.getenv("EMAIL_USER", "")
+EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
+EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 
 EXCHANGES = {
     "041 Benelux":     "tickers_041x.txt",
@@ -136,6 +142,27 @@ def send_telegram_message(text: str) -> None:
         )
     except Exception as e:
         print(f"Telegram fout: {e}")
+
+def send_email(subject: str, body: str) -> None:
+    """Verstuurt rapport via Gmail SMTP."""
+    if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
+        return
+    try:
+        msg = MIMEMultipart()
+        msg["From"]    = EMAIL_USER
+        msg["To"]      = EMAIL_RECEIVER
+        msg["Subject"] = subject
+        # Markdown opschonen voor email
+        clean = body.replace("*", "").replace("`", "").replace("•", "-").replace("_", "")
+        msg.attach(MIMEText(clean, "plain", "utf-8"))
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.send_message(msg)
+        server.quit()
+        print(f"Email verzonden naar {EMAIL_RECEIVER}")
+    except Exception as e:
+        print(f"Email fout: {e}")
 
 def ensure_csv_header(path: str, header: List[str]) -> None:
     if not os.path.exists(path):
@@ -559,70 +586,67 @@ def format_cs_per_exchange(
     exchange_name:    str,
     signalen:         List[CSSignaal],
     portfolio_waarde: float,
-) -> Tuple[str, str]:
+) -> Optional[str]:
+    """
+    Eén bericht per exchange. Slimme filtering:
+    - Toon perfecte score (7/7)
+    - Als geen perfecte: toon hoogste niveau aanwezig
+    - Lege exchanges: geeft None terug (geen bericht)
+    """
+    if not signalen:
+        return None
+
     nu = today_str()
 
     def detail_blok(sigs: List[CSSignaal]) -> str:
-        if not sigs:
-            return "_Geen kandidaten_"
         lines = []
         for s in sigs:
             lines.append(
                 f"• `{s.ticker}` | Score: {_score_bar(s.score)} | EUR{s.price:.2f} | {_yahoo_link(s.ticker)}\n"
-                f"  RS:{s.rs:.0f} | EPS kwartaal:+{s.eps_q_growth:.1f}% | Inst:{s.inst_pct:.1f}%\n"
-                f"  {s.pct_from_high:.1f}% onder 52w high | Vol ratio:{s.vol_ratio:.1f}×\n"
+                f"  RS:{s.rs:.0f} | EPS +{s.eps_q_growth:.1f}% | Inst:{s.inst_pct:.1f}%\n"
+                f"  {s.pct_from_high:.1f}% onder 52w high | Vol:{s.vol_ratio:.1f}×\n"
                 + "\n".join(f"  {lbl}" for lbl in s.score_labels) + "\n"
                 + sizing_tekst(s.ticker, s.price, s.stop, portfolio_waarde)
             )
         return "\n\n".join(lines)
 
-    top2   = signalen[:2]
-    score7 = [s for s in signalen if s.score == 7]
-    score6 = [s for s in signalen if s.score == 6]
-    score5 = [s for s in signalen if s.score == 5]
-    score4 = [s for s in signalen if s.score == 4]
+    # Slimme filtering: hoogste score aanwezig bepaalt wat getoond wordt
+    max_score = max(s.score for s in signalen)
+    if max_score == 7:
+        toon = [s for s in signalen if s.score == 7]
+        label = "⭐ PERFECTE SCORE (7/7)"
+    elif max_score == 6:
+        toon = [s for s in signalen if s.score == 6]
+        label = "🔥 UITSTEKEND (6/7)"
+    elif max_score == 5:
+        toon = [s for s in signalen if s.score == 5]
+        label = "⚡ STERK (5/7)"
+    else:
+        toon = [s for s in signalen if s.score == 4]
+        label = "📊 WATCHLIST (4/7)"
 
-    deel1 = "\n\n".join([
+    # Top 2 als fallback aanvulling
+    top2_extra = [s for s in signalen[:2] if s not in toon]
+
+    delen = [
         f"📈 *CAN SLIM — {exchange_name}*",
-        f"_{nu} | C·A·N·S·L·I·M filter | Min score: {CS_CFG['min_score']}/7_",
-        f"_O'Neil: EPS groei + RS leider + nieuw high + volume_",
+        f"_{nu} | Beste signalen | {len(signalen)} kandidaten totaal_",
         "─────────────────────────────",
-        f"🏆 *TOP 2 HOOGSTE POTENTIEEL:*",
-        detail_blok(top2) if top2 else "_Geen kandidaten vandaag_",
-        "─────────────────────────────",
-        f"⭐ *PERFECTE SCORE (7/7):*",
-        detail_blok(score7) if score7 else "_Geen_",
-        f"🔥 *UITSTEKEND (6/7):*",
-        detail_blok(score6) if score6 else "_Geen_",
-    ])
-
-    deel2_parts = [
-        f"📈 *CAN SLIM — {exchange_name} (2/2)*",
-        "",
-        f"⚡ *STERK (5/7):*",
-        detail_blok(score5) if score5 else "_Geen_",
-        "",
-        f"📊 *WATCHLIST (4/7):*",
-        detail_blok(score4) if score4 else "_Geen_",
-        "",
-        "─────────────────────────────",
-        f"📊 *SAMENVATTING:*",
-        f"  Kandidaten (score≥{CS_CFG['min_score']}) : {len(signalen)}",
-        f"  Score 7/7 : {len(score7)}",
-        f"  Score 6/7 : {len(score6)}",
-        f"  Score 5/7 : {len(score5)}",
-        f"  Score 4/7 : {len(score4)}",
-        "",
-        "⚙️ *CAN SLIM PARAMETERS:*",
-        f"_C: kwartaal EPS ≥+{CS_CFG['eps_quarterly_growth']:.0f}% YoY_",
-        f"_A: EPS CAGR ≥{CS_CFG['eps_annual_growth']:.0f}% over {CS_CFG['eps_annual_years']} jaar_",
-        f"_N: max {CS_CFG['max_from_high_pct']:.0f}% onder 52w high_",
-        f"_S: volume hoger op up-days (ratio ≥1.2×)_",
-        f"_L: RS Rating ≥{CS_CFG['rs_min']} | I: inst. ≥5% | M: Close>MA200_",
-        f"_Stop: {CS_CFG['stop_pct']:.0f}% onder entry | Risico: 5% portfolio_",
+        f"*{label}:*",
+        detail_blok(toon),
     ]
 
-    return deel1, "\n".join(deel2_parts)
+    if top2_extra:
+        delen += ["─────────────────────────────",
+                  "*🏆 TOP 2 EXTRA:*",
+                  detail_blok(top2_extra)]
+
+    delen += [
+        "─────────────────────────────",
+        f"⚙️ _Stop: {CS_CFG['stop_pct']:.0f}% | Risico: 5% | RS≥{CS_CFG['rs_min']} | EPS≥{CS_CFG['eps_quarterly_growth']:.0f}%_",
+    ]
+
+    return "\n\n".join(delen)
 
 
 # ============================================================
@@ -672,6 +696,8 @@ def run_live_engine():
 
     portfolio_waarde = START_CAPITAL
 
+    email_delen: List[str] = []
+
     for ex_name, tlist in exchange_tickers.items():
         print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
         df_ex = df[df["Ticker"].isin(tlist)].copy()
@@ -690,13 +716,24 @@ def run_live_engine():
         signalen.sort(key=lambda s: s.total_score, reverse=True)
         print(f"  → {len(signalen)} CAN SLIM kandidaten")
 
-        deel1, deel2 = format_cs_per_exchange(ex_name, signalen, portfolio_waarde)
-        send_telegram_message(deel1)
-        time.sleep(1)
-        send_telegram_message(deel2)
+        bericht = format_cs_per_exchange(ex_name, signalen, portfolio_waarde)
+        if bericht:
+            send_telegram_message(bericht)
+            email_delen.append(bericht)
+            print(f"  → Telegram verstuurd: {ex_name}")
+        else:
+            print(f"  → Overgeslagen (geen signalen): {ex_name}")
 
         if signalen:
             _log_csv(signalen, ex_name)
+
+    # Één samenvattingsmail met alle exchanges
+    if email_delen:
+        datum = today_str()
+        send_email(
+            subject=f"CAN SLIM rapport {datum}",
+            body="\n\n" + ("="*40 + "\n\n").join(email_delen),
+        )
 
     print(f"\n{'='*60}")
     print("Klaar.")
