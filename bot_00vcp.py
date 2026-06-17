@@ -44,6 +44,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -64,6 +67,9 @@ MAX_HOLD_DAYS        = 60
 
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+EMAIL_USER       = os.getenv("EMAIL_USER", "")
+EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
+EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 
 EXCHANGES = {
     "041 Benelux":     "tickers_041x.txt",
@@ -150,6 +156,26 @@ def send_telegram_message(text: str) -> None:
         )
     except Exception as e:
         print(f"Telegram fout: {e}")
+
+def send_email(subject: str, body: str) -> None:
+    """Verstuurt rapport via Gmail SMTP."""
+    if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
+        return
+    try:
+        msg = MIMEMultipart()
+        msg["From"]    = EMAIL_USER
+        msg["To"]      = EMAIL_RECEIVER
+        msg["Subject"] = subject
+        clean = body.replace("*", "").replace("`", "").replace("•", "-").replace("_", "")
+        msg.attach(MIMEText(clean, "plain", "utf-8"))
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.send_message(msg)
+        server.quit()
+        print(f"Email verzonden naar {EMAIL_RECEIVER}")
+    except Exception as e:
+        print(f"Email fout: {e}")
 
 def ensure_csv_header(path: str, header: List[str]) -> None:
     if not os.path.exists(path):
@@ -788,10 +814,29 @@ def run_live_engine():
         signalen.sort(key=lambda s: s.total_score, reverse=True)
         print(f"  → {len(signalen)} VCP kandidaten | {sum(s.vcp.breakout for s in signalen)} breakouts")
 
-        deel1, deel2 = format_vcp_per_exchange(ex_name, signalen, portfolio_waarde)
-        send_telegram_message(deel1)
-        time.sleep(1)
-        send_telegram_message(deel2)
+        if signalen:
+            max_sc = max(s.score for s in signalen)
+            toon = [s for s in signalen if s.score == max_sc]
+            top2 = signalen[:2]
+            lbl = {8:"🔥 PERFECT (8/8)", 7:"⭐ UITSTEKEND (7/8)", 6:"⚡ STERK (6/8)", 5:"📊 GOED (5/8)", 4:"📊 WATCHLIST (4/8)"}.get(max_sc, "📊")
+            nu = today_str()
+            bericht_delen = [
+                f"🔻 *VCP — {ex_name}*",
+                f"_{nu} | Narrowing techniek | {len(signalen)} kandidaten_",
+                "─────────────────────────────",
+                f"🏆 *TOP 2:*",
+            ]
+            for s in top2:
+                bericht_delen.append(f"• `{s.ticker}` {_score_bar(s.score)} €{s.price:.2f} [Grafiek](https://finance.yahoo.com/quote/{s.ticker})\n  {s.vcp.n_contracties} contracties | laatste -{s.vcp.laatste_pct:.1f}% | {'BREAKOUT' if s.vcp.breakout else 'setup'}\n" + sizing_tekst(s.ticker, s.price, s.stop, s.vcp.pivot, portfolio_waarde))
+            bericht_delen += ["─────────────────────────────", f"*{lbl}:*"]
+            for s in [x for x in toon if x not in top2]:
+                bericht_delen.append(f"• `{s.ticker}` {_score_bar(s.score)} €{s.price:.2f} | {s.vcp.n_contracties} contracties | {'BREAKOUT' if s.vcp.breakout else 'setup'}")
+            bericht_delen.append(f"⚙️ _Min {VCP_CFG['min_contracties']} contracties | Breakout {VCP_CFG['breakout_vol_mult']}×vol | Risico 5%_")
+            bericht = "\n\n".join(bericht_delen)
+            send_telegram_message(bericht)
+            email_delen.append(bericht)
+        else:
+            print(f"  → Overgeslagen: {ex_name}")
 
         if signalen:
             _log_csv(signalen, ex_name)
