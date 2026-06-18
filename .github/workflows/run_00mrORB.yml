@@ -1,10 +1,10 @@
-name: "bot_00mr ORB"
+name: "Bot 00: FULL Scanner (041-059) MR ORB"
 
 on:
   schedule:
-    - cron: "30 09 * * 1-5"
+    - cron: "30 07 * * 1-5"
   workflow_dispatch:
-  
+
 jobs:
   bot-00mr-orb:
     runs-on: ubuntu-latest
@@ -15,11 +15,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install yfinance pandas numpy requests
-      - name: Run ORB
+      - run: pip install yfinance pandas numpy requests python-dotenv
+      - name: Run bot_00mr ORB
         env:
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
         run: python bot_00mr.py orb
       - name: Opslaan state
         if: always()
