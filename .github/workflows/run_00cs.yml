@@ -1,43 +1,34 @@
-name: "Bot 00cs: CAN SLIM Scanner"
+name: "Bot 00: FULL Scanner (041-059) CAN SLIM"
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '30 19 * * 1-5'
+    - cron: "00 20 * * 1-5"
+  workflow_dispatch:
 
 jobs:
   bot-00cs:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          pip install yfinance pandas numpy requests
-
+          python-version: "3.11"
+      - run: pip install yfinance pandas numpy requests python-dotenv
       - name: Run bot_00cs
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
         run: python bot_00cs.py live
-
-      - name: Commit and Push CSV results
+      - name: Opslaan CSV
+        if: always()
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f cs_signalen_*.csv cs_backtest_trades.csv 2>/dev/null || true
-          git diff --cached --quiet || git commit -m "bot_00cs scan $(date '+%Y-%m-%d')"
+          git add -f cs_signalen_*.csv 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "bot_00cs $(date '+%Y-%m-%d')"
           git push
