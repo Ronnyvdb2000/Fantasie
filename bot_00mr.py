@@ -51,6 +51,9 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import requests
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -65,6 +68,9 @@ PERF_FILE        = "mr_performance.json"
 
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+EMAIL_USER       = os.getenv("EMAIL_USER", "")
+EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
+EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 
 EXCHANGES = {
     "041 Benelux":     "tickers_041x.txt",
@@ -149,6 +155,26 @@ def load_tickers_from_file(path: str) -> List[str]:
         if t and not t.startswith("#"):
             result.append(t)
     return sorted(list(set(result)))
+
+
+def send_email(subject: str, body: str) -> None:
+    if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
+        return
+    try:
+        msg = MIMEMultipart()
+        msg["From"]    = EMAIL_USER
+        msg["To"]      = EMAIL_RECEIVER
+        msg["Subject"] = subject
+        clean = body.replace("*", "").replace("`", "").replace("•", "-").replace("_", "")
+        msg.attach(MIMEText(clean, "plain", "utf-8"))
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.send_message(msg)
+        server.quit()
+        print(f"Email verzonden naar {EMAIL_RECEIVER}")
+    except Exception as e:
+        print(f"Email fout: {e}")
 
 def send_telegram(text: str) -> None:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
@@ -1021,6 +1047,7 @@ def run_eod():
     # Telegram rapport
     rapport = rapport_eod(mr_entries, mr_exits, portfolio, prices)
     send_telegram(rapport)
+    send_email(f"Multi-Systeem EOD rapport {today_str()}", rapport.replace("*","").replace("`",""))
     print("EOD rapport verzonden.")
 
 
@@ -1118,6 +1145,7 @@ def run_orb():
 
     rapport = rapport_orb(orb_signalen, portfolio, prices)
     send_telegram(rapport)
+    send_email(f"ORB rapport {today_str()}", rapport.replace("*","").replace("`",""))
     print("ORB rapport verzonden.")
 
 
