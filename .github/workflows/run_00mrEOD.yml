@@ -1,8 +1,8 @@
-name: "bot_00mr EOD"
+name: "Bot 00: FULL Scanner (041-059) MR EOD"
 
 on:
   schedule:
-    - cron: "30 21 * * 1-5"
+    - cron: "30 19 * * 1-5"
   workflow_dispatch:
     inputs:
       mode:
@@ -11,7 +11,7 @@ on:
         default: "eod"
 
 jobs:
-  bot-00mr:
+  bot-00mr-eod:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -20,11 +20,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install yfinance pandas numpy requests
-      - name: Run EOD
+      - run: pip install yfinance pandas numpy requests python-dotenv
+      - name: Run bot_00mr EOD
         env:
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
         run: python bot_00mr.py ${{ github.event.inputs.mode || 'eod' }}
       - name: Opslaan state
         if: always()
