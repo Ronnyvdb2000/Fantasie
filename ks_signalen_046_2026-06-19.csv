@@ -1,0 +1,2 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-06-19,046 Milaan,RACE.MI,3,307.5,44.7,✓ herstel (44.7 ↑),✗ neutraal (-17.627),41.8,✓ 41.8% opwaarts (ratio 6.3:1),270.72,✗ 13.6% boven bodem (270.72),435.94,287.11,113.0,✓ 113.00%

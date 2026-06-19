@@ -1,0 +1,9 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-06-19,043 Frankfurt,SAP.DE,4,134.14,34.6,✓ oververkocht (34.6),✗ neutraal (-9.466),94.8,✓ 94.8% opwaarts (ratio 10.1:1),134.14,✓ 0.0% boven bodem (134.14),261.36,121.53,175.0,✓ 175.00%
+2026-06-19,043 Frankfurt,BMW.DE,4,59.98,36.2,✓ oververkocht (36.2),✗ neutraal (-2.238),53.6,✓ 53.6% opwaarts (ratio 6.9:1),59.74,✓ 0.4% boven bodem (59.74),92.11,55.32,648.0,✓ 648.00%
+2026-06-19,043 Frankfurt,SHL.DE,4,34.23,32.4,✓ oververkocht (32.4),✗ neutraal (-3.498),41.3,✓ 41.3% opwaarts (ratio 8.9:1),33.4,✓ 2.5% boven bodem (33.40),48.37,32.63,283.0,✓ 283.00%
+2026-06-19,043 Frankfurt,EVD.DE,3,52.1,39.9,✓ oververkocht (39.9),✗ neutraal (-4.882),99.3,✓ 99.3% opwaarts (ratio 13.2:1),47.69,✗ 9.2% boven bodem (47.69),103.83,48.19,263.0,✓ 263.00%
+2026-06-19,043 Frankfurt,BEI.DE,3,71.6,32.3,✓ oververkocht (32.3),✗ neutraal (-12.555),53.7,✓ 53.7% opwaarts (ratio 11.9:1),67.3,✗ 6.4% boven bodem (67.30),110.04,68.37,141.0,✓ 141.00%
+2026-06-19,043 Frankfurt,QIA.DE,3,32.13,41.1,✓ herstel (41.1 ↑),✗ neutraal (-1.607),44.5,✓ 44.5% opwaarts (ratio 9.3:1),28.11,✗ 14.3% boven bodem (28.11),46.43,30.59,92.0,✓ 92.00%
+2026-06-19,043 Frankfurt,FRE.DE,3,39.61,51.9,✓ herstel (51.9 ↑),✗ neutraal (2.879),28.0,✓ 28.0% opwaarts (ratio 6.1:1),35.45,✗ 11.7% boven bodem (35.45),50.71,37.79,271.0,✓ 271.00%
+2026-06-19,043 Frankfurt,BOSS.DE,3,38.8,43.7,✓ herstel (43.7 ↑),✓ histogram ↑ (0.743),10.0,✗ 10.0% / ratio 2.3:1,34.15,✗ 13.6% boven bodem (34.15),42.67,37.13,10.0,✓ 10.00%
