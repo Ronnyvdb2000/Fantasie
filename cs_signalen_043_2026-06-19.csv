@@ -1,0 +1,9 @@
+datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
+2026-06-19,043 Frankfurt,NDX1.DE,6,47.72,96.0,576.9,0.0,38.9,4.6,1.5,43.9,True,False,True,True,True,True,True,146.9
+2026-06-19,043 Frankfurt,NDA.DE,6,195.0,94.8,193.9,95.6,46.2,11.0,0.55,179.4,True,True,True,False,True,True,True,98.4
+2026-06-19,043 Frankfurt,BSL.DE,5,31.45,97.2,172.5,0.0,22.1,0.0,1.11,28.93,True,False,True,False,True,True,True,96.7
+2026-06-19,043 Frankfurt,JEN.DE,5,46.96,96.2,80.5,-0.3,54.5,0.8,0.83,43.2,True,False,True,False,True,True,True,87.3
+2026-06-19,043 Frankfurt,REP.DE,5,21.56,80.8,153.8,-22.6,35.8,12.8,0.72,19.84,True,False,True,False,True,True,True,81.5
+2026-06-19,043 Frankfurt,ENR.DE,5,168.92,89.6,76.5,0.0,55.6,10.0,0.84,155.41,True,False,True,False,True,True,True,75.6
+2026-06-19,043 Frankfurt,ASML.AS,4,1657.8,95.0,17.1,10.7,46.6,1.1,0.81,1525.18,False,False,True,False,True,True,True,69.0
+2026-06-19,043 Frankfurt,DWS.DE,5,61.25,71.9,32.7,29.6,9.5,0.4,1.14,56.35,True,True,True,False,False,True,True,63.3

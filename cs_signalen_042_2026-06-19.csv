@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
+2026-06-19,042 Parijs,NEX.PA,5,158.8,85.8,0.0,26.2,63.5,3.7,1.11,146.1,False,True,True,False,True,True,True,77.2
+2026-06-19,042 Parijs,MAU.PA,4,8.06,77.4,131.7,39.7,8.0,29.5,0.68,7.42,True,True,False,False,False,True,True,53.2
+2026-06-19,042 Parijs,IPN.PA,4,156.5,76.8,-3.9,-17.0,20.6,8.5,1.32,143.98,False,False,True,True,False,True,True,40
