@@ -1,0 +1,14 @@
+datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
+2026-06-22,047 Toronto,AG.TO,4,25.1,87.8,5560.5,0.0,54.6,42.4,1.07,23.09,True,False,False,False,True,True,True,613.6
+2026-06-22,047 Toronto,IMG.TO,4,23.91,91.8,856.4,165.4,73.6,28.8,1.03,22.0,True,False,False,False,True,True,True,144.0
+2026-06-22,047 Toronto,ABX.TO,5,56.84,86.0,238.0,98.1,67.2,19.9,0.91,52.29,True,True,False,False,True,True,True,91.0
+2026-06-22,047 Toronto,HBM.TO,6,39.52,95.3,89.6,192.6,79.3,10.3,0.99,36.36,True,True,True,False,True,True,True,88.0
+2026-06-22,047 Toronto,CLS.TO,5,533.43,94.7,146.3,84.6,72.1,18.3,0.77,490.76,True,True,False,False,True,True,True,83.6
+2026-06-22,047 Toronto,ATZ.TO,6,162.56,94.1,34.8,120.2,43.3,6.1,0.91,149.56,True,True,True,False,True,True,True,82.3
+2026-06-22,047 Toronto,GMIN.TO,4,42.3,91.5,229.0,0.0,49.0,27.2,1.01,38.92,True,False,False,False,True,True,True,81.2
+2026-06-22,047 Toronto,LUN.TO,4,37.34,94.4,126.4,130.5,50.7,15.8,1.0,34.35,True,False,False,False,True,True,True,71.5
+2026-06-22,047 Toronto,TIH.TO,4,237.46,87.2,24.5,-3.6,44.3,1.5,1.13,218.46,False,False,True,False,True,True,True,67.4
+2026-06-22,047 Toronto,CS.TO,4,14.66,89.8,0.0,0.0,39.7,12.0,0.96,13.49,False,False,True,False,True,True,True,58.0
+2026-06-22,047 Toronto,IGM.TO,4,78.29,85.2,21.4,-2.1,9.2,6.1,0.86,72.03,False,False,True,False,True,True,True,57.0
+2026-06-22,047 Toronto,TFII.TO,4,207.87,84.6,-22.7,-21.6,80.5,8.8,0.95,191.24,False,False,True,False,True,True,True,56.9
+2026-06-22,047 Toronto,FTT.TO,4,102.57,83.7,16.3,12.2,47.5,5.1,0.89,94.36,False,False,True,False,True,True,True,56.7

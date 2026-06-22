@@ -1,0 +1,17 @@
+datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
+2026-06-22,045 Londen,OXIG.L,4,3048.0,79.1,1805.3,-2.5,65.9,7.7,0.83,2804.16,True,False,True,False,False,True,True,220.5
+2026-06-22,045 Londen,CMCX.L,7,456.0,84.9,42.7,25.9,20.7,1.9,2.04,419.52,True,True,True,True,True,True,True,101.2
+2026-06-22,045 Londen,APN.L,5,296.0,93.5,73.0,23.6,25.9,0.8,0.52,272.32,True,False,True,False,True,True,True,86.0
+2026-06-22,045 Londen,WOSG.L,5,720.0,86.9,53.6,-33.5,65.4,1.9,1.17,662.4,True,False,True,False,True,True,True,82.7
+2026-06-22,045 Londen,PAF.L,4,109.2,88.9,206.9,52.5,66.4,40.5,0.85,100.46,True,True,False,False,True,True,False,78.5
+2026-06-22,045 Londen,KLR.L,5,2674.0,84.3,4.8,26.3,106.2,0.5,0.8,2460.08,False,True,True,False,True,True,True,76.9
+2026-06-22,045 Londen,LUCE.L,5,267.0,88.6,77.9,10.3,16.2,7.9,0.71,245.64,True,False,True,False,True,True,True,75.5
+2026-06-22,045 Londen,ANTO.L,5,3956.0,92.1,41.7,26.1,22.5,11.2,0.71,3639.52,True,False,True,False,True,True,True,72.6
+2026-06-22,045 Londen,SDR.L,5,586.0,71.4,85.5,15.8,39.9,0.2,1.51,539.12,True,False,True,True,False,True,True,68.5
+2026-06-22,045 Londen,HOC.L,4,549.5,90.4,93.1,0.0,41.5,32.0,0.5,505.54,True,False,False,False,True,True,True,67.4
+2026-06-22,045 Londen,HILS.L,4,2865.0,81.7,4.8,9.5,55.2,0.3,1.18,2635.8,False,False,True,False,True,True,True,66.3
+2026-06-22,045 Londen,DPLM.L,5,7220.0,73.1,4.7,25.3,83.0,0.1,2.58,6642.4,False,True,True,True,False,True,True,60
+2026-06-22,045 Londen,ECOR.L,4,143.8,90.9,0.0,411.8,36.6,5.8,0.78,132.3,False,False,True,False,True,True,True,58.2
+2026-06-22,045 Londen,BRWM.L,4,967.0,82.9,0.0,0.0,0.0,7.5,1.23,889.64,False,False,True,True,True,False,True,56.6
+2026-06-22,045 Londen,RIO.L,4,7513.0,80.9,-5.3,-0.5,47.3,9.6,0.62,6911.96,False,False,True,False,True,True,True,56.2
+2026-06-22,045 Londen,JUP.L,4,169.6,75.7,113.2,0.0,56.1,13.1,0.84,156.03,True,False,True,False,False,True,True,51.3
