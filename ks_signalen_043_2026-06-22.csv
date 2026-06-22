@@ -1,0 +1,12 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-06-22,043 Frankfurt,SAP.DE,4,132.22,34.2,✓ oververkocht (34.2),✗ neutraal (-9.619),97.7,✓ 97.7% opwaarts (ratio 10.6:1),132.22,✓ 0.0% boven bodem (132.22),261.36,120.01,186.0,✓ 186.00%
+2026-06-22,043 Frankfurt,BMW.DE,4,60.94,36.6,✓ oververkocht (36.6),✗ neutraal (-2.162),51.1,✓ 51.1% opwaarts (ratio 6.8:1),59.74,✓ 2.0% boven bodem (59.74),92.11,56.38,734.0,✓ 734.00%
+2026-06-22,043 Frankfurt,EVD.DE,3,51.15,39.6,✓ oververkocht (39.6),✗ neutraal (-4.958),103.0,✓ 103.0% opwaarts (ratio 13.6:1),47.69,✗ 7.3% boven bodem (47.69),103.83,47.27,276.0,✓ 276.00%
+2026-06-22,043 Frankfurt,BEI.DE,3,71.2,32.0,✓ oververkocht (32.0),✗ neutraal (-12.587),54.6,✓ 54.6% opwaarts (ratio 12.2:1),67.3,✗ 5.8% boven bodem (67.30),110.04,68.02,140.0,✓ 140.00%
+2026-06-22,043 Frankfurt,MUM.DE,3,34.9,38.0,✓ oververkocht (38.0),✗ neutraal (-3.244),51.0,✓ 51.0% opwaarts (ratio 8.6:1),31.54,✗ 10.6% boven bodem (31.54),52.69,32.83,576.0,✓ 576.00%
+2026-06-22,043 Frankfurt,QIA.DE,3,32.06,40.9,✓ herstel (40.9 ↑),✗ neutraal (-1.614),44.8,✓ 44.8% opwaarts (ratio 9.5:1),28.11,✗ 14.0% boven bodem (28.11),46.43,30.54,93.0,✓ 93.00%
+2026-06-22,043 Frankfurt,SHL.DE,3,34.5,32.7,✓ oververkocht (32.7),✗ neutraal (-3.477),40.2,✓ 40.2% opwaarts (ratio 8.9:1),33.4,✗ 3.3% boven bodem (33.40),48.37,32.95,292.0,✓ 292.00%
+2026-06-22,043 Frankfurt,DWNI.DE,3,18.22,41.4,✗ neutraal (41.4),✗ neutraal (-0.554),33.9,✓ 33.9% opwaarts (ratio 7.5:1),17.86,✓ 2.0% boven bodem (17.86),24.4,17.4,22.0,✓ 22.00%
+2026-06-22,043 Frankfurt,FRE.DE,3,39.54,51.8,✓ herstel (51.8 ↑),✗ neutraal (2.874),28.2,✓ 28.2% opwaarts (ratio 6.2:1),35.45,✗ 11.5% boven bodem (35.45),50.71,37.74,265.0,✓ 265.00%
+2026-06-22,043 Frankfurt,FNTN.DE,3,24.56,49.9,✗ neutraal (49.9),✗ neutraal (0.676),26.6,✓ 26.6% opwaarts (ratio 6.5:1),23.89,✓ 2.8% boven bodem (23.89),31.09,23.56,825.0,✓ 825.00%
+2026-06-22,043 Frankfurt,BOSS.DE,3,38.09,42.7,✓ herstel (42.7 ↑),✓ histogram ↑ (0.698),12.0,✗ 12.0% / ratio 2.7:1,34.15,✗ 11.5% boven bodem (34.15),42.67,36.42,10.0,✓ 10.00%

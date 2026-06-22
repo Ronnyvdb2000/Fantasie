@@ -1,0 +1,40 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-06-22,048 Nasdaq/NYSE,INTU,4,257.77,28.4,✓ oververkocht (28.4),✗ neutraal (-61.637),211.1,✓ 211.1% opwaarts (ratio 16.0:1),257.77,✓ 0.0% boven bodem (257.77),801.96,223.82,180.0,✓ 180.00%
+2026-06-22,048 Nasdaq/NYSE,ACN,4,124.83,25.7,✓ oververkocht (25.7),✗ neutraal (-37.538),140.9,✓ 140.9% opwaarts (ratio 9.5:1),124.83,✓ 0.0% boven bodem (124.83),300.71,106.32,509.0,✓ 509.00%
+2026-06-22,048 Nasdaq/NYSE,CTSH,4,41.83,32.9,✓ oververkocht (32.9),✗ neutraal (-4.128),104.8,✓ 104.8% opwaarts (ratio 9.1:1),41.83,✓ 0.0% boven bodem (41.83),85.66,37.0,302.0,✓ 302.00%
+2026-06-22,048 Nasdaq/NYSE,BSY,4,28.87,28.6,✓ oververkocht (28.6),✗ neutraal (-4.744),102.0,✓ 102.0% opwaarts (ratio 11.2:1),28.87,✓ 0.0% boven bodem (28.87),58.33,26.23,95.0,✓ 95.00%
+2026-06-22,048 Nasdaq/NYSE,MKTX,4,117.12,33.3,✓ oververkocht (33.3),✗ neutraal (-22.686),87.2,✓ 87.2% opwaarts (ratio 11.9:1),116.11,✓ 0.9% boven bodem (116.11),219.27,108.57,259.0,✓ 259.00%
+2026-06-22,048 Nasdaq/NYSE,ERIE,4,211.65,34.7,✓ oververkocht (34.7),✗ neutraal (-30.258),71.7,✓ 71.7% opwaarts (ratio 10.2:1),207.24,✓ 2.1% boven bodem (207.24),363.37,196.76,264.0,✓ 264.00%
+2026-06-22,048 Nasdaq/NYSE,EFX,4,153.49,33.3,✓ oververkocht (33.3),✗ neutraal (-19.590),71.3,✓ 71.3% opwaarts (ratio 8.2:1),153.49,✓ 0.0% boven bodem (153.49),262.95,140.2,146.0,✓ 146.00%
+2026-06-22,048 Nasdaq/NYSE,MKC,4,45.73,31.2,✓ oververkocht (31.2),✗ neutraal (-6.283),64.8,✓ 64.8% opwaarts (ratio 10.7:1),45.6,✓ 0.3% boven bodem (45.60),75.37,42.96,412.0,✓ 412.00%
+2026-06-22,048 Nasdaq/NYSE,CMCSA,4,22.32,34.9,✓ oververkocht (34.9),✗ neutraal (-2.459),46.1,✓ 46.1% opwaarts (ratio 7.6:1),22.32,✓ 0.0% boven bodem (22.32),32.62,20.97,588.0,✓ 588.00%
+2026-06-22,048 Nasdaq/NYSE,GEHC,4,60.64,38.0,✓ oververkocht (38.0),✗ neutraal (-3.649),45.3,✓ 45.3% opwaarts (ratio 7.4:1),59.49,✓ 1.9% boven bodem (59.49),88.08,56.91,23.0,✓ 23.00%
+2026-06-22,048 Nasdaq/NYSE,TECH,4,55.61,44.6,✓ herstel (44.6 ↑),✓ bullish crossover,27.9,✓ 27.9% opwaarts (ratio 3.3:1),43.22,✗ 28.7% boven bodem (43.22),71.15,50.89,55.0,✓ 55.00%
+2026-06-22,048 Nasdaq/NYSE,TTD,3,18.02,32.0,✓ oververkocht (32.0),✗ neutraal (-17.423),398.1,✓ 398.1% opwaarts (ratio 30.6:1),18.02,✓ 0.0% boven bodem (18.02),89.76,15.67,0.0,✗ geen dividend
+2026-06-22,048 Nasdaq/NYSE,BSX,3,44.33,25.2,✓ oververkocht (25.2),✗ neutraal (-5.284),143.9,✓ 143.9% opwaarts (ratio 19.1:1),44.33,✓ 0.0% boven bodem (44.33),108.14,41.0,0.0,✗ geen dividend
+2026-06-22,048 Nasdaq/NYSE,WDAY,3,113.04,30.2,✓ oververkocht (30.2),✗ neutraal (-29.919),119.1,✓ 119.1% opwaarts (ratio 9.3:1),112.5,✓ 0.5% boven bodem (112.50),247.69,98.52,0.0,✗ geen dividend
+2026-06-22,048 Nasdaq/NYSE,FDS,3,218.62,30.2,✓ oververkocht (30.2),✗ neutraal (-53.428),102.5,✓ 102.5% opwaarts (ratio 9.8:1),188.17,✗ 16.2% boven bodem (188.17),442.75,195.64,210.0,✓ 210.00%
+2026-06-22,048 Nasdaq/NYSE,ADBE,3,194.9,29.2,✓ oververkocht (29.2),✗ neutraal (-66.479),101.2,✓ 101.2% opwaarts (ratio 9.5:1),194.9,✓ 0.0% boven bodem (194.90),392.1,174.05,0.0,✗ geen dividend
+2026-06-22,048 Nasdaq/NYSE,PAYC,3,123.67,32.7,✓ oververkocht (32.7),✗ neutraal (-27.565),91.3,✓ 91.3% opwaarts (ratio 9.4:1),113.28,✗ 9.2% boven bodem (113.28),236.57,111.64,120.0,✓ 120.00%
+2026-06-22,048 Nasdaq/NYSE,BRO,3,58.24,34.3,✓ oververkocht (34.3),✗ neutraal (-7.755),88.8,✓ 88.8% opwaarts (ratio 14.7:1),54.38,✗ 7.1% boven bodem (54.38),109.97,54.72,109.0,✓ 109.00%
+2026-06-22,048 Nasdaq/NYSE,PTC,3,115.0,33.0,✓ oververkocht (33.0),✗ neutraal (-9.018),88.3,✓ 88.3% opwaarts (ratio 9.3:1),113.68,✓ 1.2% boven bodem (113.68),216.53,104.05,0.0,✗ geen dividend
+2026-06-22,048 Nasdaq/NYSE,PYPL,3,42.34,34.3,✓ oververkocht (34.3),✗ neutraal (-6.252),83.2,✓ 83.2% opwaarts (ratio 13.1:1),38.83,✗ 9.0% boven bodem (38.83),77.55,39.66,132.0,✓ 132.00%
+2026-06-22,048 Nasdaq/NYSE,ROP,3,325.09,25.5,✓ oververkocht (25.5),✗ neutraal (-50.363),74.9,✓ 74.9% opwaarts (ratio 12.6:1),314.73,✗ 3.3% boven bodem (314.73),568.6,305.7,110.0,✓ 110.00%
+2026-06-22,048 Nasdaq/NYSE,ADSK,3,187.72,32.2,✓ oververkocht (32.2),✗ neutraal (-6.905),74.1,✓ 74.1% opwaarts (ratio 7.2:1),187.72,✓ 0.0% boven bodem (187.72),326.79,168.39,0.0,✗ geen dividend
+2026-06-22,048 Nasdaq/NYSE,CPRT,3,29.48,30.8,✓ oververkocht (30.8),✗ neutraal (-5.033),69.5,✓ 69.5% opwaarts (ratio 11.0:1),29.48,✓ 0.0% boven bodem (29.48),49.97,27.61,0.0,✗ geen dividend
+2026-06-22,048 Nasdaq/NYSE,RMD,3,188.45,37.9,✓ oververkocht (37.9),✗ neutraal (-1.569),54.7,✓ 54.7% opwaarts (ratio 9.5:1),182.82,✗ 3.1% boven bodem (182.82),291.49,177.56,127.0,✓ 127.00%
+2026-06-22,048 Nasdaq/NYSE,ABT,3,87.83,36.1,✓ oververkocht (36.1),✗ neutraal (-4.512),54.1,✓ 54.1% opwaarts (ratio 11.3:1),82.56,✗ 6.4% boven bodem (82.56),135.32,83.61,285.0,✓ 285.00%
+2026-06-22,048 Nasdaq/NYSE,FOXA,3,49.39,45.9,✗ neutraal (45.9),✗ neutraal (5.182),53.3,✓ 53.3% opwaarts (ratio 4.6:1),49.39,✓ 0.0% boven bodem (49.39),75.74,43.72,107.0,✓ 107.00%
+2026-06-22,048 Nasdaq/NYSE,PNR,3,74.03,39.7,✓ oververkocht (39.7),✗ neutraal (-0.151),50.9,✓ 50.9% opwaarts (ratio 9.1:1),70.8,✗ 4.6% boven bodem (70.80),111.71,69.87,143.0,✓ 143.00%
+2026-06-22,048 Nasdaq/NYSE,FOX,3,44.93,45.5,✗ neutraal (45.5),✗ neutraal (4.394),50.0,✓ 50.0% opwaarts (ratio 4.6:1),44.93,✓ 0.0% boven bodem (44.93),67.4,40.04,119.0,✓ 119.00%
+2026-06-22,048 Nasdaq/NYSE,ICE,3,131.34,41.2,✗ neutraal (41.2),✗ neutraal (2.562),41.7,✓ 41.7% opwaarts (ratio 6.8:1),131.34,✓ 0.0% boven bodem (131.34),186.07,123.25,155.0,✓ 155.00%
+2026-06-22,048 Nasdaq/NYSE,ADP,3,214.6,39.9,✓ oververkocht (39.9),✗ neutraal (-9.867),41.2,✓ 41.2% opwaarts (ratio 7.6:1),187.37,✗ 14.5% boven bodem (187.37),302.98,203.02,311.0,✓ 311.00%
+2026-06-22,048 Nasdaq/NYSE,WTW,3,252.97,40.2,✓ herstel (40.2 ↑),✗ neutraal (-0.725),37.5,✓ 37.5% opwaarts (ratio 6.9:1),242.12,✗ 4.5% boven bodem (242.12),347.81,239.17,150.0,✓ 150.00%
+2026-06-22,048 Nasdaq/NYSE,SPGI,3,407.39,39.6,✓ oververkocht (39.6),✗ neutraal (-6.025),37.3,✓ 37.3% opwaarts (ratio 6.7:1),388.95,✗ 4.7% boven bodem (388.95),559.46,384.68,94.0,✓ 94.00%
+2026-06-22,048 Nasdaq/NYSE,XYL,3,111.77,42.4,✓ herstel (42.4 ↑),✗ neutraal (-0.536),35.5,✓ 35.5% opwaarts (ratio 8.1:1),105.92,✗ 5.5% boven bodem (105.92),151.41,106.85,154.0,✓ 154.00%
+2026-06-22,048 Nasdaq/NYSE,STE,3,200.4,40.5,✗ neutraal (40.5),✗ neutraal (-0.580),33.3,✓ 33.3% opwaarts (ratio 6.5:1),199.4,✓ 0.5% boven bodem (199.40),267.17,190.06,124.0,✓ 124.00%
+2026-06-22,048 Nasdaq/NYSE,CARR,3,71.85,58.7,✓ momentum (58.7 ↑),✓ bullish crossover,11.1,✗ 11.1% / ratio 1.6:1,49.97,✗ 43.8% boven bodem (49.97),79.79,66.96,134.0,✓ 134.00%
+2026-06-22,048 Nasdaq/NYSE,APD,3,283.11,51.2,✓ herstel (51.2 ↑),✓ histogram ↑ (1.545),8.2,✗ 8.2% / ratio 1.8:1,227.66,✗ 24.4% boven bodem (227.66),306.2,270.51,258.0,✓ 258.00%
+2026-06-22,048 Nasdaq/NYSE,VMC,3,304.39,57.4,✓ momentum (57.4 ↑),✓ bullish crossover,8.1,✗ 8.1% / ratio 1.4:1,252.8,✗ 20.4% boven bodem (252.80),329.09,286.48,69.0,✓ 69.00%
+2026-06-22,048 Nasdaq/NYSE,EG,3,339.3,51.0,✓ herstel (51.0 ↑),✓ bullish crossover,6.2,✗ 6.2% / ratio 1.4:1,301.22,✗ 12.6% boven bodem (301.22),360.44,323.92,238.0,✓ 238.00%
+2026-06-22,048 Nasdaq/NYSE,TROW,3,107.99,57.0,✓ momentum (57.0 ↑),✓ histogram ↑ (0.955),0.9,✗ 0.9% / ratio 0.2:1,85.17,✗ 26.8% boven bodem (85.17),108.94,103.53,483.0,✓ 483.00%
