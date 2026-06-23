@@ -1,0 +1,13 @@
+datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
+2026-06-23,047 Toronto,CLS.TO,5,499.31,95.4,146.3,84.6,72.1,23.5,0.85,459.37,True,True,False,False,True,True,True,83.7
+2026-06-23,047 Toronto,ATZ.TO,6,156.4,94.0,34.8,120.2,43.4,9.7,0.94,143.89,True,True,True,False,True,True,True,82.3
+2026-06-23,047 Toronto,ABX.TO,4,54.21,85.0,238.0,98.1,67.3,23.6,0.9,49.87,True,True,False,False,True,True,False,80.8
+2026-06-23,047 Toronto,HBM.TO,5,36.04,95.6,89.6,192.6,79.3,18.2,1.05,33.16,True,True,False,False,True,True,True,78.1
+2026-06-23,047 Toronto,LUN.TO,4,34.72,94.3,126.4,130.5,50.7,21.7,0.86,31.94,True,False,False,False,True,True,True,71.5
+2026-06-23,047 Toronto,TIH.TO,4,236.1,90.2,24.5,-3.6,44.2,2.0,1.15,217.21,False,False,True,False,True,True,True,68.0
+2026-06-23,047 Toronto,CVE.TO,4,36.58,86.8,82.8,-2.2,55.0,15.8,0.85,33.65,True,False,False,False,True,True,True,65.6
+2026-06-23,047 Toronto,IGM.TO,4,78.68,88.9,21.4,-2.1,9.2,5.7,0.81,72.39,False,False,True,False,True,True,True,57.8
+2026-06-23,047 Toronto,TFII.TO,4,205.21,86.4,-22.7,-21.6,80.5,9.9,1.14,188.79,False,False,True,False,True,True,True,57.3
+2026-06-23,047 Toronto,FTT.TO,4,98.33,83.9,16.3,12.2,47.5,9.0,0.83,90.46,False,False,True,False,True,True,True,56.8
+2026-06-23,047 Toronto,WCP.TO,4,15.7,84.1,-86.3,5.2,28.5,8.5,0.77,14.44,False,False,True,False,True,True,True,56.8
+2026-06-23,047 Toronto,CCO.TO,4,154.68,76.5,87.4,27.8,68.3,14.9,0.91,142.31,True,False,True,False,False,True,True,48.7
