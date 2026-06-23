@@ -1,0 +1,3 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-06-23,044 Spanje/Port,AMS.MC,3,52.3,37.7,✓ oververkocht (37.7),✗ neutraal (-3.199),37.6,✓ 37.6% opwaarts (ratio 6.2:1),46.64,✗ 12.1% boven bodem (46.64),71.97,49.15,300.0,✓ 300.00%
+2026-06-23,044 Spanje/Port,FDR.MC,3,18.87,44.3,✓ herstel (44.3 ↑),✗ neutraal (0.028),37.6,✓ 37.6% opwaarts (ratio 8.4:1),18.25,✗ 3.4% boven bodem (18.25),25.96,18.03,341.0,✓ 341.00%
