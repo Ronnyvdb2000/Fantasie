@@ -1,19 +1,7 @@
 {
-  "cash": 36185.130917,
-  "positions": {
-    "AZN.L": {
-      "entry_price": 13751.738,
-      "size": 1,
-      "stop": 12640.0,
-      "tp": 15682.0,
-      "systeem": "ORB",
-      "exchange": "045 Londen",
-      "days_open": 0,
-      "cost": 63.3520417905,
-      "intraday": true
-    }
-  },
-  "daily_pnl": 0.0,
+  "cash": 50015.84823767905,
+  "positions": {},
+  "daily_pnl": 15.62727888855079,
   "daily_start": "2026-06-24",
   "total_trades": 0
 }
