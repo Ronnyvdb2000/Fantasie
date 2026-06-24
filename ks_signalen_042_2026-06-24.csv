@@ -1,0 +1,16 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-06-24,042 Parijs,BIM.PA,4,68.15,29.3,✓ oververkocht (29.3),✗ neutraal (-6.203),85.7,✓ 85.7% opwaarts (ratio 16.5:1),66.6,✓ 2.3% boven bodem (66.60),126.56,64.61,147.0,✓ 147.00%
+2026-06-24,042 Parijs,CAP.PA,4,89.0,32.0,✓ oververkocht (32.0),✗ neutraal (-16.717),65.3,✓ 65.3% opwaarts (ratio 7.4:1),87.82,✓ 1.3% boven bodem (87.82),147.12,81.18,383.0,✓ 383.00%
+2026-06-24,042 Parijs,TEP.PA,4,51.38,36.5,✓ oververkocht (36.5),✓ histogram ↑ (0.404),63.2,✓ 63.2% opwaarts (ratio 6.5:1),42.91,✗ 19.7% boven bodem (42.91),83.84,46.41,840.0,✓ 840.00%
+2026-06-24,042 Parijs,RI.PA,4,66.24,27.7,✓ oververkocht (27.7),✓ histogram ↑ (0.481),51.0,✓ 51.0% opwaarts (ratio 10.1:1),59.94,✗ 10.5% boven bodem (59.94),100.02,62.9,729.0,✓ 729.00%
+2026-06-24,042 Parijs,RCO.PA,4,44.62,35.1,✓ oververkocht (35.1),✓ histogram ↑ (2.481),36.4,✓ 36.4% opwaarts (ratio 5.2:1),34.88,✗ 27.9% boven bodem (34.88),60.85,41.51,343.0,✓ 343.00%
+2026-06-24,042 Parijs,CDI.PA,4,458.4,40.5,✓ herstel (40.5 ↑),✓ histogram ↑ (0.911),30.1,✓ 30.1% opwaarts (ratio 4.8:1),412.47,✗ 11.1% boven bodem (412.47),596.16,429.56,320.0,✓ 320.00%
+2026-06-24,042 Parijs,MC.PA,4,493.0,41.2,✓ herstel (41.2 ↑),✓ bullish crossover,30.1,✓ 30.1% opwaarts (ratio 4.7:1),433.72,✗ 13.7% boven bodem (433.72),641.64,461.4,269.0,✓ 269.00%
+2026-06-24,042 Parijs,ITP.PA,4,25.96,38.6,✓ oververkocht (38.6),✓ bullish crossover,29.0,✓ 29.0% opwaarts (ratio 4.9:1),21.33,✗ 21.7% boven bodem (21.33),33.5,24.43,417.0,✓ 417.00%
+2026-06-24,042 Parijs,DSY.PA,3,17.39,28.3,✓ oververkocht (28.3),✗ neutraal (-4.841),83.3,✓ 83.3% opwaarts (ratio 10.9:1),15.75,✗ 10.4% boven bodem (15.75),31.87,16.07,155.0,✓ 155.00%
+2026-06-24,042 Parijs,SK.PA,3,48.52,37.9,✓ oververkocht (37.9),✗ neutraal (-10.398),64.9,✓ 64.9% opwaarts (ratio 9.5:1),39.35,✗ 23.3% boven bodem (39.35),80.0,45.21,564.0,✓ 564.00%
+2026-06-24,042 Parijs,WAVE.PA,3,39.9,41.2,✗ neutraal (41.2),✗ neutraal (-1.361),54.9,✓ 54.9% opwaarts (ratio 6.7:1),39.75,✓ 0.4% boven bodem (39.75),61.8,36.64,122.0,✓ 122.00%
+2026-06-24,042 Parijs,RMS.PA,3,1629.0,35.4,✓ oververkocht (35.4),✗ neutraal (-114.865),50.4,✓ 50.4% opwaarts (ratio 6.9:1),1564.0,✗ 4.2% boven bodem (1564.00),2449.32,1509.76,112.0,✓ 112.00%
+2026-06-24,042 Parijs,ANTIN.PA,3,9.04,42.9,✗ neutraal (42.9),✗ neutraal (-0.351),32.2,✓ 32.2% opwaarts (ratio 6.3:1),8.81,✓ 2.6% boven bodem (8.81),11.95,8.58,776.0,✓ 776.00%
+2026-06-24,042 Parijs,TRI.PA,3,133.6,47.8,✗ neutraal (47.8),✗ neutraal (8.043),31.4,✓ 31.4% opwaarts (ratio 4.7:1),133.6,✓ 0.0% boven bodem (133.60),175.54,124.59,296.0,✓ 296.00%
+2026-06-24,042 Parijs,ERF.PA,3,67.02,58.2,✓ momentum (58.2 ↑),✓ histogram ↑ (0.471),7.8,✗ 7.8% / ratio 1.8:1,56.08,✗ 19.5% boven bodem (56.08),72.26,64.05,110.0,✓ 110.00%

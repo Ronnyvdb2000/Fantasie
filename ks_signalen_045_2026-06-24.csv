@@ -1,0 +1,25 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-06-24,045 Londen,APTD.L,4,206.0,33.3,✓ oververkocht (33.3),✗ neutraal (-26.638),63.1,✓ 63.1% opwaarts (ratio 6.1:1),206.0,✓ 0.0% boven bodem (206.00),335.92,184.58,261.0,✓ 261.00%
+2026-06-24,045 Londen,REC.L,4,44.4,32.3,✓ oververkocht (32.3),✗ neutraal (-4.918),51.2,✓ 51.2% opwaarts (ratio 5.2:1),44.4,✓ 0.0% boven bodem (44.40),67.15,40.01,774.0,✓ 774.00%
+2026-06-24,045 Londen,BCG.L,3,192.5,39.5,✓ oververkocht (39.5),✗ neutraal (-21.451),96.1,✓ 96.1% opwaarts (ratio 11.2:1),170.8,✗ 12.7% boven bodem (170.80),377.45,176.01,179.0,✓ 179.00%
+2026-06-24,045 Londen,III.L,3,2273.0,37.4,✓ oververkocht (37.4),✗ neutraal (-121.035),96.1,✓ 96.1% opwaarts (ratio 12.9:1),2081.57,✗ 9.2% boven bodem (2081.57),4457.57,2103.58,371.0,✓ 371.00%
+2026-06-24,045 Londen,RMV.L,3,426.3,33.5,✓ oververkocht (33.5),✗ neutraal (-45.932),93.2,✓ 93.2% opwaarts (ratio 15.2:1),404.0,✗ 5.5% boven bodem (404.00),823.63,400.19,252.0,✓ 252.00%
+2026-06-24,045 Londen,CARD.L,3,63.9,38.6,✓ oververkocht (38.6),✗ neutraal (-8.117),73.0,✓ 73.0% opwaarts (ratio 9.0:1),60.07,✗ 6.4% boven bodem (60.07),110.53,58.73,805.0,✓ 805.00%
+2026-06-24,045 Londen,AUTO.L,3,489.2,35.3,✓ oververkocht (35.3),✗ neutraal (-70.612),71.2,✓ 71.2% opwaarts (ratio 11.7:1),427.2,✗ 14.5% boven bodem (427.20),837.27,459.39,237.0,✓ 237.00%
+2026-06-24,045 Londen,EXPN.L,3,2551.0,35.1,✓ oververkocht (35.1),✗ neutraal (-215.288),60.2,✓ 60.2% opwaarts (ratio 8.6:1),2375.0,✗ 7.4% boven bodem (2375.00),4087.81,2371.6,205.0,✓ 205.00%
+2026-06-24,045 Londen,LSL.L,3,214.0,38.1,✓ oververkocht (38.1),✗ neutraal (-16.184),52.3,✓ 52.3% opwaarts (ratio 6.0:1),205.0,✗ 4.4% boven bodem (205.00),325.84,195.37,543.0,✓ 543.00%
+2026-06-24,045 Londen,FORT.L,3,136.4,37.0,✓ oververkocht (37.0),✗ neutraal (-4.839),49.5,✓ 49.5% opwaarts (ratio 5.7:1),127.8,✗ 6.7% boven bodem (127.80),203.91,124.5,469.0,✓ 469.00%
+2026-06-24,045 Londen,MRO.L,3,477.8,44.6,✓ herstel (44.6 ↑),✗ neutraal (-9.460),42.7,✓ 42.7% opwaarts (ratio 7.1:1),448.2,✗ 6.6% boven bodem (448.20),681.74,449.2,152.0,✓ 152.00%
+2026-06-24,045 Londen,RAT.L,3,1620.0,41.6,✗ neutraal (41.6),✗ neutraal (50.245),39.8,✓ 39.8% opwaarts (ratio 4.8:1),1582.0,✓ 2.4% boven bodem (1582.00),2264.27,1486.41,611.0,✓ 611.00%
+2026-06-24,045 Londen,CTEC.L,3,209.4,44.9,✓ herstel (44.9 ↑),✗ neutraal (-5.327),38.1,✓ 38.1% opwaarts (ratio 7.1:1),194.0,✗ 7.9% boven bodem (194.00),289.14,198.12,260.0,✓ 260.00%
+2026-06-24,045 Londen,RKT.L,3,4778.0,38.7,✓ oververkocht (38.7),✗ neutraal (-88.661),36.3,✓ 36.3% opwaarts (ratio 4.4:1),4443.0,✗ 7.5% boven bodem (4443.00),6510.44,4387.74,463.0,✓ 463.00%
+2026-06-24,045 Londen,PSH.L,3,3774.0,46.9,✗ neutraal (46.9),✗ neutraal (133.675),34.9,✓ 34.9% opwaarts (ratio 6.0:1),3732.0,✓ 1.1% boven bodem (3732.00),5089.57,3556.41,146.0,✓ 146.00%
+2026-06-24,045 Londen,HIK.L,3,1527.0,43.2,✓ herstel (43.2 ↑),✗ neutraal (-141.100),32.7,✓ 32.7% opwaarts (ratio 7.5:1),1190.67,✗ 28.2% boven bodem (1190.67),2027.04,1460.52,407.0,✓ 407.00%
+2026-06-24,045 Londen,BREE.L,3,303.4,40.6,✓ herstel (40.6 ↑),✗ neutraal (-22.244),29.5,✓ 29.5% opwaarts (ratio 4.2:1),273.0,✗ 11.1% boven bodem (273.00),392.82,281.96,504.0,✓ 504.00%
+2026-06-24,045 Londen,ROR.L,3,305.2,45.7,✗ neutraal (45.7),✗ neutraal (-0.293),26.4,✓ 26.4% opwaarts (ratio 5.9:1),298.6,✓ 2.2% boven bodem (298.60),385.74,291.56,271.0,✓ 271.00%
+2026-06-24,045 Londen,LIO.L,3,331.0,42.6,✓ herstel (42.6 ↑),✓ histogram ↑ (8.780),24.7,✗ 24.7% / ratio 2.7:1,231.5,✗ 43.0% boven bodem (231.50),412.88,300.95,1939.0,✓ 1939.00%
+2026-06-24,045 Londen,JD.L,3,84.5,44.8,✓ herstel (44.8 ↑),✓ histogram ↑ (1.302),23.7,✗ 23.7% / ratio 3.2:1,65.28,✗ 29.4% boven bodem (65.28),104.55,78.25,144.0,✓ 144.00%
+2026-06-24,045 Londen,MONY.L,3,183.0,42.2,✓ herstel (42.2 ↑),✓ bullish crossover,20.9,✗ 20.9% / ratio 3.8:1,144.41,✗ 26.7% boven bodem (144.41),221.23,172.86,697.0,✓ 697.00%
+2026-06-24,045 Londen,FOUR.L,3,3720.0,45.9,✓ herstel (45.9 ↑),✓ histogram ↑ (20.915),19.0,✗ 19.0% / ratio 2.1:1,3054.02,✗ 21.8% boven bodem (3054.02),4428.58,3390.43,490.0,✓ 490.00%
+2026-06-24,045 Londen,FSTA.L,3,718.0,57.8,✓ momentum (57.8 ↑),✓ histogram ↑ (8.154),4.7,✗ 4.7% / ratio 0.5:1,547.94,✗ 31.0% boven bodem (547.94),752.0,643.64,294.0,✓ 294.00%
+2026-06-24,045 Londen,TET.L,3,303.5,45.6,✓ herstel (45.6 ↑),✓ histogram ↑ (15.472),0.0,✗ onvoldoende,184.97,✗ 64.1% boven bodem (184.97),303.5,299.48,185.0,✓ 185.00%
