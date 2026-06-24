@@ -1,0 +1,23 @@
+datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
+2026-06-24,045 Londen,OXIG.L,4,2916.0,79.0,1805.3,-2.5,65.9,11.7,1.18,2682.72,True,False,True,False,False,True,True,220.5
+2026-06-24,045 Londen,AAIF.L,5,335.0,78.8,501.6,190.8,45.9,4.8,1.17,308.2,True,True,True,False,False,True,True,110.2
+2026-06-24,045 Londen,CMCX.L,7,466.0,89.8,42.7,25.9,20.7,0.0,1.99,428.72,True,True,True,True,True,True,True,102.2
+2026-06-24,045 Londen,WOSG.L,6,707.5,90.7,53.6,-33.5,65.4,3.6,1.77,650.9,True,False,True,True,True,True,True,93.5
+2026-06-24,045 Londen,APN.L,5,307.0,95.4,73.0,23.6,25.9,0.0,0.62,282.44,True,False,True,False,True,True,True,86.4
+2026-06-24,045 Londen,PAF.L,4,97.45,86.9,206.9,52.5,66.6,46.9,0.96,89.65,True,True,False,False,True,True,False,78.1
+2026-06-24,045 Londen,KLR.L,5,2602.0,88.4,4.8,26.3,106.5,3.2,0.95,2393.84,False,True,True,False,True,True,True,77.7
+2026-06-24,045 Londen,LUCE.L,5,261.0,91.3,77.9,10.3,16.1,10.0,0.53,240.12,True,False,True,False,True,True,True,76.1
+2026-06-24,045 Londen,CABP.L,4,79.5,83.9,183.4,-22.7,45.4,17.6,0.76,73.14,True,False,False,False,True,True,True,75.1
+2026-06-24,045 Londen,SDR.L,5,585.0,77.6,85.5,15.8,35.7,0.4,1.76,538.2,True,False,True,True,False,True,True,68.5
+2026-06-24,045 Londen,EMG.L,4,296.6,85.3,-7.5,-13.5,40.8,0.9,0.73,272.87,False,False,True,False,True,True,True,67.1
+2026-06-24,045 Londen,HILS.L,4,2790.0,84.1,4.8,9.5,55.6,3.0,0.99,2566.8,False,False,True,False,True,True,True,66.8
+2026-06-24,045 Londen,CPG.L,4,32.45,81.2,16.3,7.8,76.1,4.3,0.76,29.85,False,False,True,False,True,True,True,66.2
+2026-06-24,045 Londen,COST.L,5,207.0,70.7,35.1,29.9,42.6,1.7,0.74,190.44,True,True,True,False,False,True,True,63.5
+2026-06-24,045 Londen,ANTO.L,4,3650.0,89.3,41.7,26.1,22.5,18.1,0.67,3358.0,True,False,False,False,True,True,True,62.0
+2026-06-24,045 Londen,ECOR.L,4,137.4,92.0,0.0,411.8,36.6,10.0,0.8,126.41,False,False,True,False,True,True,True,58.4
+2026-06-24,045 Londen,RIO.L,4,7163.0,84.4,-5.3,-0.5,47.3,13.8,0.66,6589.96,False,False,True,False,True,True,True,56.9
+2026-06-24,045 Londen,DPLM.L,4,7040.0,75.8,4.7,25.3,83.0,2.6,0.75,6476.8,False,True,True,False,False,True,True,50
+2026-06-24,045 Londen,HSX.L,4,1810.0,74.2,2.4,-7.9,70.6,2.6,1.31,1665.2,False,False,True,True,False,True,True,50
+2026-06-24,045 Londen,IPF.L,4,247.5,70.4,-43.7,6.3,95.9,2.9,1.39,227.7,False,False,True,True,False,True,True,50
+2026-06-24,045 Londen,TATE.L,4,556.5,72.2,0.0,-28.2,66.5,2.2,1.68,511.98,False,False,True,True,False,True,True,50
+2026-06-24,045 Londen,TET.L,4,303.5,76.3,-33.6,-32.0,50.4,0.0,2.46,279.22,False,False,True,True,False,True,True,50
