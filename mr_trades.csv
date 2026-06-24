@@ -1,0 +1,2 @@
+datum,ticker,systeem,side,price,size,cost,pnl,tax,net,reason
+2026-06-24,AZN.L,ORB,BUY,13751.738,1,63.3520417905,0,0,0,ORB breakout
