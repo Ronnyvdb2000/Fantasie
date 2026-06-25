@@ -963,6 +963,8 @@ def run_eod():
     mr_entries: Dict[str, List[MRSignaal]]     = {}
     mr_exits:   Dict[str, List[MRExitSignaal]] = {}
 
+    email_delen: List[str] = []
+  
     for ex_name, tlist in exchange_tickers.items():
         df_ex = df[df["Ticker"].isin(tlist)].copy()
         entries, exits = generate_mr_signals(df_ex, ex_name)
