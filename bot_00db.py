@@ -602,6 +602,8 @@ def run_live_engine():
     exchange_tickers: Dict[str, List[str]] = {}
     all_tickers: List[str] = []
 
+    email_delen: List[str] = []  
+  
     for ex_name, path in EXCHANGES.items():
         tlist = load_tickers_from_file(path)
         if tlist:
