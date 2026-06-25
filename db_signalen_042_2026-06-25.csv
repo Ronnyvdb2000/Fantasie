@@ -1,0 +1,16 @@
+datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
+2026-06-25,042 Parijs,AC.PA,5,51.62,48.15,49.05,8,True,1.7,True,True,73.5
+2026-06-25,042 Parijs,CS.PA,4,43.09,39.03,39.86,18,True,0.67,True,True,55
+2026-06-25,042 Parijs,ELIS.PA,4,27.36,26.68,27.04,5,True,1.1,True,True,55
+2026-06-25,042 Parijs,SAF.PA,4,343.7,329.4,338.7,5,True,1.01,True,True,55
+2026-06-25,042 Parijs,TRI.PA,3,139.0,133.6,136.0,5,True,1.7,False,False,48.5
+2026-06-25,042 Parijs,VIL.PA,3,17.92,17.8,18.34,7,False,2.09,False,True,40.4
+2026-06-25,042 Parijs,AI.PA,3,171.4,164.16,168.36,6,True,0.67,False,True,40
+2026-06-25,042 Parijs,AIR.PA,3,195.08,174.96,179.26,14,True,0.77,False,True,40
+2026-06-25,042 Parijs,BN.PA,3,69.98,65.06,66.58,8,True,0.94,False,True,40
+2026-06-25,042 Parijs,ERF.PA,3,68.28,62.52,63.9,8,True,0.73,False,True,40
+2026-06-25,042 Parijs,IPN.PA,3,162.2,154.5,158.6,13,True,0.59,False,True,40
+2026-06-25,042 Parijs,OR.PA,3,387.95,376.0,387.5,6,True,0.65,False,True,40
+2026-06-25,042 Parijs,SCR.PA,3,31.82,31.14,31.62,8,True,1.15,False,True,40
+2026-06-25,042 Parijs,SGO.PA,3,81.76,77.32,80.56,5,True,1.1,False,True,40
+2026-06-25,042 Parijs,SU.PA,3,279.55,279.5,293.7,4,False,0.66,True,True,35
