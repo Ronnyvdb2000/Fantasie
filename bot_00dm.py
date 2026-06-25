@@ -720,6 +720,8 @@ def run_live_engine():
 
     portfolio_waarde = START_CAPITAL
 
+    email_delen: List[str] = []
+  
     for ex_name, tlist in exchange_tickers.items():
         print(f"\nAnalyseren: {ex_name}...")
         tlist_set = set(tlist)
