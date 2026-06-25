@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-06-25,047 Toronto,IAG.TO,4,192.53,5,4.28,172.0864,167.05,True,0.97,True,False,False,False,95
+2026-06-25,047 Toronto,WCN.TO,4,235.96,3,8.69,232.2035,200.83,True,1.61,False,False,False,False,75
+2026-06-25,047 Toronto,BAM.TO,4,63.36,3,7.68,68.056,61.84,False,0.63,False,False,True,False,55
