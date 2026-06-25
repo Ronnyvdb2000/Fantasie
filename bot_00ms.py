@@ -803,6 +803,8 @@ def run_live_engine():
 
     portfolio_waarde = START_CAPITAL
 
+    email_delen: List[str] = []
+  
     for ex_name, tlist in exchange_tickers.items():
         print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
         df_ex = df[df["Ticker"].isin(tlist)].copy()
