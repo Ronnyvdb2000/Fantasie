@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-06-26,044 Spanje/Port,AENA.MC,4,27.3,4,5.76,25.1078,23.3,True,0.32,True,False,False,False,90
+2026-06-26,044 Spanje/Port,VID.MC,4,83.1,5,5.24,87.3,73.31,False,0.98,False,False,True,False,65
+2026-06-26,044 Spanje/Port,VIS.MC,4,58.6,3,3.72,58.9206,56.62,False,0.86,True,False,False,False,65
