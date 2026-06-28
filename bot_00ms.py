@@ -3,7 +3,6 @@
 """
 bot_00ms.py  —  MINERVINI SEPA ENGINE v1.0
 Gebaseerd op Mark Minervini's SEPA methodologie (Specific Entry Point Analysis).
-Zelfde structuur, tickerbestanden en Telegram output als bot_00xxxV2.py.
 
 Criteria — 8-punt Trend Template + VCP:
   TREND TEMPLATE (Stage 2 uptrend — alle 8 verplicht):
@@ -14,19 +13,17 @@ Criteria — 8-punt Trend Template + VCP:
     5. Close > MA50
     6. Close binnen 25% van 52-weekse high
     7. Close minstens 30% boven 52-weekse low
-    8. RS Rating ≥ 70 (relatieve sterkte vs. universe)
+    8. RS Rating >= 70 (relatieve sterkte vs. universe)
 
-  VCP SCORE (0-4 punten — entry timing):
-    1. Volatiliteit contractie — ATR daalt over 3 periodes
-    2. Volume droogvalt — volume daalt naar lows van consolidatie
-    3. Pullback verkleint — elke correctie kleiner dan vorige
-    4. Pivot breakout — prijs doorbreekt recente weerstand op volume
+  VCP SCORE (0-4 punten):
+    1. Volatiliteit contractie — ATR daalt
+    2. Volume droogvalt
+    3. Pullback verkleint
+    4. Pivot breakout op volume
 
 Gebruik:
-  python bot_00ms.py          # live rapport
+  python bot_00ms.py live     # live rapport
   python bot_00ms.py backtest # backtest modus
-
-GitHub Actions: dagelijks om 21:50 UTC (na bot_00xxxV2 en bot_00kr)
 """
 
 import os
@@ -36,16 +33,16 @@ import csv
 import warnings
 import datetime as dt
 import time
+import smtplib
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
 import requests
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -58,7 +55,6 @@ MAX_POSITIONS        = 10
 MIN_CASH_RATIO       = 0.10
 RISICO_PCT_PER_TRADE = 0.05
 SLIPPAGE_PCT         = 0.001
-
 TRADE_COST_FIXED     = 15.0
 TRADE_COST_PCT       = 0.0035
 TAX_RATE             = 0.10
@@ -81,26 +77,21 @@ EXCHANGES = {
     "048 Nasdaq/NYSE": "tickers_048x.txt",
 }
 
-# Minervini SEPA parameters
 MS_CFG = {
-    # Trend Template MAs
-    "ma_fast":          50,
-    "ma_mid":           150,
-    "ma_slow":          200,
-    # Stage 2 criteria
-    "max_from_high_pct":   25.0,   # max 25% onder 52-weekse high
-    "min_from_low_pct":    30.0,   # min 30% boven 52-weekse low
-    "rs_min":              70,     # min RS rating (0-99)
-    # VCP parameters
+    "ma_fast":             50,
+    "ma_mid":              150,
+    "ma_slow":             200,
+    "max_from_high_pct":   25.0,
+    "min_from_low_pct":    30.0,
+    "rs_min":              70,
     "atr_period":          14,
-    "vcp_lookback":        60,     # dagen voor VCP detectie
-    "vol_contraction_pct": 20.0,   # ATR moet X% gedaald zijn
-    "volume_dry_pct":      30.0,   # volume moet X% onder gem. zijn
-    "pivot_lookback":      20,     # dagen voor pivot weerstand
-    "pivot_breakout_vol":  1.5,    # volume moet X× gem. zijn bij breakout
-    # Stop en TP
-    "stop_pct":            8.0,    # Minervini: max 7-8% stop
-    "min_score":           2,      # min VCP score om te rapporteren (0-4)
+    "vcp_lookback":        60,
+    "vol_contraction_pct": 20.0,
+    "volume_dry_pct":      30.0,
+    "pivot_lookback":      20,
+    "pivot_breakout_vol":  1.5,
+    "stop_pct":            8.0,
+    "min_score":           2,
 }
 
 BACKTEST_START = "2021-01-01"
@@ -108,7 +99,7 @@ BACKTEST_END   = dt.date.today().isoformat()
 
 
 # ============================================================
-# HULPFUNCTIES  (identiek aan bot_00xxxV2.py)
+# HULPFUNCTIES
 # ============================================================
 
 def trade_cost(amount: float) -> float:
@@ -156,7 +147,6 @@ def send_telegram_message(text: str) -> None:
         print(f"Telegram fout: {e}")
 
 def send_email(subject: str, body: str) -> None:
-    """Verstuurt rapport via Gmail SMTP."""
     if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
         return
     try:
@@ -185,7 +175,7 @@ def _yahoo_link(ticker: str) -> str:
 
 
 # ============================================================
-# ATR SIZING  (identiek aan bot_00xxxV2.py — 5% risico)
+# ATR SIZING
 # ============================================================
 
 def bereken_positie(
@@ -204,29 +194,21 @@ def bereken_positie(
 
 def sizing_tekst(ticker, prijs, stop, resistance, portfolio_waarde) -> str:
     entry       = prijs * (1 + SLIPPAGE_PCT)
-    stop_slip   = stop
-    aandelen, max_loss = bereken_positie(portfolio_waarde, entry, stop_slip)
+    aandelen, max_loss = bereken_positie(portfolio_waarde, entry, stop)
     tp          = resistance
     investering = round(entry * aandelen, 2)
     slip_est    = round(entry * SLIPPAGE_PCT * aandelen * 2, 2)
     kosten      = round(trade_cost(investering), 2)
-    rr          = ((tp - entry) / (entry - stop_slip)) if (entry - stop_slip) > 0 else 0
+    rr          = ((tp - entry) / (entry - stop)) if (entry - stop) > 0 else 0
     return (
-        f"  📐 *Sizing:*\n"
-        f"  Entry geschat : EUR{entry:.2f}\n"
-        f"  Stop-Loss     : EUR{stop_slip:.2f}  ({MS_CFG['stop_pct']:.0f}% max)\n"
-        f"  Take-Profit   : EUR{tp:.2f}  (pivot weerstand)\n"
-        f"  R/R ratio     : {rr:.1f}:1\n"
-        f"  Aandelen      : {aandelen} stuks\n"
-        f"  Investering   : EUR{investering:,.2f}\n"
-        f"  Max verlies   : EUR{max_loss:,.2f}  (5% portfolio)\n"
-        f"  Slippage est. : EUR{slip_est:.2f}\n"
-        f"  Kosten        : EUR{kosten:.2f}"
+        f"  Entry: EUR{entry:.2f} | Stop: EUR{stop:.2f} | TP: EUR{tp:.2f}\n"
+        f"  R/R: {rr:.1f}:1 | {aandelen} stuks | EUR{investering:,.2f}\n"
+        f"  Max verlies: EUR{max_loss:,.2f} | Kosten: EUR{kosten:.2f}"
     )
 
 
 # ============================================================
-# DATA DOWNLOAD  (identiek aan bot_00xxxV2.py)
+# DATA DOWNLOAD
 # ============================================================
 
 def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
@@ -247,7 +229,6 @@ def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
         return None
     df["Ticker"] = ticker
     return df
-
 
 def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
     if not tickers:
@@ -300,7 +281,6 @@ def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
 
     if not frames:
         return pd.DataFrame()
-
     df = pd.concat(frames, ignore_index=True)
     if "Date" in df.columns:
         df["Date"] = pd.to_datetime(df["Date"])
@@ -326,9 +306,7 @@ def _wilder_smooth(series: pd.Series, period: int) -> pd.Series:
         )
     return result
 
-
 def add_indicators(df: pd.DataFrame, universe_rs: Dict[str, float]) -> pd.DataFrame:
-    """For-loop per ticker — voegt MA50/150/200, ATR, Volume MA, RS toe."""
     parts = []
     for ticker, group in df.groupby("Ticker", sort=False):
         g     = group.copy()
@@ -337,82 +315,56 @@ def add_indicators(df: pd.DataFrame, universe_rs: Dict[str, float]) -> pd.DataFr
         low   = g["Low"]
         vol   = g["Volume"]
 
-        g["MA50"]  = close.rolling(MS_CFG["ma_fast"]).mean()
-        g["MA150"] = close.rolling(MS_CFG["ma_mid"]).mean()
-        g["MA200"] = close.rolling(MS_CFG["ma_slow"]).mean()
-
-        # MA200 richting: stijgt over laatste 20 handelsdagen
+        g["MA50"]        = close.rolling(MS_CFG["ma_fast"]).mean()
+        g["MA150"]       = close.rolling(MS_CFG["ma_mid"]).mean()
+        g["MA200"]       = close.rolling(MS_CFG["ma_slow"]).mean()
         g["MA200_slope"] = g["MA200"].diff(20)
 
-        # ATR14
         hl  = high - low
         hcp = (high - close.shift()).abs()
         lcp = (low  - close.shift()).abs()
         tr  = pd.concat([hl, hcp, lcp], axis=1).max(axis=1)
-        g["ATR14"] = _wilder_smooth(tr, 14)
-
-        # Volume MA20
+        g["ATR14"]  = _wilder_smooth(tr, 14)
         g["VolMA20"] = vol.rolling(20).mean()
-
-        # 52-weekse high/low
         g["High52w"] = close.rolling(252).max()
         g["Low52w"]  = close.rolling(252).min()
-
-        # RS Rating (relatieve sterkte vs. universe — 0-99)
-        g["RS"] = universe_rs.get(ticker, 50.0)
-
-        g["Ticker"] = ticker
+        g["RS"]      = universe_rs.get(ticker, 50.0)
+        g["Ticker"]  = ticker
         parts.append(g)
 
     if not parts:
         return df
     return pd.concat(parts).sort_values(["Ticker", "Date"]).reset_index(drop=True)
 
-
 def compute_rs_ratings(df: pd.DataFrame) -> Dict[str, float]:
-    """
-    Berekent RS Rating per ticker: 12-maands prijsprestatie
-    gerangschikt als percentiel binnen het universe (0-99).
-    Gewogen: laatste kwartaal telt dubbel (Minervini stijl).
-    """
     rs_map: Dict[str, float] = {}
-    perf: Dict[str, float] = {}
-
+    perf:   Dict[str, float] = {}
     for ticker, group in df.groupby("Ticker", sort=False):
         g = group.sort_values("Date")
         if len(g) < 252:
             continue
-        c_now  = safe_float(g["Close"].iloc[-1])
-        c_3m   = safe_float(g["Close"].iloc[-63])   # ~3 maanden
-        c_12m  = safe_float(g["Close"].iloc[-252])  # ~12 maanden
+        c_now = safe_float(g["Close"].iloc[-1])
+        c_3m  = safe_float(g["Close"].iloc[-63])
+        c_12m = safe_float(g["Close"].iloc[-252])
         if math.isnan(c_now) or math.isnan(c_12m) or c_12m <= 0 or c_3m <= 0:
             continue
-        # Gewogen: 40% laatste kwartaal, 60% rest van het jaar
-        perf_3m  = (c_now - c_3m)  / c_3m
-        perf_12m = (c_now - c_12m) / c_12m
-        perf[ticker] = 0.4 * perf_3m + 0.6 * perf_12m
+        perf[ticker] = 0.4 * (c_now - c_3m) / c_3m + 0.6 * (c_now - c_12m) / c_12m
 
     if not perf:
         return rs_map
-
     values = sorted(perf.values())
     n = len(values)
     for ticker, p in perf.items():
         rank = sum(1 for v in values if v < p)
         rs_map[ticker] = round((rank / n) * 99, 1)
-
     return rs_map
 
 
 # ============================================================
-# TREND TEMPLATE  (8 criteria — allemaal verplicht)
+# TREND TEMPLATE
 # ============================================================
 
 def check_trend_template(row: pd.Series) -> Tuple[bool, List[str]]:
-    """
-    Controleert alle 8 Minervini Trend Template criteria.
-    Geeft (passed, detail_list) terug.
-    """
     close  = safe_float(row.get("Close"))
     ma50   = safe_float(row.get("MA50"))
     ma150  = safe_float(row.get("MA150"))
@@ -433,70 +385,48 @@ def check_trend_template(row: pd.Series) -> Tuple[bool, List[str]]:
             checks.append(f"✗ {fail_msg}")
             passed = False
 
-    # 1. Close > MA150 en MA200
     chk(not math.isnan(close) and not math.isnan(ma150) and not math.isnan(ma200)
         and close > ma150 and close > ma200,
-        f"Close>{MS_CFG['ma_mid']}/{MS_CFG['ma_slow']}MA",
-        f"Close niet boven MA150/MA200")
-
-    # 2. MA150 > MA200
+        f"Close>MA150/MA200", f"Close niet boven MA150/MA200")
     chk(not math.isnan(ma150) and not math.isnan(ma200) and ma150 > ma200,
-        "MA150>MA200",
-        "MA150 niet boven MA200")
-
-    # 3. MA200 stijgt
+        "MA150>MA200", "MA150 niet boven MA200")
     chk(not math.isnan(ma200s) and ma200s > 0,
-        "MA200 stijgt",
-        "MA200 daalt/vlak")
-
-    # 4. MA50 > MA150 en MA200
+        "MA200 stijgt", "MA200 daalt/vlak")
     chk(not math.isnan(ma50) and not math.isnan(ma150) and not math.isnan(ma200)
         and ma50 > ma150 and ma50 > ma200,
-        "MA50>MA150/MA200",
-        "MA50 niet boven MA150/MA200")
-
-    # 5. Close > MA50
+        "MA50>MA150/MA200", "MA50 niet boven MA150/MA200")
     chk(not math.isnan(close) and not math.isnan(ma50) and close > ma50,
-        "Close>MA50",
-        "Close niet boven MA50")
+        "Close>MA50", "Close niet boven MA50")
 
-    # 6. Binnen 25% van 52-weekse high
     if not math.isnan(h52) and h52 > 0:
         pct_from_high = (h52 - close) / h52 * 100
         chk(pct_from_high <= MS_CFG["max_from_high_pct"],
-            f"{pct_from_high:.1f}% onder 52w high (≤25%)",
+            f"{pct_from_high:.1f}% onder 52w high (<=25%)",
             f"{pct_from_high:.1f}% onder 52w high (>25%)")
     else:
         checks.append("✗ geen 52w high data")
         passed = False
 
-    # 7. Minstens 30% boven 52-weekse low
     if not math.isnan(l52) and l52 > 0:
         pct_from_low = (close - l52) / l52 * 100
         chk(pct_from_low >= MS_CFG["min_from_low_pct"],
-            f"{pct_from_low:.1f}% boven 52w low (≥30%)",
+            f"{pct_from_low:.1f}% boven 52w low (>=30%)",
             f"{pct_from_low:.1f}% boven 52w low (<30%)")
     else:
         checks.append("✗ geen 52w low data")
         passed = False
 
-    # 8. RS Rating ≥ 70
     chk(rs >= MS_CFG["rs_min"],
-        f"RS={rs:.0f} (≥70)",
-        f"RS={rs:.0f} (<70)")
+        f"RS={rs:.0f} (>=70)", f"RS={rs:.0f} (<70)")
 
     return passed, checks
 
 
 # ============================================================
-# VCP DETECTIE  (score 0-4)
+# VCP DETECTIE
 # ============================================================
 
 def detect_vcp(g: pd.DataFrame) -> Tuple[int, List[str], float, float]:
-    """
-    Detecteert Volatility Contraction Pattern.
-    Geeft (score, detail_list, pivot_prijs, stop_prijs) terug.
-    """
     score   = 0
     details = []
     close   = g["Close"]
@@ -507,24 +437,21 @@ def detect_vcp(g: pd.DataFrame) -> Tuple[int, List[str], float, float]:
     if len(g) < MS_CFG["vcp_lookback"] + 10:
         return 0, ["onvoldoende data"], float("nan"), float("nan")
 
-    recent     = g.iloc[-MS_CFG["vcp_lookback"]:]
+    recent      = g.iloc[-MS_CFG["vcp_lookback"]:]
     very_recent = g.iloc[-MS_CFG["pivot_lookback"]:]
 
-    # ── 1. Volatiliteit contractie ──────────────────────────────
-    # ATR nu vs. ATR begin van VCP window
     atr_now   = safe_float(atr.iloc[-1])
     atr_start = safe_float(atr.iloc[-MS_CFG["vcp_lookback"]])
     if not math.isnan(atr_now) and not math.isnan(atr_start) and atr_start > 0:
         contraction = (atr_start - atr_now) / atr_start * 100
         if contraction >= MS_CFG["vol_contraction_pct"]:
             score += 1
-            details.append(f"✓ ATR contractie {contraction:.1f}% (min {MS_CFG['vol_contraction_pct']}%)")
+            details.append(f"✓ ATR contractie {contraction:.1f}%")
         else:
             details.append(f"✗ ATR contractie {contraction:.1f}% (min {MS_CFG['vol_contraction_pct']}%)")
     else:
         details.append("✗ ATR data onvoldoende")
 
-    # ── 2. Volume droogvalt bij lows ────────────────────────────
     vol_now  = safe_float(volume.iloc[-1])
     vol_mean = safe_float(vol_ma.iloc[-1])
     if not math.isnan(vol_now) and not math.isnan(vol_mean) and vol_mean > 0:
@@ -533,12 +460,10 @@ def detect_vcp(g: pd.DataFrame) -> Tuple[int, List[str], float, float]:
             score += 1
             details.append(f"✓ Volume droogvalt {vol_ratio:.0f}% van gem.")
         else:
-            details.append(f"✗ Volume {vol_ratio:.0f}% van gem. (max {100-MS_CFG['volume_dry_pct']:.0f}%)")
+            details.append(f"✗ Volume {vol_ratio:.0f}% van gem.")
     else:
         details.append("✗ Volume data onvoldoende")
 
-    # ── 3. Pullbacks worden kleiner ─────────────────────────────
-    # Splits VCP window in 3 gelijke delen, vergelijk range
     n = len(recent)
     third = n // 3
     if third >= 5:
@@ -550,22 +475,16 @@ def detect_vcp(g: pd.DataFrame) -> Tuple[int, List[str], float, float]:
         range3 = float(r3.max() - r3.min())
         if range1 > 0 and range2 < range1 and range3 < range2:
             score += 1
-            details.append(
-                f"✓ Pullbacks krimpen: {range1:.2f}→{range2:.2f}→{range3:.2f}"
-            )
+            details.append(f"✓ Pullbacks krimpen: {range1:.2f}->{range2:.2f}->{range3:.2f}")
         else:
-            details.append(
-                f"✗ Pullbacks krimpen niet: {range1:.2f}→{range2:.2f}→{range3:.2f}"
-            )
+            details.append(f"✗ Pullbacks krimpen niet: {range1:.2f}->{range2:.2f}->{range3:.2f}")
     else:
         details.append("✗ Onvoldoende data voor pullback analyse")
 
-    # ── 4. Pivot breakout ───────────────────────────────────────
-    # Prijs boven recent hoogste punt (pivot) op verhoogd volume?
-    pivot_high   = float(very_recent["Close"].iloc[:-1].max())  # hoogste excl. vandaag
-    current      = safe_float(close.iloc[-1])
+    pivot_high      = float(very_recent["Close"].iloc[:-1].max())
+    current         = safe_float(close.iloc[-1])
     vol_recent_mean = safe_float(vol_ma.iloc[-MS_CFG["pivot_lookback"]])
-    vol_today    = safe_float(volume.iloc[-1])
+    vol_today       = safe_float(volume.iloc[-1])
 
     breakout = (
         not math.isnan(current) and current > pivot_high
@@ -575,18 +494,13 @@ def detect_vcp(g: pd.DataFrame) -> Tuple[int, List[str], float, float]:
     )
     if breakout:
         score += 1
-        details.append(f"✓ Pivot breakout boven {pivot_high:.2f} op {vol_today/vol_recent_mean:.1f}× volume")
+        details.append(f"✓ Pivot breakout boven {pivot_high:.2f}")
     else:
         details.append(f"✗ Geen pivot breakout (pivot={pivot_high:.2f})")
 
-    # ── Stop en pivot prijs ─────────────────────────────────────
-    # Stop: laagste close in recente consolidatie
     stop_prijs  = float(very_recent["Close"].min())
-    # Extra marge: max 8% stop (Minervini regel)
     stop_max    = current * (1 - MS_CFG["stop_pct"] / 100)
     stop_prijs  = max(stop_prijs, stop_max)
-
-    # Pivot = weerstand = hoogste punt van VCP window
     pivot_prijs = float(recent["Close"].max())
 
     return score, details, pivot_prijs, stop_prijs
@@ -598,20 +512,19 @@ def detect_vcp(g: pd.DataFrame) -> Tuple[int, List[str], float, float]:
 
 @dataclass
 class SEPASignaal:
-    ticker:          str
-    price:           float
-    trend_passed:    bool
-    trend_details:   List[str]
-    vcp_score:       int          # 0-4
-    vcp_details:     List[str]
-    pivot:           float        # weerstand / TP
-    stop:            float
-    rs:              float
-    pct_from_high:   float
-    pct_from_low:    float
-    atr:             float
-    total_score:     float        # gewogen totaal voor ranking
-
+    ticker:        str
+    price:         float
+    trend_passed:  bool
+    trend_details: List[str]
+    vcp_score:     int
+    vcp_details:   List[str]
+    pivot:         float
+    stop:          float
+    rs:            float
+    pct_from_high: float
+    pct_from_low:  float
+    atr:           float
+    total_score:   float
 
 def analyse_ticker(ticker: str, g: pd.DataFrame) -> Optional[SEPASignaal]:
     try:
@@ -624,20 +537,14 @@ def analyse_ticker(ticker: str, g: pd.DataFrame) -> Optional[SEPASignaal]:
         if current_price <= 0 or math.isnan(current_price):
             return None
 
-        # ── Trend Template ──────────────────────────────────────
         trend_passed, trend_details = check_trend_template(last)
-
-        # Alleen rapporteren als Trend Template slaagt
         if not trend_passed:
             return None
 
-        # ── VCP ─────────────────────────────────────────────────
         vcp_score, vcp_details, pivot, stop = detect_vcp(g)
-
         if vcp_score < MS_CFG["min_score"]:
             return None
 
-        # ── Extra metrics ───────────────────────────────────────
         h52 = safe_float(last.get("High52w"))
         l52 = safe_float(last.get("Low52w"))
         rs  = safe_float(last.get("RS"), 0.0)
@@ -645,120 +552,85 @@ def analyse_ticker(ticker: str, g: pd.DataFrame) -> Optional[SEPASignaal]:
 
         pct_from_high = ((h52 - current_price) / h52 * 100) if h52 > 0 else 0.0
         pct_from_low  = ((current_price - l52) / l52 * 100) if l52 > 0 else 0.0
-
-        # Totaal score voor ranking: RS + VCP score gewogen
-        total_score = rs * 0.4 + vcp_score * 15 + (25 - pct_from_high) * 0.5
+        total_score   = rs * 0.4 + vcp_score * 15 + (25 - pct_from_high) * 0.5
 
         return SEPASignaal(
-            ticker=ticker,
-            price=round(current_price, 2),
-            trend_passed=trend_passed,
-            trend_details=trend_details,
-            vcp_score=vcp_score,
-            vcp_details=vcp_details,
-            pivot=round(pivot, 2),
-            stop=round(stop, 2),
-            rs=round(rs, 1),
-            pct_from_high=round(pct_from_high, 1),
-            pct_from_low=round(pct_from_low, 1),
-            atr=round(atr, 4),
+            ticker=ticker, price=round(current_price, 2),
+            trend_passed=trend_passed, trend_details=trend_details,
+            vcp_score=vcp_score, vcp_details=vcp_details,
+            pivot=round(pivot, 2), stop=round(stop, 2),
+            rs=round(rs, 1), pct_from_high=round(pct_from_high, 1),
+            pct_from_low=round(pct_from_low, 1), atr=round(atr, 4),
             total_score=round(total_score, 1),
         )
-
     except Exception as e:
         print(f"[WARN] {ticker}: fout — {e}")
         return None
 
 
 # ============================================================
-# TELEGRAM OUTPUT  (zelfde stijl als bot_00xxxV2.py)
+# TELEGRAM + EMAIL OUTPUT
 # ============================================================
 
 def _vcp_bar(score: int) -> str:
-    filled = "█" * score
-    empty  = "░" * (4 - score)
-    return f"{filled}{empty} {score}/4"
+    return "█" * score + "░" * (4 - score) + f" {score}/4"
 
+def format_bericht(exchange_name: str, signalen: List[SEPASignaal],
+                   portfolio_waarde: float) -> Optional[str]:
+    if not signalen:
+        return None
 
-def format_ms_per_exchange(
-    exchange_name:   str,
-    signalen:        List[SEPASignaal],
-    portfolio_waarde: float,
-) -> Tuple[str, str]:
-    nu = today_str()
+    nu      = today_str()
+    max_sc  = max(s.vcp_score for s in signalen)
+    toon    = [s for s in signalen if s.vcp_score == max_sc]
+    top2    = signalen[:2]
+    lbl     = {4: "🔥 PERFECTE VCP (4/4)", 3: "⚡ STERK (3/4)",
+               2: "📊 WATCHLIST (2/4)"}.get(max_sc, "📊")
 
-    def detail_blok(sigs: List[SEPASignaal]) -> str:
-        if not sigs:
-            return "_Geen kandidaten_"
-        lines = []
-        for s in sigs:
-            rr = ((s.pivot - s.price) / (s.price - s.stop)) if (s.price - s.stop) > 0 else 0
-            lines.append(
-                f"• `{s.ticker}` | VCP: {_vcp_bar(s.vcp_score)} | RS:{s.rs:.0f} | EUR{s.price:.2f} | {_yahoo_link(s.ticker)}\n"
-                f"  {s.pct_from_high:.1f}% onder 52w high | {s.pct_from_low:.1f}% boven 52w low\n"
-                + "\n".join(f"  {d}" for d in s.vcp_details) + "\n"
-                + sizing_tekst(s.ticker, s.price, s.stop, s.pivot, portfolio_waarde)
-            )
-        return "\n\n".join(lines)
-
-    def trend_blok(sigs: List[SEPASignaal]) -> str:
-        """Compact trend template detail per ticker."""
-        if not sigs:
-            return "_Geen_"
-        lines = []
-        for s in sigs[:5]:  # max 5 in deel2
-            lines.append(
-                f"• `{s.ticker}` RS:{s.rs:.0f}\n"
-                + "\n".join(f"  {d}" for d in s.trend_details)
-            )
-        return "\n\n".join(lines)
-
-    # Top 2 over alle signalen (voor ranking)
-    top2     = signalen[:2]
-    vcp4     = [s for s in signalen if s.vcp_score == 4]
-    vcp3     = [s for s in signalen if s.vcp_score == 3]
-    vcp2     = [s for s in signalen if s.vcp_score == 2]
-
-    deel1 = "\n\n".join([
+    delen = [
         f"📈 *MINERVINI SEPA — {exchange_name}*",
-        f"_{nu} | Stage 2 + VCP filter | Min VCP score: {MS_CFG['min_score']}/4_",
-        f"_Trend Template (8/8 verplicht) + Volatility Contraction Pattern_",
+        f"_{nu} | Stage 2 + VCP | {len(signalen)} kandidaten_",
         "─────────────────────────────",
-        f"🏆 *TOP 2 HOOGSTE POTENTIEEL:*",
-        detail_blok(top2) if top2 else "_Geen kandidaten vandaag_",
-        "─────────────────────────────",
-        f"🔥 *PERFECTE VCP (4/4):*",
-        detail_blok(vcp4) if vcp4 else "_Geen_",
-        f"⚡ *STERKE VCP (3/4):*",
-        detail_blok(vcp3) if vcp3 else "_Geen_",
-    ])
-
-    deel2_parts = [
-        f"📈 *MINERVINI SEPA — {exchange_name} (2/2)*",
-        "",
-        f"📊 *WATCHLIST VCP (2/4):*",
-        detail_blok(vcp2) if vcp2 else "_Geen_",
-        "",
-        "─────────────────────────────",
-        f"🔍 *TREND TEMPLATE DETAIL (top 5):*",
-        trend_blok(signalen),
-        "",
-        "─────────────────────────────",
-        f"📊 *SAMENVATTING:*",
-        f"  Kandidaten (Stage 2 + VCP≥{MS_CFG['min_score']}) : {len(signalen)}",
-        f"  VCP 4/4 : {len(vcp4)}",
-        f"  VCP 3/4 : {len(vcp3)}",
-        f"  VCP 2/4 : {len(vcp2)}",
-        "",
-        "⚙️ *PARAMETERS:*",
-        f"_Trend Template: MA50>MA150>MA200 stijgend_",
-        f"_Max 25% onder 52w high | Min 30% boven 52w low_",
-        f"_RS Rating ≥ 70 | Stop max {MS_CFG['stop_pct']:.0f}%_",
-        f"_VCP: ATR contractie ≥{MS_CFG['vol_contraction_pct']:.0f}% | Volume droogvalt_",
-        f"_Risico: 5% portfolio per trade | Slippage: 0.1%_",
+        f"🏆 *TOP 2:*",
     ]
+    for s in top2:
+        rr = ((s.pivot - s.price) / (s.price - s.stop)) if (s.price - s.stop) > 0 else 0
+        delen.append(
+            f"• `{s.ticker}` VCP:{_vcp_bar(s.vcp_score)} RS:{s.rs:.0f} "
+            f"EUR{s.price:.2f} {_yahoo_link(s.ticker)}\n"
+            f"  {s.pct_from_high:.1f}% onder high | R/R:{rr:.1f}:1\n"
+            + sizing_tekst(s.ticker, s.price, s.stop, s.pivot, portfolio_waarde)
+        )
 
-    return deel1, "\n".join(deel2_parts)
+    delen += ["─────────────────────────────", f"*{lbl}:*"]
+    for s in [x for x in toon if x not in top2]:
+        delen.append(
+            f"• `{s.ticker}` VCP:{_vcp_bar(s.vcp_score)} RS:{s.rs:.0f} "
+            f"EUR{s.price:.2f} | {s.pct_from_high:.1f}% onder high"
+        )
+    delen.append(
+        f"⚙️ _Stop max {MS_CFG['stop_pct']:.0f}% | RS>={MS_CFG['rs_min']} | "
+        f"Risico 5% portfolio_"
+    )
+    return "\n\n".join(delen)
+
+
+# ============================================================
+# CSV LOGGING
+# ============================================================
+
+def _log_csv(signalen: List[SEPASignaal], exchange: str):
+    fname  = f"ms_signalen_{exchange.split()[0]}_{today_str()}.csv"
+    header = ["datum","exchange","ticker","vcp_score","rs","price",
+              "pivot","stop","pct_from_high","pct_from_low","total_score"]
+    ensure_csv_header(fname, header)
+    with open(fname, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        for s in signalen:
+            w.writerow([today_str(), exchange, s.ticker, s.vcp_score, s.rs,
+                        s.price, s.pivot, s.stop,
+                        s.pct_from_high, s.pct_from_low, s.total_score])
+    print(f"  CSV: {fname}")
 
 
 # ============================================================
@@ -787,7 +659,6 @@ def run_live_engine():
 
     print(f"\nTotaal: {len(all_tickers)} unieke tickers")
     print("Data downloaden (2 jaar)...")
-
     df = download_history(all_tickers, period="2y")
     if df.empty:
         print("[ERROR] Geen data.")
@@ -797,14 +668,12 @@ def run_live_engine():
     print("RS ratings berekenen...")
     rs_ratings = compute_rs_ratings(df)
     print(f"RS ratings: {len(rs_ratings)} tickers")
-
     print("Indicatoren berekenen...")
     df = add_indicators(df, rs_ratings)
 
     portfolio_waarde = START_CAPITAL
-
     email_delen: List[str] = []
-  
+
     for ex_name, tlist in exchange_tickers.items():
         print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
         df_ex = df[df["Ticker"].isin(tlist)].copy()
@@ -814,65 +683,32 @@ def run_live_engine():
             sig = analyse_ticker(ticker, group)
             if sig:
                 signalen.append(sig)
-                print(
-                    f"  ✓ {ticker}: VCP={sig.vcp_score}/4 | RS={sig.rs:.0f} | "
-                    f"{sig.pct_from_high:.1f}% onder high"
-                )
+                print(f"  ✓ {ticker}: VCP={sig.vcp_score}/4 | RS={sig.rs:.0f} | "
+                      f"{sig.pct_from_high:.1f}% onder high")
 
-        # Sorteren: totaal_score hoog→laag
         signalen.sort(key=lambda s: s.total_score, reverse=True)
         print(f"  → {len(signalen)} SEPA kandidaten")
 
-        if signalen:
-            max_sc = max(s.vcp_score for s in signalen)
-            toon = [s for s in signalen if s.vcp_score == max_sc]
-            top2 = signalen[:2]
-            lbl = {4:"🔥 PERFECTE VCP (4/4)", 3:"⚡ STERK (3/4)", 2:"📊 WATCHLIST (2/4)"}.get(max_sc, "📊")
-            nu = today_str()
-            bericht_delen = [
-                f"📈 *MINERVINI SEPA — {ex_name}*",
-                f"_{nu} | Stage 2 + VCP | {len(signalen)} kandidaten_",
-                "─────────────────────────────",
-                f"🏆 *TOP 2:*",
-            ]
-            for s in top2:
-                rr = ((s.pivot - s.price) / (s.price - s.stop)) if (s.price - s.stop) > 0 else 0
-                bericht_delen.append(f"• `{s.ticker}` VCP:{_vcp_bar(s.vcp_score)} RS:{s.rs:.0f} €{s.price:.2f} [Grafiek](https://finance.yahoo.com/quote/{s.ticker})\n  {s.pct_from_high:.1f}% onder high | R/R:{rr:.1f}:1\n" + sizing_tekst(s.ticker, s.price, s.stop, s.pivot, portfolio_waarde))
-            bericht_delen += ["─────────────────────────────", f"*{lbl}:*"]
-            for s in [x for x in toon if x not in top2]:
-                bericht_delen.append(f"• `{s.ticker}` VCP:{_vcp_bar(s.vcp_score)} RS:{s.rs:.0f} €{s.price:.2f}")
-            bericht_delen.append(f"⚙️ _Stop max {MS_CFG['stop_pct']:.0f}% | RS≥{MS_CFG['rs_min']} | Risico 5%_")
-            bericht = "\n\n".join(bericht_delen)
+        bericht = format_bericht(ex_name, signalen, portfolio_waarde)
+        if bericht:
             send_telegram_message(bericht)
             email_delen.append(bericht)
+            print(f"  → Telegram verstuurd")
         else:
             print(f"  → Overgeslagen: {ex_name}")
 
         if signalen:
             _log_csv(signalen, ex_name)
 
+    # Email met alle exchanges samen
+    if email_delen:
+        send_email(
+            f"Minervini SEPA rapport {today_str()}",
+            "\n\n" + ("=" * 40 + "\n\n").join(email_delen),
+        )
+
     print(f"\n{'='*60}")
     print("Klaar.")
-
-
-# ============================================================
-# CSV LOGGING
-# ============================================================
-
-def _log_csv(signalen: List[SEPASignaal], exchange: str):
-    fname  = f"ms_signalen_{exchange.split()[0]}_{today_str()}.csv"
-    header = ["datum","exchange","ticker","vcp_score","rs","price",
-              "pivot","stop","pct_from_high","pct_from_low","total_score"]
-    ensure_csv_header(fname, header)
-    with open(fname, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        for s in signalen:
-            w.writerow([
-                today_str(), exchange, s.ticker, s.vcp_score, s.rs,
-                s.price, s.pivot, s.stop,
-                s.pct_from_high, s.pct_from_low, s.total_score,
-            ])
-    print(f"  CSV: {fname}")
 
 
 # ============================================================
@@ -899,18 +735,13 @@ def run_backtest():
         print("[ERROR] Geen data.")
         return
 
-    all_dates = sorted(df["Date"].dt.date.unique())
-    print(f"Handelsdagen: {len(all_dates)}")
-
-    # RS berekenen op volledige dataset
+    all_dates  = sorted(df["Date"].dt.date.unique())
     rs_ratings = compute_rs_ratings(df)
-    df = add_indicators(df, rs_ratings)
+    df         = add_indicators(df, rs_ratings)
 
     cash      = START_CAPITAL
     positions: Dict[str, Dict] = {}
-    trades:    List[Dict] = []
-
-    # Wekelijks scannen (elke maandag)
+    trades:    List[Dict]      = []
     scan_dates = [d for d in all_dates if d.weekday() == 0]
     print(f"Scanmomenten: {len(scan_dates)} (wekelijks maandag)")
 
@@ -923,29 +754,21 @@ def run_backtest():
             sig = analyse_ticker(ticker, group)
             if not sig:
                 continue
-
             entry      = sig.price * (1 + SLIPPAGE_PCT)
-            aandelen, max_loss = bereken_positie(cash, entry, sig.stop)
+            aandelen, _ = bereken_positie(cash, entry, sig.stop)
             if aandelen <= 0:
                 continue
             investering = entry * aandelen + trade_cost(entry * aandelen)
             if investering > cash:
                 continue
-
             cash -= investering
             positions[ticker] = {
-                "entry_date":  scan_date,
-                "entry_price": round(entry, 4),
-                "size":        aandelen,
-                "stop":        sig.stop,
-                "tp":          sig.pivot,
-                "vcp_score":   sig.vcp_score,
-                "rs":          sig.rs,
-                "days":        0,
-                "cost":        trade_cost(investering),
+                "entry_date": scan_date, "entry_price": round(entry, 4),
+                "size": aandelen, "stop": sig.stop, "tp": sig.pivot,
+                "vcp_score": sig.vcp_score, "rs": sig.rs, "days": 0,
+                "cost": trade_cost(investering),
             }
 
-        # Dagelijkse exit
         day_df = df[df["Date"] == pd.Timestamp(scan_date)].copy()
         price_map: Dict[str, float] = {}
         for _, row in day_df.iterrows():
@@ -960,7 +783,6 @@ def run_backtest():
                 continue
             close  = price_map[ticker]
             reason = None
-
             if close <= pos["stop"]:
                 reason = f"SL ({pos['stop']:.2f})"
             elif close >= pos["tp"]:
@@ -976,25 +798,18 @@ def run_backtest():
                 tax       = pnl * TAX_RATE if pnl > 0 else 0.0
                 cash     += gross - cost - tax
                 trades.append({
-                    "entry_date":  pos["entry_date"].isoformat(),
-                    "exit_date":   scan_date.isoformat(),
-                    "ticker":      ticker,
-                    "vcp_score":   pos["vcp_score"],
-                    "rs":          pos["rs"],
-                    "entry_price": pos["entry_price"],
-                    "exit_price":  round(exit_slip, 4),
-                    "size":        pos["size"],
-                    "pnl":         round(pnl, 2),
-                    "tax":         round(tax, 2),
-                    "net":         round(pnl - tax, 2),
-                    "reason":      reason,
-                    "days":        pos["days"],
+                    "entry_date": pos["entry_date"].isoformat(),
+                    "exit_date":  scan_date.isoformat(),
+                    "ticker": ticker, "vcp_score": pos["vcp_score"], "rs": pos["rs"],
+                    "entry_price": pos["entry_price"], "exit_price": round(exit_slip, 4),
+                    "size": pos["size"], "pnl": round(pnl, 2),
+                    "tax": round(tax, 2), "net": round(pnl - tax, 2),
+                    "reason": reason, "days": pos["days"],
                 })
                 del positions[ticker]
 
-    # Resultaten
     if trades:
-        tdf = pd.DataFrame(trades)
+        tdf  = pd.DataFrame(trades)
         tdf.to_csv("ms_backtest_trades.csv", index=False)
         n    = len(tdf)
         nwin = (tdf["net"] > 0).sum()
@@ -1002,8 +817,7 @@ def run_backtest():
                abs(tdf.loc[tdf["net"] <= 0, "net"].sum()), 1e-9)
         final_val = cash + sum(
             price_map.get(t, p["entry_price"]) * p["size"]
-            for t, p in positions.items()
-        )
+            for t, p in positions.items())
         print(f"\n{'='*60}")
         print(f"Startkapitaal    : EUR{START_CAPITAL:>12,.2f}")
         print(f"Eindkapitaal     : EUR{final_val:>12,.2f}")
@@ -1012,10 +826,6 @@ def run_backtest():
         print(f"Profit Factor    : {pf:.2f}")
         print(f"Belasting betaald: EUR{tdf['tax'].sum():,.2f}")
         print(f"Gem. houdduur    : {tdf['days'].mean():.1f} dagen")
-        print(f"\n{'VCP score':<12} {'#':>4} {'Win%':>6} {'Net':>10}")
-        for sc, g in tdf.groupby("vcp_score"):
-            wr = (g["net"] > 0).sum() / len(g) * 100
-            print(f"VCP {sc}/4      {len(g):>4} {wr:>5.1f}% {g['net'].sum():>+10.2f}")
         print(f"{'='*60}")
         print(f"Opgeslagen: ms_backtest_trades.csv")
     else:
