@@ -1,0 +1,10 @@
+datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
+2026-06-29,046 Milaan,DAN.MI,3,65.8,67.85,74.65,4,False,3.46,False,True,47.3
+2026-06-29,046 Milaan,DIA.MI,3,69.96,63.74,66.6,9,True,1.18,False,True,40
+2026-06-29,046 Milaan,RACE.MI,3,323.95,301.7,317.45,7,True,1.06,False,True,40
+2026-06-29,046 Milaan,REC.MI,3,51.5,50.55,50.85,10,True,0.45,False,True,40
+2026-06-29,046 Milaan,TXT.MI,3,37.4,35.55,36.85,8,True,0.39,False,True,40
+2026-06-29,046 Milaan,ELN.MI,3,17.15,16.7,17.45,6,False,1.05,True,True,35
+2026-06-29,046 Milaan,G.MI,3,41.89,41.89,42.89,6,False,0.87,True,True,35
+2026-06-29,046 Milaan,PIRC.MI,3,6.55,6.33,6.55,10,False,1.18,True,True,35
+2026-06-29,046 Milaan,UNI.MI,3,23.69,23.69,24.6,4,False,0.56,True,True,35
