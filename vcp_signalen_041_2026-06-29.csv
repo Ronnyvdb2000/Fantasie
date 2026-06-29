@@ -5,3 +5,9 @@ datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,
 2026-06-29,041 Benelux,THEON.AS,5,30.4,2,9.11,33.9647,29.62,False,0.55,False,True,True,True,65
 2026-06-29,041 Benelux,MONT.BR,4,65.9,3,6.12,70.347,63.75,False,0.54,False,False,True,False,55
 2026-06-29,041 Benelux,SHELL.AS,4,33.72,2,5.79,38.2832,35.33,False,0.68,False,True,False,True,55
+2026-06-29,041 Benelux,ARGX.BR,5,785.4,2,7.68,721.0,648.85,True,1.0,True,True,False,False,90
+2026-06-29,041 Benelux,AED.BR,4,71.75,5,6.43,74.7694,66.28,False,0.55,True,False,False,False,75
+2026-06-29,041 Benelux,SIP.BR,5,93.0,2,5.88,96.9234,90.38,False,0.33,False,True,False,True,65
+2026-06-29,041 Benelux,THEON.AS,5,30.4,2,9.11,33.9647,29.62,False,0.55,False,True,True,True,65
+2026-06-29,041 Benelux,MONT.BR,4,65.9,3,6.12,70.347,63.75,False,0.54,False,False,True,False,55
+2026-06-29,041 Benelux,SHELL.AS,4,33.72,2,5.79,38.2832,35.33,False,0.68,False,True,False,True,55

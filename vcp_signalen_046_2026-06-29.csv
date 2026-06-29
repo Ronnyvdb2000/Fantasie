@@ -1,3 +1,5 @@
 datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
 2026-06-29,046 Milaan,PRY.MI,4,144.75,2,14.46,154.2,131.42,False,0.44,True,False,True,False,60
 2026-06-29,046 Milaan,GE.MI,4,10.6,3,7.02,11.4,10.46,False,0.76,False,False,True,False,55
+2026-06-29,046 Milaan,PRY.MI,4,144.75,2,14.46,154.2,131.42,False,0.44,True,False,True,False,60
+2026-06-29,046 Milaan,GE.MI,4,10.6,3,7.02,11.4,10.46,False,0.76,False,False,True,False,55
