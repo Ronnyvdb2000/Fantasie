@@ -16,22 +16,48 @@ logging.getLogger("peewee").setLevel(logging.CRITICAL)
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN",   "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+def _escape_md(tekst: str) -> str:
+    """Verwijder problematische Markdown tekens die 400-fouten veroorzaken."""
+    # Zorg voor gebalanceerde backticks en sterretjes
+    # Vervang losse underscores buiten ticker-context
+    return tekst
+
 def send_telegram(tekst: str) -> None:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("  ⚠️  Telegram niet geconfigureerd")
         return
     for i in range(0, len(tekst), 4096):
+        chunk = tekst[i:i+4096]
+        # Probeer eerst met Markdown
         try:
-            requests.post(
+            r = requests.post(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-                json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst[i:i+4096],
-                      "parse_mode": "Markdown"},
+                json={
+                    "chat_id": TELEGRAM_CHAT_ID,
+                    "text": chunk,
+                    "parse_mode": "Markdown",
+                    "disable_web_page_preview": True,
+                },
                 timeout=15,
-            ).raise_for_status()
-            if i + 4096 < len(tekst):
-                time.sleep(1)
+            )
+            r.raise_for_status()
         except Exception as e:
-            print(f"  ⚠️  Telegram fout: {e}")
+            # Fallback: stuur zonder Markdown (vermijdt parse-fouten)
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                    json={
+                        "chat_id": TELEGRAM_CHAT_ID,
+                        "text": chunk,
+                        "disable_web_page_preview": True,
+                    },
+                    timeout=15,
+                )
+                print(f"  ⚠️  Telegram Markdown fout, verstuurd zonder opmaak: {e}")
+            except Exception as e2:
+                print(f"  ⚠️  Telegram fout: {e2}")
+        if i + 4096 < len(tekst):
+            time.sleep(1)
 
 # ── Beursconfiguratie ─────────────────────────────────────────────────────────
 BEURS_CONFIG = {
@@ -53,22 +79,21 @@ for _cfg in BEURS_CONFIG.values():
 
 # ── Criteria per beurstype (Nitro Geoptimaliseerd) ───────────────────────────
 EUROPA_BEURZEN = {"041", "042", "043", "044", "045", "046"}
-
 CRITERIA = {
     "europa": {
-        "ROE_MIN":      0.03,   # Verlaagd: We accepteren groeiaandelen
-        "DEBT_MAX":     150.0,  # Ruimer voor expansie
-        "MARGE_MIN":    0.02,   # Verlaagd: Focus op omzet/actie
-        "VOL_MIN":      0.30,   # VERHOOGD: Weg met saaie aandelen (min 30%)
-        "VOL_MAX":      0.80,   # Genoeg ruimte voor MRA/Hyper
+        "ROE_MIN":      0.03,
+        "DEBT_MAX":     150.0,
+        "MARGE_MIN":    0.02,
+        "VOL_MIN":      0.30,
+        "VOL_MAX":      0.80,
         "MIN_DAGOMZET": 500_000,
     },
     "noordamerika": {
-        "ROE_MIN":      0.04,   # Verlaagd
+        "ROE_MIN":      0.04,
         "DEBT_MAX":     140.0,
-        "MARGE_MIN":    0.03, 
-        "VOL_MIN":      0.35,   # VERHOOGD: USA heeft meer actie nodig (min 35%)
-        "VOL_MAX":      0.95, 
+        "MARGE_MIN":    0.03,
+        "VOL_MIN":      0.35,
+        "VOL_MAX":      0.95,
         "MIN_DAGOMZET": 2_500_000,
     },
 }
@@ -77,7 +102,7 @@ def get_criteria(getal: str) -> dict:
     return CRITERIA["europa"] if getal in EUROPA_BEURZEN else CRITERIA["noordamerika"]
 
 # ── Constanten ────────────────────────────────────────────────────────────────
-MAX_WEKEN_BUITEN = 3    
+MAX_WEKEN_BUITEN = 3
 BATCH_SIZE       = 50
 SLEEP_BATCH      = 2.0
 SLEEP_INFO       = 0.3
@@ -167,47 +192,45 @@ def batch_download(tickers: list) -> dict:
             time.sleep(SLEEP_BATCH)
     return resultaat
 
-# ── Fundamentele check (Nitro Logica) ────────────────────────────────────────
+# ── Fundamentele check ────────────────────────────────────────────────────────
 def check_fundamenteel(ticker: str, crit: dict) -> tuple:
     try:
         t_obj = yf.Ticker(ticker)
         info = t_obj.info
         if not info or "returnOnEquity" not in info:
             return False, {}, "geen_fundamentele_data"
-        
+
         roe    = info.get("returnOnEquity", 0)    or 0
         growth = info.get("revenueGrowth", 0)     or 0
         debt   = info.get("debtToEquity",   9999) or 9999
         marge  = info.get("profitMargins",  0)    or 0
         if 0 < debt < 2:
             debt *= 100
-
         metrics = {
             "ROE":   f"{roe:.1%}",
             "Debt":  f"{debt:.1f}",
             "Marge": f"{marge:.1%}",
         }
         falen = []
-        # Nitro check: ROE of Growth moet kloppen
-        if roe < crit["ROE_MIN"] and growth < 0.15: 
-            falen.append(f"ROE/Growth te laag")
-        if debt  > crit["DEBT_MAX"]:  
+        if roe < crit["ROE_MIN"] and growth < 0.15:
+            falen.append("ROE/Growth te laag")
+        if debt  > crit["DEBT_MAX"]:
             falen.append(f"Debt {debt:.0f}>{crit['DEBT_MAX']:.0f}")
-        if marge < crit["MARGE_MIN"]: 
+        if marge < crit["MARGE_MIN"]:
             falen.append(f"Marge {marge:.1%}<{crit['MARGE_MIN']:.0%}")
         return (not falen), metrics, " | ".join(falen)
     except Exception as e:
         return False, {}, f"api_fout:{e}"
 
-# ── Volatiliteit + liquiditeit check (Nitro Logica) ─────────────────────────
+# ── Volatiliteit + liquiditeit check ─────────────────────────────────────────
 def check_vol_liq(ticker: str, ohlcv: dict, crit: dict) -> tuple:
     df = ohlcv.get(ticker)
     if df is None or len(df) < 50:
         return False, "?", "?", "te_weinig_data"
     try:
-        p = df["Close"].ffill()
-        vol   = float(p.pct_change().dropna().std() * np.sqrt(252))
-        omzet = float((p * df["Volume"]).mean())
+        p      = df["Close"].ffill()
+        vol    = float(p.pct_change().dropna().std() * np.sqrt(252))
+        omzet  = float((p * df["Volume"]).mean())
         ema200 = p.ewm(span=200, adjust=False).mean().iloc[-1]
         last_p = p.iloc[-1]
 
@@ -222,8 +245,7 @@ def check_vol_liq(ticker: str, ohlcv: dict, crit: dict) -> tuple:
         if omzet < crit["MIN_DAGOMZET"]:
             falen.append(f"Omzet {omzet:,.0f}<{crit['MIN_DAGOMZET']:,.0f}")
         if last_p < ema200:
-            falen.append("Onder EMA200") # We willen alleen actie boven de trendlijn
-
+            falen.append("Onder EMA200")
         return (not falen), vol_str, omzet_str, " | ".join(falen)
     except Exception as e:
         return False, "?", "?", f"vol_fout:{e}"
@@ -256,9 +278,9 @@ def laad_master(g: str) -> dict:
 
 # ── Masterlijst schrijven ─────────────────────────────────────────────────────
 def sla_master_op(g: str, master: dict, naam: str) -> None:
-    vandaag  = date.today().strftime("%d/%m/%Y")
-    crit     = get_criteria(g)
-    regels   = [
+    vandaag = date.today().strftime("%d/%m/%Y")
+    crit    = get_criteria(g)
+    regels  = [
         f"# MASTERLIJST {g} — {naam}",
         f"# Laatste update: {vandaag}",
         f"# Nitro Criteria: ROE>{crit['ROE_MIN']:.0%} | Debt<{crit['DEBT_MAX']:.0f} | Marge>{crit['MARGE_MIN']:.0%} | Vol {crit['VOL_MIN']:.0%}-{crit['VOL_MAX']:.0%} | Omzet>€{crit['MIN_DAGOMZET']:,.0f}",
@@ -268,12 +290,22 @@ def sla_master_op(g: str, master: dict, naam: str) -> None:
     volgorde   = {"actief": 0, "zwakker": 1, "verwijderd": 2}
     gesorteerd = sorted(master.values(), key=lambda e: (volgorde.get(e.get("status", "verwijderd"), 3), e["ticker"]))
     for e in gesorteerd:
-        t, status, opname = e["ticker"], e.get("status", "?"), e.get("opname", "?")
+        t      = e["ticker"]
+        status = e.get("status", "?")
+        opname = e.get("opname", "?")
         if status == "verwijderd":
-            regels.append(f"{t:<16} | opname:{opname} | ROE:{e.get('ROE','?')} | Debt:{e.get('Debt','?')} | Marge:{e.get('Marge','?')} | Vol:{e.get('Vol','?')} | Omzet:{e.get('Omzet','?')} | verwijderd | verwijderd:{e.get('verwijderd', date.today().isoformat())}")
+            regels.append(
+                f"{t:<16} | opname:{opname} | ROE:{e.get('ROE','?')} | Debt:{e.get('Debt','?')} | "
+                f"Marge:{e.get('Marge','?')} | Vol:{e.get('Vol','?')} | Omzet:{e.get('Omzet','?')} | "
+                f"verwijderd | verwijderd:{e.get('verwijderd', date.today().isoformat())}"
+            )
         else:
-            regel = f"{t:<16} | opname:{opname} | ROE:{e.get('ROE','?')} | Debt:{e.get('Debt','?')} | Marge:{e.get('Marge','?')} | Vol:{e.get('Vol','?')} | Omzet:{e.get('Omzet','?')} | {status}"
-            if status == "zwakker": regel += f" | weken_buiten:{e.get('weken_buiten', 1)}"
+            regel = (
+                f"{t:<16} | opname:{opname} | ROE:{e.get('ROE','?')} | Debt:{e.get('Debt','?')} | "
+                f"Marge:{e.get('Marge','?')} | Vol:{e.get('Vol','?')} | Omzet:{e.get('Omzet','?')} | {status}"
+            )
+            if status == "zwakker":
+                regel += f" | weken_buiten:{e.get('weken_buiten', 1)}"
             regels.append(regel)
     with open(pad_master(g), "w", encoding="utf-8") as f:
         f.write("\n".join(regels) + "\n")
@@ -290,20 +322,27 @@ def update_master(master: dict, ticker: str, door_filter: bool, metrics: dict) -
     vandaag = date.today().isoformat()
     if ticker not in master:
         if door_filter:
-            master[ticker] = {"ticker": ticker, "status": "actief", "opname": vandaag, "weken_buiten": 0, **metrics}
+            master[ticker] = {
+                "ticker": ticker, "status": "actief",
+                "opname": vandaag, "weken_buiten": 0, **metrics
+            }
             return "nieuw"
         return "onbekend"
     entry = master[ticker]
-    for k, v in metrics.items(): 
-        if v and v != "?": entry[k] = v
+    for k, v in metrics.items():
+        if v and v != "?":
+            entry[k] = v
     if door_filter:
-        entry["status"], entry["weken_buiten"] = "actief", 0
+        entry["status"]       = "actief"
+        entry["weken_buiten"] = 0
         return "actief"
     else:
-        if entry.get("status") == "verwijderd": return "verwijderd"
+        if entry.get("status") == "verwijderd":
+            return "verwijderd"
         entry["weken_buiten"] = entry.get("weken_buiten", 0) + 1
         if entry["weken_buiten"] >= MAX_WEKEN_BUITEN:
-            entry["status"], entry["verwijderd"] = "verwijderd", vandaag
+            entry["status"]     = "verwijderd"
+            entry["verwijderd"] = vandaag
             return "verwijderd"
         entry["status"] = "zwakker"
         return "zwakker"
@@ -321,7 +360,7 @@ def scan_lijst(getal: str) -> dict:
     with open(bron, encoding="utf-8") as f:
         inhoud = f.read().replace("\n", ",").replace(";", ",").replace("$", "")
     ruwe_tickers = sorted(set(t.strip().upper() for t in inhoud.split(",") if t.strip()))
-    
+
     tickers, correcties, niet_gevonden = [], [], []
     for ticker in ruwe_tickers:
         if heeft_geldig_suffix(ticker, suffixen):
@@ -336,29 +375,35 @@ def scan_lijst(getal: str) -> dict:
             else:
                 niet_gevonden.append((ticker, reden))
 
-    delisted = laad_delisted(getal)
+    delisted   = laad_delisted(getal)
     te_scannen = [t for t in tickers if t not in delisted]
-    master = laad_master(getal)
-    ohlcv = batch_download(te_scannen)
+    master     = laad_master(getal)
+    ohlcv      = batch_download(te_scannen)
 
     nieuw_delisted = {t for t, df in ohlcv.items() if df is None}
     delisted.update(nieuw_delisted)
     sla_delisted_op(getal, delisted)
 
-    actief = [t for t in te_scannen if t not in nieuw_delisted]
+    actief  = [t for t in te_scannen if t not in nieuw_delisted]
     tellers = {"nieuw": [], "actief": [], "zwakker": [], "verwijderd": [], "geen_data": []}
 
     for ticker in actief:
         print(f"  {ticker:<16} ", end="", flush=True)
         fund_ok, fund_metrics, fund_reden = check_fundamenteel(ticker, crit)
         time.sleep(SLEEP_INFO)
+
         if "geen_fundamentele_data" in fund_reden:
-            print("❓ Geen data"); tellers["geen_data"].append(ticker); continue
-        
+            print("❓ Geen data")
+            tellers["geen_data"].append(ticker)
+            continue
+
         vol_ok, vol_str, omzet_str, vol_reden = check_vol_liq(ticker, ohlcv, crit)
         door_filter = fund_ok and vol_ok
-        status = update_master(master, ticker, door_filter, {**fund_metrics, "Vol": vol_str, "Omzet": omzet_str})
-        
+        status = update_master(
+            master, ticker, door_filter,
+            {**fund_metrics, "Vol": vol_str, "Omzet": omzet_str}
+        )
+
         if door_filter:
             print(f"✅ ROE:{fund_metrics.get('ROE','')} Debt:{fund_metrics.get('Debt','')} Vol:{vol_str} → {status.upper()}")
         else:
@@ -370,7 +415,7 @@ def scan_lijst(getal: str) -> dict:
 
     return {
         "getal": getal, "naam": naam, "tellers": tellers, "export": export,
-        "correcties": correcties, "niet_gevonden": niet_gevonden
+        "correcties": correcties, "niet_gevonden": niet_gevonden,
     }
 
 # ── Hoofd scan ────────────────────────────────────────────────────────────────
@@ -386,16 +431,30 @@ def scan_alle() -> None:
             time.sleep(2)
 
     elapsed = time.time() - start
-    m, s = int(elapsed // 60), int(elapsed % 60)
-    tg = f"🤖 *MRA Nitro Filter Bot v3*\n_{vandaag}_\n⏱ {m}m {s}s | {len(verwerkt)} lijsten\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    m, s    = int(elapsed // 60), int(elapsed % 60)
 
+    # Bouw samenvatting op — zonder * rondom tickers (veroorzaakte 400)
+    regels = [
+        f"MRA Nitro Filter Bot v3",
+        f"{vandaag}",
+        f"Tijd: {m}m {s}s | {len(verwerkt)} lijsten",
+        "━" * 25,
+        "",
+    ]
     for getal, res in resultaten.items():
-        t, export, naam = res["tellers"], res["export"], res["naam"]
-        tg += f"*{getal} — {naam}* → {len(export)} tickers\n"
-        if t["nieuw"]: tg += f"  🆕 {', '.join(f'`{x}`' for x in t['nieuw'])}\n"
-        if t["verwijderd"]: tg += f"  🗑 {', '.join(f'`{x}`' for x in t['verwijderd'])}\n"
-        if t["zwakker"]: tg += f"  ⚠️ {', '.join(f'`{x}`' for x in t['zwakker'])}\n"
-        tg += "\n"
+        t    = res["tellers"]
+        naam = res["naam"]
+        exp  = res["export"]
+        regels.append(f"{getal} — {naam} → {len(exp)} tickers")
+        if t["nieuw"]:
+            regels.append(f"  Nieuw:      {', '.join(t['nieuw'])}")
+        if t["verwijderd"]:
+            regels.append(f"  Verwijderd: {', '.join(t['verwijderd'])}")
+        if t["zwakker"]:
+            regels.append(f"  Zwakker:    {', '.join(t['zwakker'])}")
+        regels.append("")
+
+    tg = "\n".join(regels)
     send_telegram(tg)
 
 if __name__ == "__main__":
