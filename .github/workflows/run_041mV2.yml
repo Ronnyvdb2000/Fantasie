@@ -1,38 +1,35 @@
-name: "Bot 041: Full Munger Ticker Filter V2"
+name: filter_tickers MRA Nitro
 
 on:
   schedule:
-    - cron: '30 7 * * 0'   # elke zondag om 07:00 UTC
+    - cron: "00 07 * * 1"  # Elke maandag om 07:00 UTC = 09:00 Belgisch
   workflow_dispatch:
 
 jobs:
   filter_tickers:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
     permissions:
-      contents: write      # nodig voor commit + push
-
+      contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Installeer packages
         run: |
           python -m pip install --upgrade pip
           pip install yfinance pandas numpy requests
 
-      - name: Draai Munger Filter Bot
+      - name: Run filter bot
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python bot_041mV2.py
 
-      - name: Commit en Push resultaten
+      - name: Opslaan resultaten
+        if: always()
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -41,6 +38,6 @@ jobs:
             echo "Geen wijzigingen gevonden."
           else
             git commit -m "Filter update $(date +%Y-%m-%d)"
-            git pull --rebase origin main
+            git pull --rebase=false -X ours origin main
             git push
           fi
