@@ -1,0 +1,9 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-06-29,042 Parijs,OR.PA,4,387.05,4,6.38,362.6751,365.33,True,0.63,True,False,False,False,90
+2026-06-29,042 Parijs,MC.PA,4,492.3,5,6.54,473.8238,453.47,True,0.55,False,False,True,False,85
+2026-06-29,042 Parijs,CDI.PA,4,455.8,4,6.62,471.237,424.76,False,0.64,False,False,True,False,60
+2026-06-29,042 Parijs,HO.PA,5,220.5,2,7.61,239.0421,220.06,False,1.17,False,True,True,False,60
+2026-06-29,042 Parijs,SAF.PA,4,336.5,4,7.66,344.0344,282.43,False,0.83,False,False,True,False,60
+2026-06-29,042 Parijs,AM.PA,4,283.6,3,6.03,335.2647,282.63,False,0.67,False,True,True,False,55
+2026-06-29,042 Parijs,AI.PA,4,172.72,2,3.56,184.9,162.53,False,1.03,False,True,False,False,50
+2026-06-29,042 Parijs,RBT.PA,4,816.0,2,5.48,829.6177,773.66,False,1.53,False,False,True,False,50

@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-06-29,043 Frankfurt,DWS.DE,4,63.4,4,4.51,59.2634,56.57,True,0.5,True,False,False,False,90
+2026-06-29,043 Frankfurt,PRG.DE,4,129.24,3,6.05,126.3837,118.43,True,1.79,False,False,False,False,75
+2026-06-29,043 Frankfurt,DB1.DE,5,238.4,2,3.99,260.8,238.05,False,0.62,False,True,True,False,60
