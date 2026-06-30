@@ -1,0 +1,13 @@
+datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
+2026-06-30,043 Frankfurt,SIE.DE,5,281.15,267.5,279.8,7,True,1.53,True,True,72.6
+2026-06-30,043 Frankfurt,ASML.AS,4,1721.4,1553.8,1711.4,7,True,1.06,True,True,55
+2026-06-30,043 Frankfurt,DHL.DE,4,53.1,51.06,52.2,8,True,1.17,True,True,55
+2026-06-30,043 Frankfurt,MRK.DE,4,146.85,132.9,134.25,10,True,0.92,True,True,55
+2026-06-30,043 Frankfurt,ADS.DE,3,179.4,171.1,177.5,8,True,1.11,False,True,40
+2026-06-30,043 Frankfurt,GFT.DE,3,20.6,20.1,20.6854,6,True,0.75,False,True,40
+2026-06-30,043 Frankfurt,HEN3.DE,3,73.54,65.36,66.58,22,True,0.77,False,True,40
+2026-06-30,043 Frankfurt,HNR1.DE,3,242.4,228.2,233.0,13,True,0.95,False,True,40
+2026-06-30,043 Frankfurt,KPN.AS,3,4.32,4.282,4.402,11,True,1.19,False,True,40
+2026-06-30,043 Frankfurt,NDX1.DE,3,46.2,43.34,45.9,5,True,0.87,False,True,40
+2026-06-30,043 Frankfurt,REP.DE,3,21.96,21.07,21.84,5,True,0.57,False,True,40
+2026-06-30,043 Frankfurt,DWS.DE,3,65.65,62.75,65.8,6,False,1.14,True,True,35

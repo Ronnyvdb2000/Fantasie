@@ -1,0 +1,8 @@
+datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
+2026-06-30,041 Benelux,AED.BR,4,70.6,67.95,69.65,10,True,1.97,False,True,59.8
+2026-06-30,041 Benelux,LOTB.BR,4,11620.0,11060.0,11400.0,9,True,1.56,False,True,57.8
+2026-06-30,041 Benelux,ASML.AS,4,1721.4,1553.8,1711.4,7,True,1.06,True,True,55
+2026-06-30,041 Benelux,HAVAS.AS,3,17.05,16.85,17.15,6,True,1.18,False,True,40
+2026-06-30,041 Benelux,UCB.BR,3,262.0,247.6,254.9,9,True,1.23,False,True,40
+2026-06-30,041 Benelux,ARGX.BR,3,811.4,748.6,813.6,6,False,1.3,True,True,35
+2026-06-30,041 Benelux,BAMNB.AS,3,12.27,12.27,12.92,4,False,0.45,True,True,35
