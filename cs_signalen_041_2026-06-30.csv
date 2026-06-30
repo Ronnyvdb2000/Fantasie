@@ -1,0 +1,12 @@
+datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
+2026-06-30,041 Benelux,HEIJM.AS,7,114.0,94.5,34.3,47.7,47.8,2.6,1.23,104.88,True,True,True,True,True,True,True,102.3
+2026-06-30,041 Benelux,JEN.BR,6,84.8,84.0,34.4,37.5,8.0,2.8,0.66,78.02,True,True,True,False,True,True,True,90.2
+2026-06-30,041 Benelux,ARGX.BR,5,811.4,86.7,116.0,0.0,47.0,0.2,1.07,746.49,True,False,True,False,True,True,True,88.9
+2026-06-30,041 Benelux,KENDR.AS,6,19.62,89.4,40.6,40.3,48.3,9.2,1.4,18.05,True,False,True,True,True,True,True,81.9
+2026-06-30,041 Benelux,BESI.AS,5,287.1,95.3,63.7,-13.8,63.3,10.4,1.06,264.13,True,False,True,False,True,True,True,75.4
+2026-06-30,041 Benelux,ASML.AS,4,1721.4,96.3,17.1,10.7,46.7,0.0,0.75,1583.69,False,False,True,False,True,True,True,69.3
+2026-06-30,041 Benelux,JDEP.AS,5,31.84,70.8,89.4,47.3,7.0,2.9,0.76,29.29,True,True,True,False,False,True,True,68.9
+2026-06-30,041 Benelux,BAMNB.AS,4,12.27,88.7,0.0,9.8,45.7,3.4,0.89,11.29,False,False,True,False,True,True,True,67.7
+2026-06-30,041 Benelux,MT.AS,4,52.7,89.7,-28.6,85.2,28.2,15.2,0.64,48.48,False,True,False,False,True,True,True,57.9
+2026-06-30,041 Benelux,NEDAP.AS,4,95.5,76.2,32.0,6.6,28.4,4.4,0.89,87.86,True,False,True,False,False,True,True,53.2
+2026-06-30,041 Benelux,UCB.BR,5,262.0,76.3,26.4,113.1,41.9,7.6,0.98,241.04,True,True,True,False,False,True,True,52.6
