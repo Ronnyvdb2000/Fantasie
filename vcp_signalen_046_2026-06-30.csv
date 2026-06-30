@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-06-30,046 Milaan,BZU.MI,4,44.79,4,8.44,49.1597,42.41,False,1.42,False,False,True,False,60
+2026-06-30,046 Milaan,PRY.MI,4,146.05,2,14.46,154.2,131.43,False,0.69,True,False,True,False,60
+2026-06-30,046 Milaan,GE.MI,4,10.65,3,7.02,11.4,10.46,False,0.28,False,False,True,False,55

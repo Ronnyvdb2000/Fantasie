@@ -1,0 +1,6 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-06-30,041 Benelux,ARGX.BR,5,811.4,2,7.68,721.0,648.71,True,1.51,False,True,False,False,80
+2026-06-30,041 Benelux,AED.BR,4,70.6,5,6.43,74.7694,66.27,False,1.91,True,False,False,False,75
+2026-06-30,041 Benelux,SIP.BR,5,92.1,2,5.88,96.9234,90.38,False,0.57,False,True,False,True,65
+2026-06-30,041 Benelux,THEON.AS,5,29.84,2,9.11,33.9647,29.63,False,1.27,False,True,True,True,65
+2026-06-30,041 Benelux,SHELL.AS,4,34.06,2,5.79,38.2832,35.33,False,0.61,False,True,False,True,55
