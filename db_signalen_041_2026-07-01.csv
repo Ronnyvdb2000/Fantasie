@@ -1,0 +1,11 @@
+datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
+2026-07-01,041 Benelux,AGN.AS,4,7.58,7.388,7.54,6,True,0.94,True,True,55
+2026-07-01,041 Benelux,ASML.AS,4,1641.6,1553.8,1711.4,8,True,0.79,True,True,55
+2026-07-01,041 Benelux,HAVAS.AS,4,17.65,16.85,17.15,7,True,0.91,True,True,55
+2026-07-01,041 Benelux,GLPG.AS,3,26.22,24.12,25.26,11,True,1.64,False,False,48.2
+2026-07-01,041 Benelux,AED.BR,3,70.35,67.95,69.65,11,True,0.93,False,True,40
+2026-07-01,041 Benelux,LOTB.BR,3,11520.0,11060.0,11400.0,10,True,0.95,False,True,40
+2026-07-01,041 Benelux,UCB.BR,3,257.9,247.6,254.9,10,True,0.99,False,True,40
+2026-07-01,041 Benelux,DEME.BR,3,171.4,171.4,178.2,4,False,1.62,False,True,38.1
+2026-07-01,041 Benelux,ARGX.BR,3,793.6,748.6,813.6,7,False,1.1,True,True,35
+2026-07-01,041 Benelux,BAMNB.AS,3,12.18,12.18,12.77,4,False,0.68,True,True,35
