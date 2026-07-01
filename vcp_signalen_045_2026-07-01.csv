@@ -1,0 +1,18 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-07-01,045 Londen,CCH.L,7,4958.0,3,4.21,4586.7088,4133.37,True,1.91,True,True,True,False,115
+2026-07-01,045 Londen,COST.L,6,213.5,2,7.01,206.0,181.41,True,0.55,True,True,False,True,105
+2026-07-01,045 Londen,DPLM.L,6,7185.0,2,4.89,7099.8051,6765.04,True,0.54,True,False,True,True,105
+2026-07-01,045 Londen,CLIG.L,4,448.0,5,4.27,440.0,417.32,True,0.71,True,False,False,False,95
+2026-07-01,045 Londen,HMSO.L,4,369.2,5,7.9,341.356,316.93,True,1.28,True,False,False,False,95
+2026-07-01,045 Londen,ITV.L,4,82.0,5,6.23,81.8161,77.9,True,0.9,True,False,False,False,95
+2026-07-01,045 Londen,JFJ.L,4,811.0,5,8.06,761.0,738.12,True,1.26,True,False,False,False,95
+2026-07-01,045 Londen,MONY.L,5,190.2,3,4.86,173.8963,175.53,True,4.22,False,True,False,False,85
+2026-07-01,045 Londen,AUTO.L,6,511.2,2,5.92,518.2,443.49,False,0.72,False,True,True,True,75
+2026-07-01,045 Londen,BLND.L,4,412.2,5,8.52,424.0888,358.49,False,0.48,True,False,False,False,75
+2026-07-01,045 Londen,JUP.L,6,169.8,2,8.09,172.5146,151.34,False,0.58,False,True,True,True,75
+2026-07-01,045 Londen,AVON.L,4,1764.0,5,9.48,1936.0,1570.23,False,0.65,False,False,True,False,65
+2026-07-01,045 Londen,ROR.L,5,301.8,2,5.6,341.7451,296.41,False,0.8,False,True,True,True,65
+2026-07-01,045 Londen,SMIN.L,4,2572.0,3,5.24,2656.0,2380.44,False,1.17,True,False,False,False,65
+2026-07-01,045 Londen,FAN.L,4,618.0,4,9.15,658.0,563.71,False,0.71,False,False,True,False,60
+2026-07-01,045 Londen,TRN.L,4,214.0,2,10.07,247.6,207.31,False,0.58,False,True,True,True,55
+2026-07-01,045 Londen,WEIR.L,4,2434.0,3,6.62,3185.7454,2309.68,False,0.57,False,True,True,False,55

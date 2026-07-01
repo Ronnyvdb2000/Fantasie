@@ -1,0 +1,10 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-07-01,042 Parijs,ELIS.PA,6,26.92,2,3.25,26.9019,25.73,True,1.45,True,True,False,True,105
+2026-07-01,042 Parijs,OR.PA,4,380.35,5,6.95,362.6751,365.47,True,1.4,True,False,False,False,95
+2026-07-01,042 Parijs,MC.PA,4,481.0,5,6.54,473.8238,453.58,True,0.88,False,False,True,False,85
+2026-07-01,042 Parijs,SAF.PA,4,349.9,4,7.66,344.0344,282.54,True,0.97,False,False,True,False,80
+2026-07-01,042 Parijs,CDI.PA,4,444.6,4,6.62,471.237,424.78,False,0.62,False,False,True,False,60
+2026-07-01,042 Parijs,HO.PA,5,229.4,2,7.61,239.0421,220.05,False,0.82,False,True,True,False,60
+2026-07-01,042 Parijs,AM.PA,4,292.4,3,6.03,335.2647,282.66,False,0.77,False,True,True,False,55
+2026-07-01,042 Parijs,AI.PA,4,176.3,2,3.56,184.9,162.53,False,1.06,False,True,False,False,50
+2026-07-01,042 Parijs,RBT.PA,4,813.0,2,5.48,829.6177,773.66,False,0.53,False,False,True,False,50
