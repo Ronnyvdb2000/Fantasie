@@ -1,7 +1,0 @@
-datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
-2026-06-23,041 Benelux,PRX.AS,3,36.96,42.5,✗ neutraal (42.5),✗ neutraal (1.396),68.3,✓ 68.3% opwaarts (ratio 10.4:1),36.96,✓ 0.0% boven bodem (36.96),62.19,34.54,53.0,✓ 53.00%
-2026-06-23,041 Benelux,SHUR.BR,3,24.05,33.2,✓ oververkocht (33.2),✗ neutraal (-2.927),50.0,✓ 50.0% opwaarts (ratio 10.8:1),22.92,✗ 4.9% boven bodem (22.92),36.09,22.94,490.0,✓ 490.00%
-2026-06-23,041 Benelux,IMCD.AS,3,79.86,38.6,✓ oververkocht (38.6),✗ neutraal (-11.966),42.5,✓ 42.5% opwaarts (ratio 6.5:1),68.87,✗ 16.0% boven bodem (68.87),113.76,74.62,221.0,✓ 221.00%
-2026-06-23,041 Benelux,EVS.BR,3,28.2,45.3,✗ neutraal (45.3),✗ neutraal (1.341),31.1,✓ 31.1% opwaarts (ratio 5.7:1),28.2,✓ 0.0% boven bodem (28.20),36.97,26.66,426.0,✓ 426.00%
-2026-06-23,041 Benelux,PROX.BR,3,6.19,49.9,✗ neutraal (49.9),✗ neutraal (0.254),30.9,✓ 30.9% opwaarts (ratio 7.0:1),6.12,✓ 1.1% boven bodem (6.12),8.1,5.92,980.0,✓ 980.00%
-2026-06-23,041 Benelux,HEIA.AS,3,72.56,48.4,✓ herstel (48.4 ↑),✓ histogram ↑ (0.457),10.4,✗ 10.4% / ratio 2.4:1,64.46,✗ 12.6% boven bodem (64.46),80.12,69.46,268.0,✓ 268.00%

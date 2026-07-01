@@ -1,9 +1,0 @@
-datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
-2026-06-26,046 Milaan,PRY.MI,7,142.85,95.4,64.0,54.9,58.4,9.0,1.67,131.42,True,True,True,True,True,True,True,95.5
-2026-06-26,046 Milaan,SPM.MI,5,4.17,88.2,1.3,31.6,49.8,13.4,0.7,3.84,False,True,True,False,True,True,True,67.6
-2026-06-26,046 Milaan,ELN.MI,4,17.25,85.7,-4.8,-5.1,31.4,0.0,1.12,15.87,False,False,True,False,True,True,True,67.1
-2026-06-26,046 Milaan,UNI.MI,4,24.1,82.5,9.7,16.0,20.5,2.4,1.03,22.17,False,False,True,False,True,True,True,66.5
-2026-06-26,046 Milaan,G.MI,4,42.49,80.1,0.0,5.5,35.9,0.9,1.16,39.09,False,False,True,False,True,True,True,66.0
-2026-06-26,046 Milaan,DIS.MI,4,7.23,92.7,45.6,-32.2,9.0,20.8,0.97,6.65,True,False,False,False,True,True,True,63.1
-2026-06-26,046 Milaan,DAN.MI,4,67.85,92.9,4.6,4.9,11.8,10.8,0.77,62.42,False,False,True,False,True,True,True,58.6
-2026-06-26,046 Milaan,TEN.MI,4,24.67,77.8,6.7,-29.8,14.4,10.9,1.41,22.7,False,False,True,True,False,True,True,40

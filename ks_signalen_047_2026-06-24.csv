@@ -1,3 +1,0 @@
-datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
-2026-06-24,047 Toronto,TRI.TO,3,115.25,26.9,✓ oververkocht (26.9),✗ neutraal (-22.772),145.1,✓ 145.1% opwaarts (ratio 16.7:1),107.8,✗ 6.9% boven bodem (107.80),282.53,105.23,318.0,✓ 318.00%
-2026-06-24,047 Toronto,STN.TO,3,98.68,39.1,✓ oververkocht (39.1),✗ neutraal (1.176),60.3,✓ 60.3% opwaarts (ratio 10.2:1),95.72,✗ 3.1% boven bodem (95.72),158.18,92.84,97.0,✓ 97.00%

@@ -1,6 +1,0 @@
-datum,exchange,ticker,score,price,rs,eps_q_growth,eps_cagr,inst_pct,pct_from_high,vol_ratio,stop,c_ok,a_ok,n_ok,s_ok,l_ok,i_ok,m_ok,total_score
-2026-06-26,042 Parijs,FII.PA,5,66.1,89.3,0.0,92.9,29.0,5.2,0.96,60.81,False,True,True,False,True,True,True,67.9
-2026-06-26,042 Parijs,DBG.PA,4,9.72,85.0,16.3,-5.6,26.7,7.3,0.87,8.94,False,False,True,False,True,True,True,57.0
-2026-06-26,042 Parijs,MAU.PA,4,7.7,72.0,131.7,39.7,8.1,32.7,0.71,7.08,True,True,False,False,False,True,True,53.2
-2026-06-26,042 Parijs,IPN.PA,4,162.4,76.9,-3.9,-17.0,21.0,5.1,1.36,149.41,False,False,True,True,False,True,True,40
-2026-06-26,042 Parijs,NEX.PA,4,141.1,70.3,0.0,26.2,63.7,14.4,1.1,129.81,False,True,True,False,False,True,True,40

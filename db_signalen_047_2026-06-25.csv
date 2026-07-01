@@ -1,7 +1,0 @@
-datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
-2026-06-25,047 Toronto,CCO.TO,3,146.84,138.04,148.75,13,True,0.82,False,True,40
-2026-06-25,047 Toronto,CP.TO,3,123.69,120.77,122.77,6,True,1.35,False,True,40
-2026-06-25,047 Toronto,DFY.TO,3,74.2,70.1,73.18,11,True,0.78,False,True,40
-2026-06-25,047 Toronto,WCN.TO,3,235.96,217.03,221.3,7,True,1.44,False,True,40
-2026-06-25,047 Toronto,HBM.TO,3,33.37,36.04,39.53,4,False,1.5,False,True,37.5
-2026-06-25,047 Toronto,IAG.TO,3,192.53,187.25,192.87,5,False,1.03,True,True,35

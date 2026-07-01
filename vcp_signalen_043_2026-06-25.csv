@@ -1,4 +1,0 @@
-datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
-2026-06-25,043 Frankfurt,DWS.DE,4,63.6,4,4.51,59.2634,56.54,True,0.72,True,False,False,False,90
-2026-06-25,043 Frankfurt,FME.DE,4,40.89,3,7.3,38.8858,34.8,True,1.74,False,False,False,False,75
-2026-06-25,043 Frankfurt,KBX.DE,4,101.4,5,7.82,105.2418,94.81,False,0.81,True,False,False,False,75

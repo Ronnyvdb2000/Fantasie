@@ -1,9 +1,0 @@
-datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
-2026-06-29,044 Spanje/Port,AENA.MC,4,27.32,4,5.76,25.1078,23.3,True,0.5,True,False,False,False,90
-2026-06-29,044 Spanje/Port,ROVI.MC,5,58.7,2,3.52,61.1,57.02,False,0.7,False,True,False,True,65
-2026-06-29,044 Spanje/Port,VID.MC,4,83.1,5,5.24,87.3,73.34,False,0.6,False,False,True,False,65
-2026-06-29,044 Spanje/Port,VIS.MC,4,58.5,3,3.72,58.9206,56.63,False,0.62,True,False,False,False,65
-2026-06-29,044 Spanje/Port,AENA.MC,4,27.32,4,5.76,25.1078,23.3,True,0.5,True,False,False,False,90
-2026-06-29,044 Spanje/Port,ROVI.MC,5,58.7,2,3.52,61.1,57.02,False,0.7,False,True,False,True,65
-2026-06-29,044 Spanje/Port,VID.MC,4,83.1,5,5.24,87.3,73.34,False,0.6,False,False,True,False,65
-2026-06-29,044 Spanje/Port,VIS.MC,4,58.5,3,3.72,58.9206,56.63,False,0.62,True,False,False,False,65
