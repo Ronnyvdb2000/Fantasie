@@ -3,41 +3,37 @@
 """
 bot_00cs.py  —  CAN SLIM ENGINE v1.0
 Gebaseerd op William O'Neil's CAN SLIM methode.
-Zelfde structuur, tickerbestanden en Telegram output als bot_00xxxV2.py.
 
 CAN SLIM criteria (score 0-7):
-  C — Current Earnings    : kwartaal EPS groei ≥ 25% YoY
-  A — Annual Earnings     : jaarlijkse EPS groei ≥ 25% over 3 jaar
+  C — Current Earnings    : kwartaal EPS groei >= 25% YoY
+  A — Annual Earnings     : jaarlijkse EPS groei >= 25% over 3 jaar
   N — New High            : prijs binnen 15% van 52-weekse high
   S — Supply & Demand     : volume stijgt bij koersstijging
-  L — Leader              : RS Rating ≥ 80 vs. universe
-  I — Institutional       : institutionele ownership > 0 (proxy via yfinance)
-  M — Market Direction    : aandeel boven MA200 (marktfilter)
+  L — Leader              : RS Rating >= 80 vs. universe
+  I — Institutional       : institutionele ownership > 0
+  M — Market Direction    : aandeel boven MA200
 
 Gebruik:
-  python bot_00cs.py          # live rapport
+  python bot_00cs.py live     # live rapport
   python bot_00cs.py backtest # backtest modus
-
-GitHub Actions: dagelijks om 22:00 UTC
 """
 
 import os
 import sys
 import math
-import csv
 import warnings
 import datetime as dt
 import time
+import smtplib
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
 import requests
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -47,10 +43,8 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 START_CAPITAL        = 50_000.0
 MAX_POSITIONS        = 10
-MIN_CASH_RATIO       = 0.10
 RISICO_PCT_PER_TRADE = 0.05
 SLIPPAGE_PCT         = 0.001
-
 TRADE_COST_FIXED     = 15.0
 TRADE_COST_PCT       = 0.0035
 TAX_RATE             = 0.10
@@ -73,27 +67,18 @@ EXCHANGES = {
     "048 Nasdaq/NYSE": "tickers_048x.txt",
 }
 
-# CAN SLIM parameters
 CS_CFG = {
-    # C — Current Earnings
-    "eps_quarterly_growth":  25.0,   # min % EPS groei kwartaal YoY
-    # A — Annual Earnings
-    "eps_annual_growth":     25.0,   # min % EPS groei per jaar
-    "eps_annual_years":      3,      # aantal jaren voor trend
-    # N — New High
-    "max_from_high_pct":     15.0,   # max % onder 52-weekse high
-    # S — Supply & Demand
-    "vol_ma_period":         50,     # volume MA periode
-    "vol_up_days":           10,     # laatste N dagen voor volume analyse
-    # L — Leader
-    "rs_min":                80,     # min RS rating (0-99)
-    # M — Market Direction
-    "ma_trend":              200,    # MA voor marktfilter
-    # Stop
-    "stop_pct":              8.0,    # max stop onder entry (O'Neil regel)
+    "eps_quarterly_growth":  25.0,
+    "eps_annual_growth":     25.0,
+    "eps_annual_years":      3,
+    "max_from_high_pct":     15.0,
+    "vol_ma_period":         50,
+    "vol_up_days":           10,
+    "rs_min":                80,
+    "ma_trend":              200,
+    "stop_pct":              8.0,
     "atr_period":            14,
-    # Rapportage
-    "min_score":             4,      # min score om te rapporteren (0-7)
+    "min_score":             4,
 }
 
 BACKTEST_START = "2021-01-01"
@@ -101,7 +86,7 @@ BACKTEST_END   = dt.date.today().isoformat()
 
 
 # ============================================================
-# HULPFUNCTIES  (identiek aan bot_00xxxV2.py)
+# HULPFUNCTIES
 # ============================================================
 
 def trade_cost(amount: float) -> float:
@@ -137,14 +122,14 @@ def send_telegram_message(text: str) -> None:
     try:
         requests.post(
             url,
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"},
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": text,
+                  "parse_mode": "Markdown", "disable_web_page_preview": True},
             timeout=10,
         )
     except Exception as e:
         print(f"Telegram fout: {e}")
 
 def send_email(subject: str, body: str) -> None:
-    """Verstuurt rapport via Gmail SMTP."""
     if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
         return
     try:
@@ -152,7 +137,6 @@ def send_email(subject: str, body: str) -> None:
         msg["From"]    = EMAIL_USER
         msg["To"]      = EMAIL_RECEIVER
         msg["Subject"] = subject
-        # Markdown opschonen voor email
         clean = body.replace("*", "").replace("`", "").replace("•", "-").replace("_", "")
         msg.attach(MIMEText(clean, "plain", "utf-8"))
         server = smtplib.SMTP("smtp.gmail.com", 587)
@@ -163,11 +147,6 @@ def send_email(subject: str, body: str) -> None:
         print(f"Email verzonden naar {EMAIL_RECEIVER}")
     except Exception as e:
         print(f"Email fout: {e}")
-
-def ensure_csv_header(path: str, header: List[str]) -> None:
-    if not os.path.exists(path):
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(header)
 
 def _yahoo_link(ticker: str) -> str:
     return f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
@@ -208,24 +187,16 @@ def sizing_tekst(ticker, prijs, stop, portfolio_waarde) -> str:
     entry       = prijs * (1 + SLIPPAGE_PCT)
     aandelen, max_loss = bereken_positie(portfolio_waarde, entry, stop)
     investering = round(entry * aandelen, 2)
-    slip_est    = round(entry * SLIPPAGE_PCT * aandelen * 2, 2)
     kosten      = round(trade_cost(investering), 2)
     rr          = ((prijs * 1.20 - entry) / (entry - stop)) if (entry - stop) > 0 else 0
     return (
-        f"  📐 *Sizing:*\n"
-        f"  Entry geschat : EUR{entry:.2f}\n"
-        f"  Stop-Loss     : EUR{stop:.2f}  (max {CS_CFG['stop_pct']:.0f}% onder entry)\n"
-        f"  R/R indicatief: {rr:.1f}:1  (TP = +20%)\n"
-        f"  Aandelen      : {aandelen} stuks\n"
-        f"  Investering   : EUR{investering:,.2f}\n"
-        f"  Max verlies   : EUR{max_loss:,.2f}  (5% portfolio)\n"
-        f"  Slippage est. : EUR{slip_est:.2f}\n"
-        f"  Kosten        : EUR{kosten:.2f}"
+        f"  Entry: EUR{entry:.2f} | Stop: EUR{stop:.2f} | R/R: {rr:.1f}:1\n"
+        f"  {aandelen} stuks | EUR{investering:,.2f} | Max verlies: EUR{max_loss:,.2f}"
     )
 
 
 # ============================================================
-# DATA DOWNLOAD  (identiek aan bot_00xxxV2.py)
+# DATA DOWNLOAD
 # ============================================================
 
 def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
@@ -246,7 +217,6 @@ def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
         return None
     df["Ticker"] = ticker
     return df
-
 
 def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
     if not tickers:
@@ -299,7 +269,6 @@ def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
 
     if not frames:
         return pd.DataFrame()
-
     df = pd.concat(frames, ignore_index=True)
     if "Date" in df.columns:
         df["Date"] = pd.to_datetime(df["Date"])
@@ -309,7 +278,7 @@ def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
 
 
 # ============================================================
-# RS RATING  (identiek aan bot_00ms.py)
+# RS RATING
 # ============================================================
 
 def compute_rs_ratings(df: pd.DataFrame) -> Dict[str, float]:
@@ -337,65 +306,47 @@ def compute_rs_ratings(df: pd.DataFrame) -> Dict[str, float]:
 
 
 # ============================================================
-# FUNDAMENTELE DATA VIA YFINANCE
+# FUNDAMENTELE DATA
 # ============================================================
 
 def get_fundamentals(ticker: str) -> Dict:
-    """
-    Haalt EPS, groei en institutionele data op via yfinance.
-    Geeft lege dict terug bij fout.
-    """
     result = {
-        "eps_q_growth":    float("nan"),  # kwartaal EPS groei % YoY
-        "eps_annual_ok":   False,         # jaarlijkse EPS groei ≥ 25% over 3j
-        "eps_annual_cagr": float("nan"),  # CAGR EPS over 3 jaar
-        "institutional":   False,         # institutionele ownership > 0
+        "eps_q_growth":    float("nan"),
+        "eps_annual_ok":   False,
+        "eps_annual_cagr": float("nan"),
+        "institutional":   False,
         "inst_pct":        0.0,
     }
     try:
         t    = yf.Ticker(ticker)
         info = t.info or {}
-
-        # ── C: Kwartaal EPS groei ───────────────────────────────
-        # yfinance geeft earningsQuarterlyGrowth als ratio
         q_growth = info.get("earningsQuarterlyGrowth")
         if q_growth is not None:
             result["eps_q_growth"] = round(float(q_growth) * 100, 1)
-
-        # ── A: Jaarlijkse EPS trend ─────────────────────────────
         try:
-            income = t.financials  # jaarlijks, kolommen = jaren
+            income = t.financials
             if income is not None and not income.empty:
                 if "Net Income" in income.index:
                     net = income.loc["Net Income"].dropna().sort_index()
                     if len(net) >= CS_CFG["eps_annual_years"]:
-                        # Nieuwste jaren
                         vals = net.values[-CS_CFG["eps_annual_years"]:]
-                        # CAGR over de periode
                         if vals[0] > 0 and vals[-1] > 0:
                             cagr = ((vals[-1] / vals[0]) **
                                     (1 / (CS_CFG["eps_annual_years"] - 1)) - 1) * 100
                             result["eps_annual_cagr"] = round(cagr, 1)
-                            # Elk jaar positief gegroeid?
                             grew_each_year = all(
-                                vals[i] > vals[i - 1]
-                                for i in range(1, len(vals))
+                                vals[i] > vals[i - 1] for i in range(1, len(vals))
                             )
                             result["eps_annual_ok"] = (
-                                cagr >= CS_CFG["eps_annual_growth"]
-                                and grew_each_year
+                                cagr >= CS_CFG["eps_annual_growth"] and grew_each_year
                             )
         except Exception:
             pass
-
-        # ── I: Institutionele ownership ─────────────────────────
         inst_pct = info.get("heldPercentInstitutions", 0.0) or 0.0
-        result["institutional"] = inst_pct > 0.05  # min 5% institutioneel
+        result["institutional"] = inst_pct > 0.05
         result["inst_pct"] = round(inst_pct * 100, 1)
-
-    except Exception as e:
-        pass  # geen data beschikbaar
-
+    except Exception:
+        pass
     return result
 
 
@@ -407,9 +358,8 @@ def get_fundamentals(ticker: str) -> Dict:
 class CSSignaal:
     ticker:        str
     price:         float
-    score:         int            # 0-7
+    score:         int
     score_labels:  List[str]
-    # individuele criteria
     c_ok:          bool
     a_ok:          bool
     n_ok:          bool
@@ -417,7 +367,6 @@ class CSSignaal:
     l_ok:          bool
     i_ok:          bool
     m_ok:          bool
-    # metrics
     eps_q_growth:  float
     eps_cagr:      float
     rs:            float
@@ -429,11 +378,10 @@ class CSSignaal:
     high52w:       float
     total_score:   float
 
-
 def analyse_ticker(
-    ticker: str,
-    g:      pd.DataFrame,
-    rs_ratings: Dict[str, float],
+    ticker:       str,
+    g:            pd.DataFrame,
+    rs_ratings:   Dict[str, float],
     fundamentals: Dict,
 ) -> Optional[CSSignaal]:
     try:
@@ -449,37 +397,27 @@ def analyse_ticker(
         if current_price <= 0 or math.isnan(current_price):
             return None
 
-        # ── Technische indicatoren ───────────────────────────────
-        ma200    = safe_float(close.rolling(CS_CFG["ma_trend"]).mean().iloc[-1])
-        vol_ma   = volume.rolling(CS_CFG["vol_ma_period"]).mean()
-        vol_now  = safe_float(volume.iloc[-1])
-        vol_avg  = safe_float(vol_ma.iloc[-1])
+        ma200   = safe_float(close.rolling(CS_CFG["ma_trend"]).mean().iloc[-1])
+        lb      = min(252, len(close))
+        h52w    = float(close.iloc[-lb:].max())
+        rs      = rs_ratings.get(ticker, 0.0)
 
-        lb    = min(252, len(close))
-        h52w  = float(close.iloc[-lb:].max())
-        rs    = rs_ratings.get(ticker, 0.0)
-
-        # ATR voor stop
         hl  = high - close.shift()
         lcp = (g["Low"] - close.shift()).abs()
         hcp = (high - close.shift()).abs()
         tr  = pd.concat([high - g["Low"], hcp, lcp], axis=1).max(axis=1)
-        atr = safe_float(_wilder_smooth(tr, CS_CFG["atr_period"]).iloc[-1],
-                         current_price * 0.02)
         stop = current_price * (1 - CS_CFG["stop_pct"] / 100)
 
         pct_from_high = ((h52w - current_price) / h52w * 100) if h52w > 0 else 100.0
 
-        # Volume ratio: gemiddeld volume op up-days vs. down-days
         recent = g.iloc[-CS_CFG["vol_up_days"]:].copy()
         recent["up"] = recent["Close"] > recent["Close"].shift()
-        vol_up   = recent.loc[recent["up"]  == True,  "Volume"].mean()
-        vol_down = recent.loc[recent["up"]  == False, "Volume"].mean()
+        vol_up   = recent.loc[recent["up"] == True,  "Volume"].mean()
+        vol_down = recent.loc[recent["up"] == False, "Volume"].mean()
         vol_ratio = (vol_up / vol_down) if (vol_down > 0 and not math.isnan(vol_down)) else 1.0
         if math.isnan(vol_ratio):
             vol_ratio = 1.0
 
-        # ── CAN SLIM criteria ────────────────────────────────────
         score  = 0
         labels = []
 
@@ -492,46 +430,39 @@ def analyse_ticker(
                 labels.append(f"✗ {letter}: {fail_msg}")
             return ok
 
-        # C — Current Earnings
         eps_q = fundamentals.get("eps_q_growth", float("nan"))
         c_ok  = not math.isnan(eps_q) and eps_q >= CS_CFG["eps_quarterly_growth"]
         chk(c_ok, "C",
-            f"kwartaal EPS +{eps_q:.1f}% YoY (≥{CS_CFG['eps_quarterly_growth']:.0f}%)",
-            f"kwartaal EPS {eps_q:.1f}% YoY (<{CS_CFG['eps_quarterly_growth']:.0f}%)" if not math.isnan(eps_q) else "geen EPS data")
+            f"kwartaal EPS +{eps_q:.1f}% YoY",
+            f"kwartaal EPS {eps_q:.1f}% YoY" if not math.isnan(eps_q) else "geen EPS data")
 
-        # A — Annual Earnings
-        a_ok    = fundamentals.get("eps_annual_ok", False)
+        a_ok     = fundamentals.get("eps_annual_ok", False)
         eps_cagr = fundamentals.get("eps_annual_cagr", float("nan"))
         chk(a_ok, "A",
-            f"EPS CAGR {eps_cagr:.1f}% over {CS_CFG['eps_annual_years']}j (≥{CS_CFG['eps_annual_growth']:.0f}%)",
-            f"EPS CAGR {eps_cagr:.1f}% (<{CS_CFG['eps_annual_growth']:.0f}%)" if not math.isnan(eps_cagr) else "geen jaar EPS data")
+            f"EPS CAGR {eps_cagr:.1f}% over {CS_CFG['eps_annual_years']}j",
+            f"EPS CAGR {eps_cagr:.1f}%" if not math.isnan(eps_cagr) else "geen jaar EPS data")
 
-        # N — New High (binnen 15% van 52w high)
         n_ok = pct_from_high <= CS_CFG["max_from_high_pct"]
         chk(n_ok, "N",
-            f"{pct_from_high:.1f}% onder 52w high (≤{CS_CFG['max_from_high_pct']:.0f}%)",
-            f"{pct_from_high:.1f}% onder 52w high (>{CS_CFG['max_from_high_pct']:.0f}%)")
+            f"{pct_from_high:.1f}% onder 52w high",
+            f"{pct_from_high:.1f}% onder 52w high")
 
-        # S — Supply & Demand (volume hoger op up-days)
         s_ok = vol_ratio >= 1.2
         chk(s_ok, "S",
-            f"volume up-days {vol_ratio:.1f}× down-days (≥1.2×)",
-            f"volume up-days {vol_ratio:.1f}× down-days (<1.2×)")
+            f"volume up-days {vol_ratio:.1f}x down-days",
+            f"volume up-days {vol_ratio:.1f}x down-days")
 
-        # L — Leader (RS ≥ 80)
         l_ok = rs >= CS_CFG["rs_min"]
         chk(l_ok, "L",
-            f"RS={rs:.0f} (≥{CS_CFG['rs_min']})",
+            f"RS={rs:.0f} (>={CS_CFG['rs_min']})",
             f"RS={rs:.0f} (<{CS_CFG['rs_min']})")
 
-        # I — Institutional
         i_ok     = fundamentals.get("institutional", False)
         inst_pct = fundamentals.get("inst_pct", 0.0)
         chk(i_ok, "I",
-            f"institutioneel {inst_pct:.1f}% (≥5%)",
-            f"institutioneel {inst_pct:.1f}% (<5%)")
+            f"institutioneel {inst_pct:.1f}%",
+            f"institutioneel {inst_pct:.1f}%")
 
-        # M — Market Direction (Close > MA200)
         m_ok = not math.isnan(ma200) and current_price > ma200
         chk(m_ok, "M",
             f"Close > MA200 ({ma200:.2f})",
@@ -540,112 +471,82 @@ def analyse_ticker(
         if score < CS_CFG["min_score"]:
             return None
 
-        # Ranking: fundamentele criteria wegen zwaarder
         total_score = (
             score * 10
             + (rs * 0.2 if l_ok else 0)
             + (eps_q * 0.1 if c_ok and not math.isnan(eps_q) else 0)
-            + (10 if n_ok and pct_from_high <= 5 else 0)  # bonus: vlak bij high
+            + (10 if n_ok and pct_from_high <= 5 else 0)
         )
 
         return CSSignaal(
-            ticker=ticker,
-            price=round(current_price, 2),
-            score=score,
-            score_labels=labels,
+            ticker=ticker, price=round(current_price, 2),
+            score=score, score_labels=labels,
             c_ok=c_ok, a_ok=a_ok, n_ok=n_ok,
             s_ok=s_ok, l_ok=l_ok, i_ok=i_ok, m_ok=m_ok,
             eps_q_growth=round(eps_q, 1) if not math.isnan(eps_q) else 0.0,
             eps_cagr=round(eps_cagr, 1) if not math.isnan(eps_cagr) else 0.0,
-            rs=round(rs, 1),
-            pct_from_high=round(pct_from_high, 1),
-            vol_ratio=round(vol_ratio, 2),
-            inst_pct=round(inst_pct, 1),
+            rs=round(rs, 1), pct_from_high=round(pct_from_high, 1),
+            vol_ratio=round(vol_ratio, 2), inst_pct=round(inst_pct, 1),
             ma200=round(ma200, 2) if not math.isnan(ma200) else 0.0,
-            stop=round(stop, 2),
-            high52w=round(h52w, 2),
+            stop=round(stop, 2), high52w=round(h52w, 2),
             total_score=round(total_score, 1),
         )
-
     except Exception as e:
         print(f"[WARN] {ticker}: fout — {e}")
         return None
 
 
 # ============================================================
-# TELEGRAM OUTPUT  (zelfde stijl als bot_00xxxV2.py)
+# OUTPUT
 # ============================================================
 
 def _score_bar(score: int, max_score: int = 7) -> str:
-    filled = "█" * score
-    empty  = "░" * (max_score - score)
-    return f"{filled}{empty} {score}/{max_score}"
+    return "█" * score + "░" * (max_score - score) + f" {score}/{max_score}"
 
-
-def format_cs_per_exchange(
+def format_bericht(
     exchange_name:    str,
     signalen:         List[CSSignaal],
     portfolio_waarde: float,
 ) -> Optional[str]:
-    """
-    Eén bericht per exchange. Slimme filtering:
-    - Toon perfecte score (7/7)
-    - Als geen perfecte: toon hoogste niveau aanwezig
-    - Lege exchanges: geeft None terug (geen bericht)
-    """
     if not signalen:
         return None
 
-    nu = today_str()
+    nu        = today_str()
+    max_score = max(s.score for s in signalen)
+    toon      = [s for s in signalen if s.score == max_score]
+    top2      = signalen[:2]
 
-    def detail_blok(sigs: List[CSSignaal]) -> str:
+    lbl = {7: "⭐ PERFECTE SCORE (7/7)", 6: "🔥 UITSTEKEND (6/7)",
+           5: "⚡ STERK (5/7)", 4: "📊 WATCHLIST (4/7)"}.get(max_score, "📊")
+
+    def sig_blok(sigs: List[CSSignaal]) -> str:
         lines = []
         for s in sigs:
             lines.append(
-                f"• `{s.ticker}` | Score: {_score_bar(s.score)} | EUR{s.price:.2f} | {_yahoo_link(s.ticker)}\n"
+                f"• `{s.ticker}` {_score_bar(s.score)} | EUR{s.price:.2f} | {_yahoo_link(s.ticker)}\n"
                 f"  RS:{s.rs:.0f} | EPS +{s.eps_q_growth:.1f}% | Inst:{s.inst_pct:.1f}%\n"
-                f"  {s.pct_from_high:.1f}% onder 52w high | Vol:{s.vol_ratio:.1f}×\n"
-                + "\n".join(f"  {lbl}" for lbl in s.score_labels) + "\n"
+                f"  {s.pct_from_high:.1f}% onder 52w high | Vol:{s.vol_ratio:.1f}x\n"
                 + sizing_tekst(s.ticker, s.price, s.stop, portfolio_waarde)
             )
         return "\n\n".join(lines)
 
-    # Slimme filtering: hoogste score aanwezig bepaalt wat getoond wordt
-    max_score = max(s.score for s in signalen)
-    if max_score == 7:
-        toon = [s for s in signalen if s.score == 7]
-        label = "⭐ PERFECTE SCORE (7/7)"
-    elif max_score == 6:
-        toon = [s for s in signalen if s.score == 6]
-        label = "🔥 UITSTEKEND (6/7)"
-    elif max_score == 5:
-        toon = [s for s in signalen if s.score == 5]
-        label = "⚡ STERK (5/7)"
-    else:
-        toon = [s for s in signalen if s.score == 4]
-        label = "📊 WATCHLIST (4/7)"
-
-    # Top 2 als fallback aanvulling
-    top2_extra = [s for s in signalen[:2] if s not in toon]
-
     delen = [
         f"📈 *CAN SLIM — {exchange_name}*",
-        f"_{nu} | Beste signalen | {len(signalen)} kandidaten totaal_",
+        f"_{nu} | {len(signalen)} kandidaten_",
         "─────────────────────────────",
-        f"*{label}:*",
-        detail_blok(toon),
-    ]
-
-    if top2_extra:
-        delen += ["─────────────────────────────",
-                  "*🏆 TOP 2 EXTRA:*",
-                  detail_blok(top2_extra)]
-
-    delen += [
+        f"🏆 *TOP 2:*",
+        sig_blok(top2),
         "─────────────────────────────",
-        f"⚙️ _Stop: {CS_CFG['stop_pct']:.0f}% | Risico: 5% | RS≥{CS_CFG['rs_min']} | EPS≥{CS_CFG['eps_quarterly_growth']:.0f}%_",
+        f"*{lbl}:*",
     ]
+    extra = [s for s in toon if s not in top2]
+    if extra:
+        for s in extra:
+            delen.append(f"• `{s.ticker}` {_score_bar(s.score)} | EUR{s.price:.2f} | RS:{s.rs:.0f}")
+    else:
+        delen.append("_Zie top 2 hierboven_")
 
+    delen.append(f"⚙️ _Stop {CS_CFG['stop_pct']:.0f}% | RS>={CS_CFG['rs_min']} | Risico 5%_")
     return "\n\n".join(delen)
 
 
@@ -684,7 +585,6 @@ def run_live_engine():
     print("RS ratings berekenen...")
     rs_ratings = compute_rs_ratings(df)
 
-    # Fundamentele data ophalen — alleen tickers met RS ≥ 70 (tijd besparen)
     rs_candidates = [t for t, r in rs_ratings.items() if r >= 70]
     print(f"Fundamentele data ophalen voor {len(rs_candidates)} RS-kandidaten...")
     fundamentals: Dict[str, Dict] = {}
@@ -692,10 +592,9 @@ def run_live_engine():
         fundamentals[ticker] = get_fundamentals(ticker)
         if i % 20 == 0:
             print(f"  {i}/{len(rs_candidates)} fundamentals opgehaald...")
-        time.sleep(0.3)  # yfinance rate limit
+        time.sleep(0.3)
 
     portfolio_waarde = START_CAPITAL
-
     email_delen: List[str] = []
 
     for ex_name, tlist in exchange_tickers.items():
@@ -708,15 +607,12 @@ def run_live_engine():
             sig  = analyse_ticker(ticker, group, rs_ratings, fund)
             if sig:
                 signalen.append(sig)
-                print(
-                    f"  ✓ {ticker}: {sig.score}/7 | RS={sig.rs:.0f} | "
-                    f"EPS+{sig.eps_q_growth:.0f}% | inst={sig.inst_pct:.0f}%"
-                )
+                print(f"  ✓ {ticker}: {sig.score}/7 | RS={sig.rs:.0f} | EPS+{sig.eps_q_growth:.0f}%")
 
         signalen.sort(key=lambda s: s.total_score, reverse=True)
         print(f"  → {len(signalen)} CAN SLIM kandidaten")
 
-        bericht = format_cs_per_exchange(ex_name, signalen, portfolio_waarde)
+        bericht = format_bericht(ex_name, signalen, portfolio_waarde)
         if bericht:
             send_telegram_message(bericht)
             email_delen.append(bericht)
@@ -724,42 +620,15 @@ def run_live_engine():
         else:
             print(f"  → Overgeslagen (geen signalen): {ex_name}")
 
-        if signalen:
-            _log_csv(signalen, ex_name)
-
-    # Één samenvattingsmail met alle exchanges
+    # Één samenvattingsmail
     if email_delen:
-        datum = today_str()
         send_email(
-            subject=f"CAN SLIM rapport {datum}",
-            body="\n\n" + ("="*40 + "\n\n").join(email_delen),
+            subject=f"CAN SLIM rapport {today_str()}",
+            body="\n\n" + ("=" * 40 + "\n\n").join(email_delen),
         )
 
     print(f"\n{'='*60}")
     print("Klaar.")
-
-
-# ============================================================
-# CSV LOGGING
-# ============================================================
-
-def _log_csv(signalen: List[CSSignaal], exchange: str):
-    fname  = f"cs_signalen_{exchange.split()[0]}_{today_str()}.csv"
-    header = ["datum","exchange","ticker","score","price","rs","eps_q_growth",
-              "eps_cagr","inst_pct","pct_from_high","vol_ratio","stop",
-              "c_ok","a_ok","n_ok","s_ok","l_ok","i_ok","m_ok","total_score"]
-    ensure_csv_header(fname, header)
-    with open(fname, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        for s in signalen:
-            w.writerow([
-                today_str(), exchange, s.ticker, s.score, s.price,
-                s.rs, s.eps_q_growth, s.eps_cagr, s.inst_pct,
-                s.pct_from_high, s.vol_ratio, s.stop,
-                s.c_ok, s.a_ok, s.n_ok, s.s_ok, s.l_ok, s.i_ok, s.m_ok,
-                s.total_score,
-            ])
-    print(f"  CSV: {fname}")
 
 
 # ============================================================
@@ -770,7 +639,6 @@ def run_backtest():
     print(f"{'='*60}")
     print(f"CAN SLIM BACKTEST  {BACKTEST_START} -> {BACKTEST_END}")
     print(f"{'='*60}")
-    print("NB: backtest gebruikt technische criteria only (C/A/I niet beschikbaar historisch)")
 
     all_tickers: List[str] = []
     for path in EXCHANGES.values():
@@ -787,13 +655,11 @@ def run_backtest():
         print("[ERROR] Geen data.")
         return
 
-    all_dates = sorted(df["Date"].dt.date.unique())
+    all_dates  = sorted(df["Date"].dt.date.unique())
     rs_ratings = compute_rs_ratings(df)
-
-    cash      = START_CAPITAL
+    cash       = START_CAPITAL
     positions: Dict[str, Dict] = {}
     trades:    List[Dict]      = []
-
     scan_dates = [d for d in all_dates if d.weekday() == 0]
     print(f"Scanmomenten: {len(scan_dates)} (wekelijks maandag)")
 
@@ -808,7 +674,6 @@ def run_backtest():
             if t and not math.isnan(c):
                 price_map[t] = c
 
-        # Exits
         for ticker, pos in list(positions.items()):
             pos["days"] += 1
             if ticker not in price_map:
@@ -819,7 +684,6 @@ def run_backtest():
                 reason = f"SL ({pos['stop']:.2f})"
             elif pos["days"] >= MAX_HOLD_DAYS:
                 reason = f"Time ({pos['days']}d)"
-
             if reason:
                 exit_slip = close * (1 - SLIPPAGE_PCT)
                 gross     = exit_slip * pos["size"]
@@ -828,62 +692,46 @@ def run_backtest():
                 tax       = pnl * TAX_RATE if pnl > 0 else 0.0
                 cash     += gross - cost - tax
                 trades.append({
-                    "entry_date":  pos["entry_date"].isoformat(),
-                    "exit_date":   scan_date.isoformat(),
-                    "ticker":      ticker,
-                    "score":       pos["score"],
+                    "entry_date": pos["entry_date"].isoformat(),
+                    "exit_date":  scan_date.isoformat(),
+                    "ticker": ticker, "score": pos["score"],
                     "entry_price": pos["entry_price"],
-                    "exit_price":  round(exit_slip, 4),
-                    "size":        pos["size"],
-                    "pnl":         round(pnl, 2),
-                    "tax":         round(tax, 2),
-                    "net":         round(pnl - tax, 2),
-                    "reason":      reason,
-                    "days":        pos["days"],
+                    "exit_price": round(exit_slip, 4),
+                    "size": pos["size"], "pnl": round(pnl, 2),
+                    "tax": round(tax, 2), "net": round(pnl - tax, 2),
+                    "reason": reason, "days": pos["days"],
                 })
                 del positions[ticker]
 
-        # Entries — technische criteria only in backtest
         for ticker, group in df_hist.groupby("Ticker", sort=False):
             if ticker in positions or len(positions) >= MAX_POSITIONS:
                 continue
-            # Vereenvoudigde criteria: N + L + M (beschikbaar zonder API calls)
             sig = analyse_ticker(ticker, group, rs_ratings, {})
-            if not sig:
+            if not sig or not (sig.n_ok and sig.l_ok and sig.m_ok):
                 continue
-            if not (sig.n_ok and sig.l_ok and sig.m_ok):
-                continue
-
-            entry      = sig.price * (1 + SLIPPAGE_PCT)
+            entry       = sig.price * (1 + SLIPPAGE_PCT)
             aandelen, _ = bereken_positie(cash, entry, sig.stop)
             if aandelen <= 0:
                 continue
             investering = entry * aandelen + trade_cost(entry * aandelen)
             if investering > cash:
                 continue
-
             cash -= investering
             positions[ticker] = {
-                "entry_date":  scan_date,
-                "entry_price": round(entry, 4),
-                "size":        aandelen,
-                "stop":        sig.stop,
-                "score":       sig.score,
-                "days":        0,
-                "cost":        trade_cost(investering),
+                "entry_date": scan_date, "entry_price": round(entry, 4),
+                "size": aandelen, "stop": sig.stop, "score": sig.score,
+                "days": 0, "cost": trade_cost(investering),
             }
 
     if trades:
-        tdf = pd.DataFrame(trades)
-        tdf.to_csv("cs_backtest_trades.csv", index=False)
+        tdf  = pd.DataFrame(trades)
         n    = len(tdf)
         nwin = (tdf["net"] > 0).sum()
         pf   = abs(tdf.loc[tdf["net"] > 0, "net"].sum()) / max(
                abs(tdf.loc[tdf["net"] <= 0, "net"].sum()), 1e-9)
         final_val = cash + sum(
             price_map.get(t, p["entry_price"]) * p["size"]
-            for t, p in positions.items()
-        )
+            for t, p in positions.items())
         print(f"\n{'='*60}")
         print(f"Startkapitaal    : EUR{START_CAPITAL:>12,.2f}")
         print(f"Eindkapitaal     : EUR{final_val:>12,.2f}")
@@ -892,7 +740,6 @@ def run_backtest():
         print(f"Profit Factor    : {pf:.2f}")
         print(f"Belasting betaald: EUR{tdf['tax'].sum():,.2f}")
         print(f"Gem. houdduur    : {tdf['days'].mean():.1f} dagen")
-        print(f"Opgeslagen       : cs_backtest_trades.csv")
         print(f"{'='*60}")
     else:
         print("Geen trades gegenereerd.")
