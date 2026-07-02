@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-07-02,043 Frankfurt,KBX.DE,4,106.0,5,7.82,105.2418,94.65,True,0.73,True,False,False,False,95
+2026-07-02,043 Frankfurt,VNA.DE,4,22.62,5,5.0,22.2482,19.86,True,1.84,False,False,False,False,85
+2026-07-02,043 Frankfurt,DB1.DE,5,246.9,2,3.99,260.8,237.9,False,0.93,False,True,True,False,60
