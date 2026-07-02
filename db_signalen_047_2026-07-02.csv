@@ -1,0 +1,12 @@
+datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
+2026-07-02,047 Toronto,ELD.TO,4,47.72,42.25,45.87,8,True,2.04,False,True,60.2
+2026-07-02,047 Toronto,FFH.TO,4,2394.19,2234.9299,2291.97,10,True,2.03,False,True,60.2
+2026-07-02,047 Toronto,DFY.TO,4,75.9,70.1,73.18,15,True,1.79,False,True,59.0
+2026-07-02,047 Toronto,ARX.TO,3,29.94,29.4304,29.9368,6,True,0.37,False,True,40
+2026-07-02,047 Toronto,CP.TO,3,124.6,120.5083,122.504,10,True,0.94,False,True,40
+2026-07-02,047 Toronto,FTT.TO,3,94.9,94.9,98.28,6,True,1.27,False,True,40
+2026-07-02,047 Toronto,GMIN.TO,3,43.14,40.07,42.91,8,True,0.62,False,True,40
+2026-07-02,047 Toronto,IGM.TO,3,78.76,76.08,78.8871,7,True,1.04,False,True,40
+2026-07-02,047 Toronto,NTR.TO,3,92.17,85.1684,87.2397,7,True,0.75,False,True,40
+2026-07-02,047 Toronto,TIH.TO,3,218.93,218.93,235.37,5,False,1.82,False,True,39.1
+2026-07-02,047 Toronto,HBM.TO,3,32.0,32.0,34.18,5,False,1.52,False,True,37.6

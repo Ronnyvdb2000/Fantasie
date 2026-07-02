@@ -1,0 +1,14 @@
+datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
+2026-07-02,041 Benelux,MT.AS,4,55.34,51.5,54.36,5,True,1.67,False,True,58.4
+2026-07-02,041 Benelux,THEON.AS,4,32.56,29.84,32.0,6,True,1.53,False,True,57.6
+2026-07-02,041 Benelux,AGN.AS,4,7.61,7.388,7.54,7,True,0.72,True,True,55
+2026-07-02,041 Benelux,ARGX.BR,4,825.2,748.6,813.6,8,True,0.74,True,True,55
+2026-07-02,041 Benelux,HAVAS.AS,4,17.85,16.85,17.15,8,True,0.76,True,True,55
+2026-07-02,041 Benelux,FAGR.BR,3,24.4,23.8,24.15,7,True,0.88,False,True,40
+2026-07-02,041 Benelux,HEIA.AS,3,76.68,73.22,74.62,6,True,0.76,False,True,40
+2026-07-02,041 Benelux,LOTB.BR,3,11620.0,11060.0,11400.0,11,True,1.48,False,True,40
+2026-07-02,041 Benelux,MONT.BR,3,67.9,65.9,67.8,6,True,0.68,False,True,40
+2026-07-02,041 Benelux,PHIA.AS,3,24.22,23.76,24.17,5,True,0.83,False,True,40
+2026-07-02,041 Benelux,UCB.BR,3,264.6,247.6,254.9,11,True,0.97,False,True,40
+2026-07-02,041 Benelux,AED.BR,3,69.65,69.65,72.15,4,False,1.7,False,True,38.5
+2026-07-02,041 Benelux,ASML.AS,3,1577.8,1553.8,1711.4,9,False,0.9,True,True,35

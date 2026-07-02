@@ -1,0 +1,15 @@
+datum,exchange,ticker,score,price,box_bottom,box_top,box_days,breakout,vol_ratio,new_high,trend_ok,total_score
+2026-07-02,044 Spanje/Port,ELE.MC,5,39.61,37.69,38.21,13,True,2.39,True,True,77.0
+2026-07-02,044 Spanje/Port,FAE.MC,4,4.65,4.458,4.561,8,True,1.59,False,True,58.0
+2026-07-02,044 Spanje/Port,CBAV.MC,4,58.6,55.2,56.6,7,True,0.79,True,True,55
+2026-07-02,044 Spanje/Port,AIR.MC,3,203.8,191.72,196.74,6,True,1.22,False,True,40
+2026-07-02,044 Spanje/Port,COR.LS,3,6.55,6.36,6.55,9,True,0.91,False,True,40
+2026-07-02,044 Spanje/Port,HOME.MC,3,17.21,16.45,16.89,6,True,1.13,False,True,40
+2026-07-02,044 Spanje/Port,IDR.MC,3,51.7,46.92,51.6,6,True,0.84,False,True,40
+2026-07-02,044 Spanje/Port,LDA.MC,3,1.22,1.164,1.2,9,True,0.92,False,True,40
+2026-07-02,044 Spanje/Port,MTS.MC,3,55.2,51.52,54.3,5,True,1.43,False,True,40
+2026-07-02,044 Spanje/Port,PUIG.MC,3,16.74,15.84,16.18,9,True,1.41,False,True,40
+2026-07-02,044 Spanje/Port,REP.MC,3,22.47,21.02,21.92,7,True,1.34,False,True,40
+2026-07-02,044 Spanje/Port,VID.MC,3,86.0,78.7,81.1,14,True,0.89,False,True,40
+2026-07-02,044 Spanje/Port,VIS.MC,3,58.9,57.4,58.3,12,True,0.91,False,True,40
+2026-07-02,044 Spanje/Port,ITX.MC,3,56.68,55.12,56.86,5,False,0.7,True,True,35
