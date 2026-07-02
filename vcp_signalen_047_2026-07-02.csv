@@ -1,3 +1,5 @@
 datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
 2026-07-02,047 Toronto,FFH.TO,4,2394.19,3,5.3,2286.8501,2144.48,True,2.18,False,False,False,False,75
 2026-07-02,047 Toronto,BAM.TO,4,65.05,3,7.68,68.056,61.85,False,0.44,False,False,True,False,55
+2026-07-02,047 Toronto,FFH.TO,4,2394.19,3,5.3,2286.8501,2144.48,True,2.18,False,False,False,False,75
+2026-07-02,047 Toronto,BAM.TO,4,65.05,3,7.68,68.056,61.85,False,0.44,False,False,True,False,55
