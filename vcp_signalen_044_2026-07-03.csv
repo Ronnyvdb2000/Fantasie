@@ -1,0 +1,10 @@
+datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
+2026-07-03,044 Spanje/Port,VID.MC,5,89.6,5,5.24,87.3,73.26,True,2.58,False,False,True,False,95
+2026-07-03,044 Spanje/Port,PUIG.MC,6,16.94,2,4.73,17.6002,15.53,False,1.21,True,True,False,True,85
+2026-07-03,044 Spanje/Port,ENO.MC,6,39.75,2,7.89,40.894,35.52,False,0.55,True,True,True,False,80
+2026-07-03,044 Spanje/Port,ALNT.MC,4,10.3,3,5.38,10.4,9.74,False,2.61,True,False,False,False,65
+2026-07-03,044 Spanje/Port,ROVI.MC,5,56.9,2,3.52,61.1,57.01,False,1.41,False,True,False,True,65
+2026-07-03,044 Spanje/Port,VIS.MC,4,58.7,3,3.72,58.9206,56.62,False,0.87,True,False,False,False,65
+2026-07-03,044 Spanje/Port,A3M.MC,4,4.89,3,7.87,5.086,4.64,False,0.57,False,False,True,False,55
+2026-07-03,044 Spanje/Port,COR.LS,4,6.5,2,6.95,6.76,6.23,False,0.58,False,False,False,True,55
+2026-07-03,044 Spanje/Port,FAE.MC,4,4.63,3,7.93,4.8994,4.28,False,1.09,False,False,True,False,55
