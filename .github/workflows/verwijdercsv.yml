@@ -39,5 +39,5 @@ jobs:
           echo "Geen CSV bestanden gevonden om te verwijderen."
         else
           git commit -m "Automated: CSV bestanden opgeschoond door bot"
-          git push origin main
+          git push origin master
         fi
