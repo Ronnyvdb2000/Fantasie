@@ -1,3 +1,0 @@
-datum,exchange,ticker,score,price,n_contracties,laatste_pct,pivot,stop,breakout,breakout_vol,stage2,pct_krimpt,tijd_krimpt,vol_krimpt,total_score
-2026-07-03,047 Toronto,BAM.TO,4,65.75,3,7.68,68.056,61.88,False,0.13,False,False,True,False,55
-2026-07-03,047 Toronto,BAM.TO,4,65.75,3,7.68,68.056,61.88,False,0.13,False,False,True,False,55
