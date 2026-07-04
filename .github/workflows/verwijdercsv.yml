@@ -1,43 +1,40 @@
 name: Verwijder CSV Bestanden
 
 on:
-  # Draait automatisch elke dag om 23:00 UTC (aanpassen naar wens)
   schedule:
     - cron: '0 23 * * *'
-  # Maakt het mogelijk om de actie handmatig te starten via de GitHub UI
   workflow_dispatch:
+
+# CROCIALE TOEVOEGING: Geef de runner expliciet schrijfrechten om de repo aan te passen
+permissions:
+  contents: write
 
 jobs:
   clean-repo:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. Haal de code uit de repository op
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    # 2. Zoek en verwijder alle .csv bestanden
     - name: Verwijder CSV bestanden
       run: |
         echo "Zoeken naar CSV bestanden..."
-        # Verwijdert alle .csv bestanden in de repo (inclusief submappen)
         find . -name "*.csv" -type f -delete
         
-    # 3. Push de wijzigingen terug naar GitHub
     - name: Commit en Push wijzigingen
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Voeg alle wijzigingen toe (inclusief de verwijderingen)
         git add -A
         
-        # Controleer of er daadwerkelijk iets veranderd is om foutmeldingen te voorkomen
         if git diff-index --quiet HEAD --; then
           echo "Geen CSV bestanden gevonden om te verwijderen."
         else
           git commit -m "Automated: CSV bestanden opgeschoond door bot"
-          git push origin master
+          # VERANDERD VAN master NAAR main:
+          git push origin main
         fi
