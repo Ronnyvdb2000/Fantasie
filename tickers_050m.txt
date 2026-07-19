@@ -1,0 +1,20 @@
+# MASTERLIJST 050 — Zurich
+# Laatste update: 19/07/2026
+# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
+# Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
+# --------------------------------------------------------------------------------
+ACLN.SW          | opname:2026-07-19 | ROE:57.5% | Debt:118.4 | Marge:18.4% | Vol:32.7% | Omzet:13,122,682 | actief
+BANB.SW          | opname:2026-07-19 | ROE:10.4% | Debt:4.1 | Marge:21.4% | Vol:49.7% | Omzet:8,119,041 | actief
+BOSN.SW          | opname:2026-07-19 | ROE:19.1% | Debt:93.4 | Marge:6.7% | Vol:30.2% | Omzet:2,253,179 | actief
+COTN.SW          | opname:2026-07-19 | ROE:3.9% | Debt:29.6 | Marge:2.7% | Vol:54.0% | Omzet:9,308,990 | actief
+IFCN.SW          | opname:2026-07-19 | ROE:21.2% | Debt:11.9 | Marge:12.7% | Vol:41.1% | Omzet:5,768,700 | actief
+IMPN.SW          | opname:2026-07-19 | ROE:12.0% | Debt:117.1 | Marge:2.4% | Vol:36.7% | Omzet:3,243,691 | actief
+LOGN.SW          | opname:2026-07-19 | ROE:32.8% | Debt:4.0 | Marge:14.7% | Vol:31.6% | Omzet:54,660,280 | actief
+MED.SW           | opname:2026-07-19 | ROE:3.4% | Debt:57.3 | Marge:3.1% | Vol:37.1% | Omzet:569,734 | actief
+SDZ.SW           | opname:2026-07-19 | ROE:10.4% | Debt:60.7 | Marge:8.2% | Vol:30.9% | Omzet:43,838,122 | actief
+SENS.SW          | opname:2026-07-19 | ROE:6.7% | Debt:36.1 | Marge:5.9% | Vol:42.7% | Omzet:1,702,155 | actief
+SKAN.SW          | opname:2026-07-19 | ROE:10.6% | Debt:103.0 | Marge:4.9% | Vol:37.4% | Omzet:1,620,059 | actief
+SRAIL.SW         | opname:2026-07-19 | ROE:12.3% | Debt:109.7 | Marge:2.4% | Vol:35.1% | Omzet:3,782,214 | actief
+STMN.SW          | opname:2026-07-19 | ROE:17.0% | Debt:19.4 | Marge:13.7% | Vol:33.1% | Omzet:37,562,292 | actief
+VACN.SW          | opname:2026-07-19 | ROE:27.7% | Debt:31.3 | Marge:20.0% | Vol:44.9% | Omzet:42,974,503 | actief
+YPSN.SW          | opname:2026-07-19 | ROE:31.1% | Debt:34.9 | Marge:30.4% | Vol:33.4% | Omzet:5,912,695 | actief

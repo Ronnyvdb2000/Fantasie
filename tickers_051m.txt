@@ -1,0 +1,24 @@
+# MASTERLIJST 051 — Warschau
+# Laatste update: 19/07/2026
+# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
+# Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
+# --------------------------------------------------------------------------------
+ACP.WA           | opname:2026-07-19 | ROE:11.7% | Debt:27.2 | Marge:7.2% | Vol:42.0% | Omzet:34,657,516 | actief
+APR.WA           | opname:2026-07-19 | ROE:16.1% | Debt:34.0 | Marge:4.9% | Vol:34.6% | Omzet:3,259,433 | actief
+ASB.WA           | opname:2026-07-19 | ROE:26.2% | Debt:86.5 | Marge:2.0% | Vol:39.3% | Omzet:9,424,494 | actief
+ATR.WA           | opname:2026-07-19 | ROE:57.5% | Debt:4.8 | Marge:11.8% | Vol:46.3% | Omzet:615,705 | actief
+BDX.WA           | opname:2026-07-19 | ROE:50.6% | Debt:32.6 | Marge:7.7% | Vol:35.0% | Omzet:27,569,384 | actief
+CEZ.WA           | opname:2026-07-19 | ROE:11.0% | Debt:101.7 | Marge:9.0% | Vol:37.3% | Omzet:855,890 | actief
+CMP.WA           | opname:2026-07-19 | ROE:16.4% | Debt:19.4 | Marge:8.7% | Vol:45.3% | Omzet:883,228 | actief
+CRI.WA           | opname:2026-07-19 | ROE:6.2% | Debt:15.0 | Marge:3.6% | Vol:58.0% | Omzet:8,058,492 | actief
+DAD.WA           | opname:2026-07-19 | ROE:15.1% | Debt:126.1 | Marge:4.0% | Vol:42.1% | Omzet:707,116 | actief
+ELT.WA           | opname:2026-07-19 | ROE:18.9% | Debt:8.7 | Marge:4.6% | Vol:34.4% | Omzet:1,032,992 | actief
+GPP.WA           | opname:2026-07-19 | ROE:44.9% | Debt:26.5 | Marge:29.0% | Vol:32.4% | Omzet:2,079,457 | actief
+KGH.WA           | opname:2026-07-19 | ROE:20.1% | Debt:17.0 | Marge:17.5% | Vol:52.5% | Omzet:252,202,039 | actief
+LBW.WA           | opname:2026-07-19 | ROE:24.0% | Debt:42.1 | Marge:20.4% | Vol:55.0% | Omzet:5,621,216 | actief
+PAS.WA           | opname:2026-07-19 | ROE:51.5% | Debt:13.9 | Marge:8.3% | Vol:55.7% | Omzet:628,097 | actief
+PKN.WA           | opname:2026-07-19 | ROE:4.4% | Debt:26.2 | Marge:2.4% | Vol:32.6% | Omzet:218,543,707 | actief
+RBW.WA           | opname:2026-07-19 | ROE:42.9% | Debt:27.1 | Marge:5.4% | Vol:34.6% | Omzet:6,989,720 | actief
+TOA.WA           | opname:2026-07-19 | ROE:15.6% | Debt:9.2 | Marge:9.2% | Vol:30.8% | Omzet:750,201 | actief
+TOR.WA           | opname:2026-07-19 | ROE:13.9% | Debt:12.2 | Marge:4.1% | Vol:32.0% | Omzet:1,197,557 | actief
+XTB.WA           | opname:2026-07-19 | ROE:41.6% | Debt:9.4 | Marge:31.2% | Vol:32.7% | Omzet:31,632,231 | actief

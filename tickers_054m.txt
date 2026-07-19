@@ -1,0 +1,14 @@
+# MASTERLIJST 054 — Helsinki
+# Laatste update: 19/07/2026
+# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
+# Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
+# --------------------------------------------------------------------------------
+CTY1S.HE         | opname:2026-07-19 | ROE:6.2% | Debt:118.5 | Marge:37.3% | Vol:41.3% | Omzet:677,475 | actief
+HARVIA.HE        | opname:2026-07-19 | ROE:20.2% | Debt:72.8 | Marge:13.3% | Vol:44.1% | Omzet:1,359,021 | actief
+KCR.HE           | opname:2026-07-19 | ROE:21.1% | Debt:21.0 | Marge:9.6% | Vol:39.9% | Omzet:9,022,175 | actief
+METSO.HE         | opname:2026-07-19 | ROE:17.6% | Debt:55.2 | Marge:8.1% | Vol:35.4% | Omzet:19,077,258 | actief
+NESTE.HE         | opname:2026-07-19 | ROE:9.6% | Debt:67.7 | Marge:3.7% | Vol:42.8% | Omzet:30,649,904 | actief
+NOKIA.HE         | opname:2026-07-19 | ROE:3.7% | Debt:15.6 | Marge:4.0% | Vol:53.7% | Omzet:101,471,430 | actief
+ORNAV.HE         | opname:2026-07-19 | ROE:53.7% | Debt:10.5 | Marge:28.5% | Vol:33.9% | Omzet:510,016 | actief
+ORNBV.HE         | opname:2026-07-19 | ROE:53.7% | Debt:10.5 | Marge:28.5% | Vol:33.5% | Omzet:12,339,766 | actief
+SSABBH.HE        | opname:2026-07-19 | ROE:7.8% | Debt:16.5 | Marge:5.6% | Vol:52.5% | Omzet:1,893,799 | actief

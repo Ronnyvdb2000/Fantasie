@@ -1,53 +1,53 @@
 # MASTERLIJST 041 — Benelux
-# Laatste update: 13/07/2026
+# Laatste update: 19/07/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-AALB.AS          | opname:2026-05-08 | ROE:6.0% | Debt:45.3 | Marge:4.8% | Vol:33.6% | Omzet:8,305,380 | actief
-AKZA.AS          | opname:2026-05-08 | ROE:13.1% | Debt:120.9 | Marge:6.3% | Vol:37.5% | Omzet:31,980,346 | actief
+AALB.AS          | opname:2026-05-08 | ROE:6.0% | Debt:45.3 | Marge:4.8% | Vol:33.5% | Omzet:8,372,667 | actief
+AKZA.AS          | opname:2026-05-08 | ROE:13.1% | Debt:120.9 | Marge:6.3% | Vol:37.4% | Omzet:32,305,486 | actief
 ARGX.BR          | opname:2026-05-04 | ROE:20.2% | Debt:64.4 | Marge:30.5% | Vol:33.3% | Omzet:58,939,752 | actief
-ASML.AS          | opname:2026-05-03 | ROE:52.2% | Debt:13.0 | Marge:29.7% | Vol:42.9% | Omzet:728,889,303 | actief
-BAMNB.AS         | opname:2026-05-08 | ROE:22.8% | Debt:39.8 | Marge:3.0% | Vol:41.2% | Omzet:7,920,559 | actief
-BESI.AS          | opname:2026-05-08 | ROE:31.3% | Debt:113.6 | Marge:24.0% | Vol:52.4% | Omzet:80,033,578 | actief
-CVC.AS           | opname:2026-05-03 | ROE:60.3% | Debt:79.3 | Marge:63.9% | Vol:33.3% | Omzet:13,211,757 | actief
+ASML.AS          | opname:2026-05-03 | ROE:53.9% | Debt:9.1 | Marge:30.1% | Vol:41.3% | Omzet:739,250,097 | actief
+BAMNB.AS         | opname:2026-05-08 | ROE:22.8% | Debt:39.8 | Marge:3.0% | Vol:41.0% | Omzet:7,961,575 | actief
+BESI.AS          | opname:2026-05-08 | ROE:31.3% | Debt:113.6 | Marge:24.0% | Vol:52.2% | Omzet:80,777,516 | actief
+CVC.AS           | opname:2026-05-03 | ROE:60.3% | Debt:79.3 | Marge:63.9% | Vol:33.8% | Omzet:13,398,748 | actief
 GLPG.AS          | opname:2026-05-03 | ROE:16.3% | Debt:19.8 | Marge:46.8% | Vol:31.4% | Omzet:2,465,533 | actief
-HAVAS.AS         | opname:2026-05-08 | ROE:11.2% | Debt:20.2 | Marge:6.5% | Vol:30.7% | Omzet:1,814,417 | actief
-HEIJM.AS         | opname:2026-05-08 | ROE:25.7% | Debt:24.2 | Marge:4.7% | Vol:42.8% | Omzet:5,893,239 | actief
-MELE.BR          | opname:2026-05-04 | ROE:20.6% | Debt:50.4 | Marge:13.2% | Vol:38.8% | Omzet:4,033,715 | actief
-MT.AS            | opname:2026-05-08 | ROE:5.4% | Debt:23.9 | Marge:4.7% | Vol:42.2% | Omzet:89,822,905 | actief
-THEON.AS         | opname:2026-05-03 | ROE:35.8% | Debt:83.6 | Marge:24.7% | Vol:52.8% | Omzet:6,108,841 | actief
-ACKB.BR          | opname:2026-05-04 | ROE:11.0% | Debt:30.5 | Marge:9.9% | Vol:21.3% | Omzet:7,540,593 | zwakker | weken_buiten:1
-ADYEN.AS         | opname:2026-05-03 | ROE:22.3% | Debt:4.8 | Marge:44.7% | Vol:42.3% | Omzet:119,317,377 | zwakker | weken_buiten:1
-AED.BR           | opname:2026-06-07 | ROE:11.1% | Debt:67.0 | Marge:156.9% | Vol:18.3% | Omzet:8,013,105 | zwakker | weken_buiten:1
-AGN.AS           | opname:2026-05-03 | ROE:10.4% | Debt:56.9 | Marge:8.0% | Vol:24.4% | Omzet:37,677,280 | zwakker | weken_buiten:1
-ARCAD.AS         | opname:2026-05-08 | ROE:18.4% | Debt:109.6 | Marge:4.3% | Vol:41.0% | Omzet:7,871,123 | zwakker | weken_buiten:1
-CRBN.AS          | opname:2026-05-08 | ROE:9.9% | Debt:60.1 | Marge:5.9% | Vol:24.6% | Omzet:2,461,808 | zwakker | weken_buiten:1
-CTPNV.AS         | opname:2026-05-08 | ROE:13.5% | Debt:108.3 | Marge:109.5% | Vol:24.1% | Omzet:2,530,695 | zwakker | weken_buiten:1
-DEME.BR          | opname:2026-05-04 | ROE:15.3% | Debt:51.1 | Marge:8.3% | Vol:30.0% | Omzet:1,819,426 | zwakker | weken_buiten:1
-EVS.BR           | opname:2026-05-04 | ROE:17.1% | Debt:6.2 | Marge:18.5% | Vol:28.2% | Omzet:635,408 | zwakker | weken_buiten:1
-FAGR.BR          | opname:2026-05-04 | ROE:17.2% | Debt:84.3 | Marge:9.6% | Vol:20.2% | Omzet:1,910,981 | zwakker | weken_buiten:1
-FERGR.AS         | opname:2026-05-03 | ROE:24.4% | Debt:19.9 | Marge:14.1% | Vol:35.3% | Omzet:355,123 | zwakker | weken_buiten:1
-HEIA.AS          | opname:2026-05-08 | ROE:9.9% | Debt:93.5 | Marge:6.6% | Vol:22.4% | Omzet:56,830,425 | zwakker | weken_buiten:1
-IMCD.AS          | opname:2026-05-08 | ROE:10.2% | Debt:87.7 | Marge:4.5% | Vol:36.8% | Omzet:24,928,571 | zwakker | weken_buiten:1
+HAVAS.AS         | opname:2026-05-08 | ROE:11.2% | Debt:20.2 | Marge:6.5% | Vol:30.5% | Omzet:1,821,904 | actief
+HEIJM.AS         | opname:2026-05-08 | ROE:25.7% | Debt:24.2 | Marge:4.7% | Vol:42.9% | Omzet:5,943,105 | actief
+IMCD.AS          | opname:2026-05-08 | ROE:10.2% | Debt:87.7 | Marge:4.5% | Vol:37.4% | Omzet:25,033,480 | actief
+MELE.BR          | opname:2026-05-04 | ROE:20.6% | Debt:50.4 | Marge:13.2% | Vol:38.6% | Omzet:4,055,474 | actief
+MT.AS            | opname:2026-05-08 | ROE:5.4% | Debt:23.9 | Marge:4.7% | Vol:42.0% | Omzet:90,770,047 | actief
+THEON.AS         | opname:2026-05-03 | ROE:35.8% | Debt:83.6 | Marge:24.7% | Vol:51.9% | Omzet:5,930,105 | actief
+ACKB.BR          | opname:2026-05-04 | ROE:11.0% | Debt:30.5 | Marge:9.9% | Vol:21.3% | Omzet:7,582,431 | zwakker | weken_buiten:2
+ADYEN.AS         | opname:2026-05-03 | ROE:22.3% | Debt:4.8 | Marge:44.7% | Vol:42.6% | Omzet:120,159,664 | zwakker | weken_buiten:2
+AED.BR           | opname:2026-06-07 | ROE:11.1% | Debt:67.0 | Marge:156.9% | Vol:18.3% | Omzet:8,040,795 | zwakker | weken_buiten:2
+AGN.AS           | opname:2026-05-03 | ROE:10.4% | Debt:56.9 | Marge:8.0% | Vol:24.3% | Omzet:37,793,039 | zwakker | weken_buiten:2
+ARCAD.AS         | opname:2026-05-08 | ROE:18.4% | Debt:109.6 | Marge:4.3% | Vol:40.8% | Omzet:7,864,110 | zwakker | weken_buiten:2
+CRBN.AS          | opname:2026-05-08 | ROE:9.9% | Debt:60.1 | Marge:5.9% | Vol:24.5% | Omzet:2,455,171 | zwakker | weken_buiten:2
+CTPNV.AS         | opname:2026-05-08 | ROE:13.5% | Debt:108.3 | Marge:109.5% | Vol:24.0% | Omzet:2,552,301 | zwakker | weken_buiten:2
+DEME.BR          | opname:2026-05-04 | ROE:15.3% | Debt:51.1 | Marge:8.3% | Vol:30.0% | Omzet:1,823,885 | zwakker | weken_buiten:2
+EVS.BR           | opname:2026-05-04 | ROE:17.1% | Debt:6.2 | Marge:18.5% | Vol:27.3% | Omzet:636,739 | zwakker | weken_buiten:2
+FAGR.BR          | opname:2026-05-04 | ROE:17.2% | Debt:84.3 | Marge:9.6% | Vol:20.2% | Omzet:1,915,591 | zwakker | weken_buiten:2
+FERGR.AS         | opname:2026-05-03 | ROE:24.4% | Debt:19.9 | Marge:14.1% | Vol:35.2% | Omzet:357,656 | zwakker | weken_buiten:2
+HEIA.AS          | opname:2026-05-08 | ROE:9.9% | Debt:93.5 | Marge:6.6% | Vol:22.3% | Omzet:57,279,232 | zwakker | weken_buiten:2
 JDEP.AS          | opname:2026-05-08 | ROE:7.2% | Debt:49.6 | Marge:8.0% | Vol:23.9% | Omzet:15,755,605 | zwakker | weken_buiten:1
-JEN.BR           | opname:2026-05-04 | ROE:20.2% | Debt:22.2 | Marge:10.9% | Vol:29.0% | Omzet:253,066 | zwakker | weken_buiten:1
-KENDR.AS         | opname:2026-05-08 | ROE:9.9% | Debt:40.8 | Marge:8.2% | Vol:29.7% | Omzet:517,605 | zwakker | weken_buiten:1
-LOTB.BR          | opname:2026-05-04 | ROE:20.9% | Debt:36.3 | Marge:12.7% | Vol:25.6% | Omzet:6,435,220 | zwakker | weken_buiten:1
-MONT.BR          | opname:2026-05-08 | ROE:8.8% | Debt:66.2 | Marge:93.7% | Vol:21.4% | Omzet:2,198,643 | zwakker | weken_buiten:1
-NEDAP.AS         | opname:2026-05-03 | ROE:28.4% | Debt:4.9 | Marge:8.8% | Vol:24.1% | Omzet:715,254 | zwakker | weken_buiten:1
-PHIA.AS          | opname:2026-05-08 | ROE:8.4% | Debt:70.9 | Marge:5.5% | Vol:28.1% | Omzet:36,692,786 | zwakker | weken_buiten:1
-PROX.BR          | opname:2026-05-08 | ROE:8.3% | Debt:106.9 | Marge:6.3% | Vol:29.8% | Omzet:2,976,827 | zwakker | weken_buiten:1
-PRX.AS           | opname:2026-05-03 | ROE:22.2% | Debt:32.9 | Marge:119.9% | Vol:32.4% | Omzet:130,356,445 | zwakker | weken_buiten:1
-SHELL.AS         | opname:2026-05-08 | ROE:10.7% | Debt:43.3 | Marge:7.0% | Vol:21.8% | Omzet:177,625,608 | zwakker | weken_buiten:1
-SHUR.BR          | opname:2026-05-04 | ROE:14.0% | Debt:37.6 | Marge:132.6% | Vol:25.4% | Omzet:1,890,088 | zwakker | weken_buiten:1
-SIP.BR           | opname:2026-05-04 | ROE:13.4% | Debt:48.0 | Marge:22.0% | Vol:20.8% | Omzet:399,629 | zwakker | weken_buiten:1
-TWEKA.AS         | opname:2026-05-08 | ROE:10.6% | Debt:75.1 | Marge:5.4% | Vol:23.9% | Omzet:3,647,523 | zwakker | weken_buiten:1
-UCB.BR           | opname:2026-05-04 | ROE:14.9% | Debt:20.7 | Marge:20.1% | Vol:34.1% | Omzet:55,864,929 | zwakker | weken_buiten:1
-UMG.AS           | opname:2026-05-03 | ROE:33.8% | Debt:74.6 | Marge:12.3% | Vol:31.6% | Omzet:47,321,172 | zwakker | weken_buiten:1
-VGP.BR           | opname:2026-05-04 | ROE:11.6% | Debt:90.7 | Marge:151.3% | Vol:27.8% | Omzet:1,805,101 | zwakker | weken_buiten:1
-WDP.BR           | opname:2026-05-08 | ROE:7.7% | Debt:72.5 | Marge:69.8% | Vol:20.1% | Omzet:8,243,380 | zwakker | weken_buiten:1
-HYDRA.AS         | opname:2026-05-03 | ROE:21.7% | Debt:10.6 | Marge:9.2% | Vol:26.0% | Omzet:13,116 | verwijderd | verwijderd:2026-05-10
-LIGHT.AS         | opname:2026-05-08 | ROE:6.8% | Debt:57.2 | Marge:3.5% | Vol:37.1% | Omzet:11,845,115 | verwijderd | verwijderd:2026-07-05
-NRP.AS           | opname:2026-05-03 | ROE:10.1% | Debt:62.0 | Marge:53.6% | Vol:27.1% | Omzet:29,767 | verwijderd | verwijderd:2026-05-10
-QRF.BR           | opname:2026-05-04 | ROE:12.9% | Debt:77.0 | Marge:126.7% | Vol:20.0% | Omzet:41,111 | verwijderd | verwijderd:2026-05-10
-VALUE.AS         | opname:2026-05-03 | ROE:15.2% | Debt:15.6 | Marge:83.1% | Vol:26.8% | Omzet:12,155 | verwijderd | verwijderd:2026-05-10
+JEN.BR           | opname:2026-05-04 | ROE:20.2% | Debt:22.2 | Marge:10.9% | Vol:29.2% | Omzet:252,494 | zwakker | weken_buiten:2
+KENDR.AS         | opname:2026-05-08 | ROE:9.9% | Debt:40.8 | Marge:8.2% | Vol:29.7% | Omzet:515,463 | zwakker | weken_buiten:2
+LOTB.BR          | opname:2026-05-04 | ROE:20.9% | Debt:36.3 | Marge:12.7% | Vol:25.6% | Omzet:6,446,762 | zwakker | weken_buiten:2
+MONT.BR          | opname:2026-05-08 | ROE:8.8% | Debt:66.2 | Marge:93.7% | Vol:21.3% | Omzet:2,194,998 | zwakker | weken_buiten:2
+NEDAP.AS         | opname:2026-05-03 | ROE:37.0% | Debt:5.8 | Marge:9.6% | Vol:22.2% | Omzet:717,071 | zwakker | weken_buiten:2
+PHIA.AS          | opname:2026-05-08 | ROE:8.4% | Debt:70.9 | Marge:5.5% | Vol:28.5% | Omzet:36,992,173 | zwakker | weken_buiten:2
+PROX.BR          | opname:2026-05-08 | ROE:8.3% | Debt:107.8 | Marge:6.3% | Vol:29.8% | Omzet:2,953,583 | zwakker | weken_buiten:2
+PRX.AS           | opname:2026-05-03 | ROE:22.2% | Debt:32.9 | Marge:119.9% | Vol:33.0% | Omzet:131,139,249 | zwakker | weken_buiten:2
+SHELL.AS         | opname:2026-05-08 | ROE:10.7% | Debt:43.3 | Marge:7.0% | Vol:22.0% | Omzet:178,832,841 | zwakker | weken_buiten:2
+SHUR.BR          | opname:2026-05-04 | ROE:14.0% | Debt:37.6 | Marge:132.6% | Vol:25.5% | Omzet:1,893,720 | zwakker | weken_buiten:2
+SIP.BR           | opname:2026-05-04 | ROE:13.4% | Debt:48.0 | Marge:22.0% | Vol:20.8% | Omzet:400,064 | zwakker | weken_buiten:2
+TWEKA.AS         | opname:2026-05-08 | ROE:10.6% | Debt:75.1 | Marge:5.4% | Vol:23.8% | Omzet:3,652,849 | zwakker | weken_buiten:2
+UCB.BR           | opname:2026-05-04 | ROE:14.9% | Debt:20.7 | Marge:20.1% | Vol:34.0% | Omzet:55,976,464 | zwakker | weken_buiten:2
+UMG.AS           | opname:2026-05-03 | ROE:33.8% | Debt:74.6 | Marge:12.3% | Vol:31.8% | Omzet:47,535,205 | zwakker | weken_buiten:2
+VGP.BR           | opname:2026-05-04 | ROE:11.6% | Debt:90.7 | Marge:151.3% | Vol:27.8% | Omzet:1,803,009 | zwakker | weken_buiten:2
+WDP.BR           | opname:2026-05-08 | ROE:7.7% | Debt:72.5 | Marge:69.8% | Vol:20.1% | Omzet:8,287,958 | zwakker | weken_buiten:2
+HYDRA.AS         | opname:2026-05-03 | ROE:21.7% | Debt:10.6 | Marge:9.2% | Vol:26.0% | Omzet:14,057 | verwijderd | verwijderd:2026-05-10
+LIGHT.AS         | opname:2026-05-08 | ROE:6.8% | Debt:57.2 | Marge:3.5% | Vol:36.7% | Omzet:11,839,041 | verwijderd | verwijderd:2026-07-05
+NRP.AS           | opname:2026-05-03 | ROE:10.1% | Debt:62.0 | Marge:53.6% | Vol:27.1% | Omzet:29,840 | verwijderd | verwijderd:2026-05-10
+QRF.BR           | opname:2026-05-04 | ROE:12.9% | Debt:77.0 | Marge:126.7% | Vol:20.1% | Omzet:41,238 | verwijderd | verwijderd:2026-05-10
+VALUE.AS         | opname:2026-05-03 | ROE:15.2% | Debt:15.6 | Marge:83.1% | Vol:26.6% | Omzet:11,814 | verwijderd | verwijderd:2026-05-10
