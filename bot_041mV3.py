@@ -52,9 +52,15 @@ BEURS_CONFIG = {
     "046": {"naam": "Milaan",          "suffixen": [".MI"]},
     "047": {"naam": "Toronto",         "suffixen": [".TO", ".V"]},
     "048": {"naam": "Nasdaq/NYSE",     "suffixen": [""]},
+    "049": {"naam": "Stockholm",       "suffixen": [".ST"]},
+    "050": {"naam": "Zurich",          "suffixen": [".SW"]},
+    "051": {"naam": "Warschau",        "suffixen": [".WA"]},
+    "052": {"naam": "Oslo",            "suffixen": [".OL"]},
+    "053": {"naam": "Kopenhagen",      "suffixen": [".CO"]},
+    "054": {"naam": "Helsinki",        "suffixen": [".HE"]},
 }
 
-EUROPA = {"041", "042", "043", "044", "045", "046"}
+EUROPA = {"041", "042", "043", "044", "045", "046", "049", "050", "051", "052", "053", "054"}
 
 CRITERIA = {
     "europa": {
