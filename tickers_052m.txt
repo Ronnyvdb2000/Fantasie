@@ -4,14 +4,14 @@
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
 AKER.OL          | opname:2026-07-19 | ROE:45.1% | Debt:63.6 | Marge:69.3% | Vol:30.9% | Omzet:57,067,844 | actief
-AKRBP.OL         | opname:2026-07-19 | ROE:12.1% | Debt:83.4 | Marge:11.9% | Vol:34.0% | Omzet:354,027,679 | actief
+AKRBP.OL         | opname:2026-07-19 | ROE:12.1% | Debt:83.4 | Marge:11.9% | Vol:34.0% | Omzet:354,027,680 | actief
 AKSO.OL          | opname:2026-07-19 | ROE:35.7% | Debt:32.6 | Marge:5.5% | Vol:30.9% | Omzet:26,142,308 | actief
 AKVA.OL          | opname:2026-07-19 | ROE:14.5% | Debt:115.4 | Marge:4.4% | Vol:36.7% | Omzet:698,261 | actief
 AUTO.OL          | opname:2026-07-19 | ROE:8.3% | Debt:15.3 | Marge:20.2% | Vol:62.6% | Omzet:49,657,157 | actief
 BWE.OL           | opname:2026-07-19 | ROE:8.7% | Debt:116.9 | Marge:12.3% | Vol:48.2% | Omzet:5,948,636 | actief
-BWLPG.OL         | opname:2026-07-19 | ROE:20.9% | Debt:44.5 | Marge:10.1% | Vol:39.5% | Omzet:72,264,202 | actief
+BWLPG.OL         | opname:2026-07-19 | ROE:20.9% | Debt:44.5 | Marge:10.1% | Vol:39.5% | Omzet:72,264,203 | actief
 CADLR.OL         | opname:2026-07-19 | ROE:18.7% | Debt:94.8 | Marge:39.9% | Vol:34.9% | Omzet:34,511,795 | actief
-EQNR.OL          | opname:2026-07-19 | ROE:12.4% | Debt:73.0 | Marge:5.3% | Vol:37.4% | Omzet:1,020,632,047 | actief
+EQNR.OL          | opname:2026-07-19 | ROE:12.4% | Debt:73.0 | Marge:5.3% | Vol:37.4% | Omzet:1,020,632,046 | actief
 FRO.OL           | opname:2026-07-19 | ROE:35.0% | Debt:92.6 | Marge:40.2% | Vol:41.4% | Omzet:339,676,740 | actief
 HAFNI.OL         | opname:2026-07-19 | ROE:18.9% | Debt:40.4 | Marge:19.0% | Vol:34.9% | Omzet:47,950,768 | actief
 HAUTO.OL         | opname:2026-07-19 | ROE:36.6% | Debt:75.8 | Marge:31.7% | Vol:36.7% | Omzet:66,678,444 | actief
