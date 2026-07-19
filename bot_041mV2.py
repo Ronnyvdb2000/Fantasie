@@ -69,6 +69,12 @@ BEURS_CONFIG = {
     "046": {"naam": "Milaan",          "suffixen": [".MI"]},
     "047": {"naam": "Toronto",         "suffixen": [".TO", ".V"]},
     "048": {"naam": "Nasdaq/NYSE",     "suffixen": [""]},
+    "049": {"naam": "Stockholm",       "suffixen": [".ST"]},
+    "050": {"naam": "Zurich",          "suffixen": [".SW"]},
+    "051": {"naam": "Warschau",        "suffixen": [".WA"]},
+    "052": {"naam": "Oslo",            "suffixen": [".OL"]},
+    "053": {"naam": "Kopenhagen",      "suffixen": [".CO"]},
+    "054": {"naam": "Helsinki",        "suffixen": [".HE"]},
 }
 
 ALLE_SUFFIXEN = set()
@@ -78,7 +84,7 @@ for _cfg in BEURS_CONFIG.values():
             ALLE_SUFFIXEN.add(_s)
 
 # ── Criteria per beurstype (Nitro Geoptimaliseerd) ───────────────────────────
-EUROPA_BEURZEN = {"041", "042", "043", "044", "045", "046"}
+EUROPA_BEURZEN = {"041", "042", "043", "044", "045", "046", "049", "050", "051", "052", "053", "054"}
 CRITERIA = {
     "europa": {
         "ROE_MIN":      0.03,
@@ -459,3 +465,4 @@ def scan_alle() -> None:
 
 if __name__ == "__main__":
     scan_alle()
+    
