@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-07-20,048 Nasdaq/NYSE,PYPL,3,56.82,46.0,✓ herstel (46.0 up),✗ neutraal (-6.000),36.5,✓ 36.5% opwaarts (ratio 5.3:1),38.83,✗ 46.3% boven bodem (38.83),77.55,52.94,99.0,✓ 99.00%
+2026-07-20,048 Nasdaq/NYSE,ABT,3,101.66,45.3,✓ herstel (45.3 up),✗ neutraal (-4.432),31.4,✓ 31.4% opwaarts (ratio 5.1:1),81.98,✗ 24.0% boven bodem (81.98),133.53,95.47,250.0,✓ 250.00%
+2026-07-20,048 Nasdaq/NYSE,HPE,3,44.56,80.4,✗ neutraal (80.4),✓ histogram up (2.579),25.6,✓ 25.6% opwaarts (ratio 2.0:1),19.41,✗ 129.6% boven bodem (19.41),55.99,38.85,124.0,✓ 124.00%
