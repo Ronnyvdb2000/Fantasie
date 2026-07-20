@@ -2,7 +2,7 @@ name: Verwijder CSV Bestanden
 
 on:
   schedule:
-    - cron: '0 23 * * *'
+#    - cron: '0 23 * * *'
   workflow_dispatch:
 
 # CROCIALE TOEVOEGING: Geef de runner expliciet schrijfrechten om de repo aan te passen
