@@ -1,7 +1,7 @@
 name: Verwijder CSV Bestanden
 
 on:
-  schedule:
+#  schedule:
 #    - cron: '0 23 * * *'
   workflow_dispatch:
 
