@@ -669,7 +669,17 @@ def run_live_engine(regio: str = "alle"):
             "\n\n" + ("=" * 40 + "\n\n").join(email_delen),
         )
     else:
-        print("\nGeen enkele beurs leverde een winnaar op vandaag — geen email verstuurd.")
+        geen_resultaat_tekst = (
+            f"🔍 *SUPERBOT — {today_str()}*\n"
+            f"_Regio: {regio}_\n\n"
+            f"Geen enkel aandeel voldeed vandaag aan alle eisen "
+            f"(Trend Template + VCP + bovengemiddelde volatiliteit) "
+            f"op {len(exchange_tickers)} gescande beurzen:\n"
+            f"{', '.join(geen_kandidaat) if geen_kandidaat else '—'}"
+        )
+        send_telegram_message(geen_resultaat_tekst)
+        send_email(f"Superbot rapport {today_str()} — geen kandidaten", geen_resultaat_tekst)
+        print("\nGeen enkele beurs leverde een winnaar op vandaag — melding verstuurd.")
 
     print(f"\n{'='*60}\nKlaar.")
 
