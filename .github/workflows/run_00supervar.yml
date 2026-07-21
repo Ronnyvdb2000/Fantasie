@@ -16,14 +16,14 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install yfinance pandas numpy requests
-      - name: Run bot_00super (Europa)
+      - name: Run bot_00supervar (Europa)
         env:
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           EMAIL_USER:       ${{ secrets.EMAIL_USER }}
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
-        run: python bot_00super.py europa
+        run: python bot_00supervar.py europa
 
   bot-00super-na:
     if: github.event.schedule == '15 13 * * 1-5' || github.event_name == 'workflow_dispatch'
@@ -34,11 +34,11 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install yfinance pandas numpy requests
-      - name: Run bot_00super (Noord-Amerika)
+      - name: Run bot_00supervar (Noord-Amerika)
         env:
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           EMAIL_USER:       ${{ secrets.EMAIL_USER }}
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
-        run: python bot_00super.py namerika
+        run: python bot_00supervar.py namerika
