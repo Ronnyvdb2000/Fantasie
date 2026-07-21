@@ -336,7 +336,8 @@ def add_indicators(df: pd.DataFrame, universe_rs: Dict[str, float]) -> pd.DataFr
         # Volatiliteit: geannualiseerde realized volatility (%) over laatste N dagen
         dagrendement = close.pct_change()
         g["VolPct"] = (
-            dagrendement.rolling(SUPER_CFG["volpct_lookback"]).std() * math.sqrt(252) * 100
+            dagrendement.rolling(SUPER_CFG["volpct_lookback"], min_periods=10).std()
+            * math.sqrt(252) * 100
         )
         g["Ticker"] = ticker
         parts.append(g)
@@ -632,7 +633,12 @@ def run_live_engine(regio: str = "alle"):
         # Volatiliteits-mediaan van de hele beurs (laatste geldige waarde per ticker)
         laatste = df_ex.sort_values("Date").groupby("Ticker", sort=False).tail(1)
         vol_waarden = laatste["VolPct"].dropna()
-        vol_drempel = float(vol_waarden.median()) if not vol_waarden.empty else 0.0
+        print(f"  Volatiliteitsdata: {len(vol_waarden)}/{len(laatste)} tickers geldig")
+        if vol_waarden.empty:
+            print(f"  → Geen volatiliteitsdata beschikbaar voor {ex_naam} (te weinig koersdata) — overgeslagen")
+            geen_kandidaat.append(ex_naam)
+            continue
+        vol_drempel = float(vol_waarden.median())
 
         kandidaten: List[SuperSignaal] = []
         for ticker, group in df_ex.groupby("Ticker", sort=False):
