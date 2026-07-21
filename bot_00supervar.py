@@ -27,17 +27,26 @@ Beurzen: alle 041-059 waarvoor een tickers_XXXx.txt bestand bestaat.
 Beurzen die nog niet zijn aangemaakt (bv. 055-059) worden automatisch
 meegenomen zodra het bestand er is — draai zonder aanpassing.
 
-Ideale draaimoment:
-  Weekdagen 22:15 UTC — dit is na sluiting van zowel alle Europese
-  beurzen (Benelux t/m Helsinki) als de reguliere sessie op
-  Nasdaq/NYSE en Toronto, zodat elke beurs verse EOD-data heeft.
-  10 minuten na bot_00vcp (22:05 UTC) om API rate-limits te spreiden.
+Draaimoment — 2 runs vlak vóór elke market open:
+  De analyse gebruikt altijd de laatst afgesloten dagcandle (van gisteren
+  op een ochtend-run), dat verandert niet met het tijdstip. Wat wél
+  verandert is wanneer je het signaal ontvangt — vlak vóór open, zodat
+  je nog kan handelen op de opening:
+    - Europa-run  ~06:30 UTC (vóór Londen/Frankfurt/Parijs/etc. open
+      rond 07:00-08:00 UTC, seizoensafhankelijk door zomer-/wintertijd)
+    - Noord-Amerika-run ~13:15 UTC (vóór Nasdaq/NYSE/Toronto open om
+      13:30 UTC EDT / 14:30 UTC EST)
+  Let op: cron-tijden zijn vaste UTC-tijden en schuiven dus 1 uur mee
+  met de eigen zomer-/wintertijd-overgangen van elke beurs.
 
 Gebruik:
-  python bot_00super.py
+  python bot_00super.py europa       # alleen Europese beurzen
+  python bot_00super.py namerika     # alleen Toronto + Nasdaq/NYSE
+  python bot_00super.py alle         # alles in 1 run (default)
 """
 
 import os
+import sys
 import math
 import warnings
 import datetime as dt
@@ -81,6 +90,11 @@ BEURS_NAMEN = {
 }
 REEKS_START = 41
 REEKS_EINDE = 59
+
+# Regio-indeling voor de 2 open-tijd runs. 047/048 zijn Noord-Amerika,
+# de rest (incl. nog niet aangemaakte 055-059) wordt als Europa behandeld
+# totdat je een nieuwe beurs toevoegt met een andere regio.
+NOORD_AMERIKA_BEURZEN = {"047", "048"}
 
 SUPER_CFG = {
     "ma_fast":             50,
@@ -565,14 +579,19 @@ def format_bericht(beurs_naam: str, s: SuperSignaal, portfolio_waarde: float) ->
 # LIVE ENGINE
 # ============================================================
 
-def run_live_engine():
-    print(f"{'='*60}\nSUPERBOT — LIVE  {today_str()}\n{'='*60}")
+def run_live_engine(regio: str = "alle"):
+    print(f"{'='*60}\nSUPERBOT — LIVE  {today_str()}  [regio: {regio}]\n{'='*60}")
 
     exchange_tickers: Dict[str, List[str]] = {}
     all_tickers: List[str] = []
 
     for nr in range(REEKS_START, REEKS_EINDE + 1):
         g = f"0{nr}"
+        is_na = g in NOORD_AMERIKA_BEURZEN
+        if regio == "europa" and is_na:
+            continue
+        if regio == "namerika" and not is_na:
+            continue
         pad = pad_export(g)
         if not os.path.exists(pad):
             continue
@@ -650,4 +669,8 @@ def run_live_engine():
 
 
 if __name__ == "__main__":
-    run_live_engine()
+    arg = sys.argv[1].lower() if len(sys.argv) > 1 else "alle"
+    if arg not in ("europa", "namerika", "alle"):
+        print(f"[WARN] Onbekend argument '{arg}', gebruik 'alle'.")
+        arg = "alle"
+    run_live_engine(arg)
