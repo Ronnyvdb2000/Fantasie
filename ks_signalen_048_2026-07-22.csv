@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-07-22,048 Nasdaq/NYSE,PYPL,3,55.51,45.0,✓ herstel (45.0 up),✗ neutraal (-6.105),39.7,✓ 39.7% opwaarts (ratio 5.9:1),38.83,✗ 42.9% boven bodem (38.83),77.55,51.74,100.0,✓ 100.00%
+2026-07-22,048 Nasdaq/NYSE,ABT,3,100.57,44.7,✓ herstel (44.7 up),✗ neutraal (-4.519),32.8,✓ 32.8% opwaarts (ratio 5.6:1),81.98,✗ 22.7% boven bodem (81.98),133.53,94.7,253.0,✓ 253.00%
+2026-07-22,048 Nasdaq/NYSE,DXCM,3,71.43,45.4,✓ herstel (45.4 up),✓ histogram up (1.493),25.3,✓ 25.3% opwaarts (ratio 3.2:1),54.84,✗ 30.3% boven bodem (54.84),89.53,65.72,0.0,✗ geen dividend
