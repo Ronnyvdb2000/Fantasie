@@ -1,4 +1,0 @@
-datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
-2026-07-21,043 Frankfurt,QIA.DE,3,35.36,46.2,✓ herstel (46.2 up),✗ neutraal (-1.494),30.0,✓ 30.0% opwaarts (ratio 5.3:1),27.83,✗ 27.1% boven bodem (27.83),45.95,33.35,86.0,✓ 86.00%
-2026-07-21,043 Frankfurt,GFT.DE,3,20.85,50.8,✓ herstel (50.8 up),✓ histogram up (0.423),13.0,✗ 13.0% / ratio 1.7:1,13.66,✗ 52.6% boven bodem (13.66),23.56,19.21,237.0,✓ 237.00%
-2026-07-21,043 Frankfurt,BFSA.DE,3,35.6,58.6,✓ momentum (58.6 up),✓ histogram up (0.976),1.0,✗ 1.0% / ratio 0.2:1,25.09,✗ 41.9% boven bodem (25.09),35.95,33.39,284.0,✓ 284.00%
