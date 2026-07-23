@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-07-23,042 Parijs,ITP.PA,4,23.5,36.0,✓ oververkocht (36.0),✓ histogram up (0.202),27.8,✓ 27.8% opwaarts (ratio 3.8:1),20.31,✗ 15.7% boven bodem (20.31),30.03,21.79,384.0,✓ 384.00%
+2026-07-23,042 Parijs,RCO.PA,4,44.48,32.7,✓ oververkocht (32.7),✓ histogram up (2.894),27.2,✓ 27.2% opwaarts (ratio 4.3:1),34.88,✗ 27.5% boven bodem (34.88),56.6,41.63,167.0,✓ 167.00%
+2026-07-23,042 Parijs,SOP.PA,3,146.8,47.8,✓ herstel (47.8 up),✗ neutraal (-10.453),26.6,✓ 26.6% opwaarts (ratio 3.8:1),108.19,✗ 35.7% boven bodem (108.19),185.85,136.48,357.0,✓ 357.00%
