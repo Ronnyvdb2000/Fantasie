@@ -24,6 +24,12 @@ jobs:
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
         run: python bot_00vcp.py live
+      - name: Upload vcp_signals.json als artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcp-signals
+          path: vcp_signals.json
+          retention-days: 1
       - name: Opslaan CSV
         if: always()
         run: |
@@ -32,3 +38,40 @@ jobs:
           git add -f vcp_signalen_*.csv 2>/dev/null || true
           git diff --cached --quiet || git commit -m "bot_00vcp $(date '+%Y-%m-%d')"
           git push
+
+  tradingagents-analyse:
+    needs: bot-00vcp
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout eigen repo
+        uses: actions/checkout@v4
+
+      - name: Checkout TradingAgents
+        uses: actions/checkout@v4
+        with:
+          repository: TauricResearch/TradingAgents
+          path: TradingAgents
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installeer dependencies
+        run: |
+          pip install -r TradingAgents/requirements.txt
+          pip install -e TradingAgents
+          pip install requests
+
+      - name: Download vcp_signals.json van vorige job
+        uses: actions/download-artifact@v4
+        with:
+          name: vcp-signals
+          path: .
+
+      - name: Run TradingAgents-bridge
+        env:
+          GROQ_API_KEY:     ${{ secrets.GROQ_API_KEY }}
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python tradingagents_bridge.py --signals-file vcp_signals.json --channel telegram
