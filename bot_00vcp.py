@@ -19,11 +19,17 @@ Gebruik:
   python bot_00vcp.py backtest # backtest modus
 
 GitHub Actions: dagelijks om 22:05 UTC
+
+TradingAgents-koppeling:
+  Na elke live run wordt vcp_signals.json weggeschreven met alle tickers
+  die de min_score-filter doorstonden (over alle beurzen heen), zodat
+  tradingagents_bridge.py deze kan oppikken als artifact in de workflow.
 """
 
 import os
 import sys
 import math
+import json
 import warnings
 import datetime as dt
 import time
@@ -93,6 +99,9 @@ VCP_CFG = {
 BACKTEST_START = "2021-01-01"
 BACKTEST_END   = dt.date.today().isoformat()
 
+# Bestandsnaam voor de TradingAgents-koppeling
+VCP_SIGNALS_PATH = "vcp_signals.json"
+
 
 # ============================================================
 # HULPFUNCTIES
@@ -159,6 +168,15 @@ def send_email(subject: str, body: str) -> None:
 
 def _yahoo_link(ticker: str) -> str:
     return f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
+
+def sla_vcp_signals_op(tickers: List[str]) -> None:
+    """Schrijft de kandidatenlijst weg zodat tradingagents_bridge.py deze kan oppikken."""
+    try:
+        with open(VCP_SIGNALS_PATH, "w", encoding="utf-8") as f:
+            json.dump({"tickers": sorted(set(tickers))}, f)
+        print(f"\n→ {VCP_SIGNALS_PATH} geschreven ({len(set(tickers))} tickers)")
+    except Exception as e:
+        print(f"[WARN] Kon {VCP_SIGNALS_PATH} niet schrijven: {e}")
 
 
 # ============================================================
@@ -642,6 +660,7 @@ def run_live_engine():
     print(f"Data geladen: {df['Ticker'].nunique()} tickers")
     portfolio_waarde = START_CAPITAL
     email_delen: List[str] = []
+    alle_kandidaten: List[str] = []  # verzamelt tickers voor vcp_signals.json (TradingAgents)
 
     for ex_name, tlist in exchange_tickers.items():
         print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
@@ -662,6 +681,8 @@ def run_live_engine():
         signalen.sort(key=lambda s: s.total_score, reverse=True)
         print(f"  → {len(signalen)} VCP kandidaten | {sum(s.vcp.breakout for s in signalen)} breakouts")
 
+        alle_kandidaten.extend(s.ticker for s in signalen)
+
         bericht = format_bericht(ex_name, signalen, portfolio_waarde)
         if bericht:
             send_telegram_message(bericht)
@@ -675,6 +696,9 @@ def run_live_engine():
             subject=f"VCP rapport {today_str()}",
             body="\n\n" + ("=" * 40 + "\n\n").join(email_delen),
         )
+
+    # Schrijf kandidatenlijst weg voor de TradingAgents-bridge
+    sla_vcp_signals_op(alle_kandidaten)
 
     print(f"\n{'='*60}")
     print("Klaar.")
