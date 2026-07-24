@@ -1,0 +1,2 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-07-24,041 Benelux,IMCD.AS,3,88.22,43.1,✓ herstel (43.1 up),✓ bullish crossover,14.6,✗ 14.6% / ratio 2.4:1,68.87,✗ 28.1% boven bodem (68.87),101.14,82.93,202.0,✓ 202.00%
