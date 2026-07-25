@@ -66,12 +66,32 @@ def send_telegram(message: str) -> None:
     token = os.environ["TELEGRAM_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    resp = requests.post(
-        url,
-        data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"},
-        timeout=30,
-    )
-    resp.raise_for_status()
+    # Telegram limiteert tot 4096 tekens per bericht — knip op in stukken.
+    for i in range(0, len(message), 4096):
+        chunk = message[i:i + 4096]
+        try:
+            resp = requests.post(
+                url,
+                data={"chat_id": chat_id, "text": chunk, "parse_mode": "HTML",
+                      "disable_web_page_preview": True},
+                timeout=30,
+            )
+            resp.raise_for_status()
+        except Exception as e:
+            # Fallback zonder parse_mode: voorkomt 400-fouten door tekens
+            # als < of > die Telegram als (kapotte) HTML-tags interpreteert.
+            try:
+                requests.post(
+                    url,
+                    data={"chat_id": chat_id, "text": chunk,
+                          "disable_web_page_preview": True},
+                    timeout=30,
+                )
+                print(f"Telegram HTML-fout, verstuurd zonder opmaak: {e}")
+            except Exception as e2:
+                print(f"Telegram fout: {e2}")
+        if i + 4096 < len(message):
+            time.sleep(1)
 
 
 def send_email(subject: str, message: str) -> None:
