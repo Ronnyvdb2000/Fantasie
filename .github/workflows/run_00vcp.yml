@@ -15,14 +15,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install yfinance pandas numpy requests python-dotenv
+      - run: pip install yfinance pandas numpy requests python-dotenv libsql-experimental
       - name: Run bot_00vcp
         env:
-          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
-          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
+          TELEGRAM_TOKEN:      ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER:          ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:          ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:      ${{ secrets.EMAIL_RECEIVER }}
+          TURSO_DATABASE_URL:  ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:    ${{ secrets.TURSO_AUTH_TOKEN }}
         run: python bot_00vcp.py live
       - name: Upload vcp_signals.json als artifact
         uses: actions/upload-artifact@v4
@@ -40,9 +42,20 @@ jobs:
           git pull --rebase=false -X ours origin main
           git push
 
+  # Uitgeschakeld op [huidige datum] — de TradingAgents-koppeling gaf op de
+  # gratis Groq-tier weinig meerwaarde: met online_tools=False (nodig om
+  # gratis te blijven) analyseert de LLM enkel dezelfde technische data die
+  # bot_00vcp.py al numeriek en foutloos berekent, zonder het nieuws/sentiment
+  # dat de oorspronkelijke meerwaarde had moeten zijn. Bovendien faalt een
+  # aanzienlijk deel van de aanvragen nog steeds op TPM-rate-limits (413/429)
+  # bij data-rijke tickers. Bridge-script (tradingagents_bridge.py) blijft
+  # staan voor eventueel later gebruik — bv. als online_tools weer aan kan
+  # op een betaalde tier, of enkel op de beste signalen (score 7-8/8).
+  # Verwijder "if: false" hieronder om de job weer te activeren.
   tradingagents-analyse:
     needs: bot-00vcp
     runs-on: ubuntu-latest
+    if: false
     steps:
       - name: Checkout eigen repo
         uses: actions/checkout@v4
