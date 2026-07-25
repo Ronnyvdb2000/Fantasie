@@ -23,6 +23,7 @@ Benodigde secrets (naast de vijf die je al gebruikt):
 import os
 import sys
 import json
+import time
 import argparse
 import smtplib
 import datetime
@@ -45,7 +46,12 @@ def build_config():
     # Kleinere debat-diepte = minder calls = ruim binnen gratis rate limits
     config["max_debate_rounds"] = 1
     config["max_risk_discuss_rounds"] = 1
-    config["online_tools"] = True
+    # Uitgezet: online_tools haalt live nieuws/social data op en maakt de
+    # prompt vaak 10-60k tokens groot — dat past niet binnen de gratis
+    # Groq TPM-limiet (6000 tokens/min voor llama-3.1-8b-instant).
+    # Met online_tools=False gebruikt TradingAgents alleen prijs/volume-data,
+    # wat de prompt klein genoeg houdt om gratis te blijven werken.
+    config["online_tools"] = False
     return config
 
 
@@ -121,6 +127,8 @@ def main():
             blocks.append(f"📊 <b>{ticker}</b>\n{decision}\n")
         except Exception as e:
             blocks.append(f"⚠️ {ticker}: analyse mislukt ({e})")
+        # Kleine pauze tussen tickers om de gratis TPM-limiet niet te bursten
+        time.sleep(5)
 
     message = f"TradingAgents-analyse VCP-kandidaten ({trade_date}):\n\n" + "\n".join(blocks)
 
