@@ -59,8 +59,7 @@ jobs:
 
       - name: Installeer dependencies
         run: |
-          pip install -r TradingAgents/requirements.txt
-          pip install -e TradingAgents
+          pip install ./TradingAgents
           pip install requests
 
       - name: Download vcp_signals.json van vorige job
