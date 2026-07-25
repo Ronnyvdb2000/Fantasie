@@ -1,12 +1,12 @@
-name: "Bot 00: FULL Scanner (041-059) Dual Momentum"
+name: "Bot 00: FULL Scanner (041-059) Darvas Box"
 
 on:
   schedule:
-    - cron: "40 19 * * 1-5"
+    - cron: "55 19 * * 1-5"
   workflow_dispatch:
 
 jobs:
-  bot-00dm:
+  bot-00db:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,20 +16,11 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install yfinance pandas numpy requests python-dotenv
-      - name: Run bot_00dm
+      - name: Run bot_00db
         env:
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           EMAIL_USER:       ${{ secrets.EMAIL_USER }}
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
-        run: python bot_00dm.py live
-      - name: Opslaan CSV
-        if: always()
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dm_signalen_*.csv 2>/dev/null || true
-          git diff --cached --quiet || git commit -m "bot_00dm $(date '+%Y-%m-%d')"
-          git pull --rebase=false -X ours origin main
-          git push
+        run: python bot_00db.py live
