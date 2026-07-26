@@ -1,17 +1,18 @@
 # MASTERLIJST 053 — Kopenhagen
-# Laatste update: 19/07/2026
+# Laatste update: 26/07/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-BOOZT-DKK.CO     | opname:2026-07-19 | ROE:11.0% | Debt:26.1 | Marge:3.7% | Vol:37.6% | Omzet:3,037,794 | actief
-DNORD.CO         | opname:2026-07-19 | ROE:7.7% | Debt:59.4 | Marge:3.2% | Vol:40.2% | Omzet:19,470,562 | actief
-DSV.CO           | opname:2026-07-19 | ROE:6.2% | Debt:77.2 | Marge:2.5% | Vol:30.3% | Omzet:523,302,271 | actief
-GMAB.CO          | opname:2026-07-19 | ROE:15.0% | Debt:94.2 | Marge:21.0% | Vol:35.1% | Omzet:251,638,739 | actief
-MAERSK-A.CO      | opname:2026-07-19 | ROE:3.2% | Debt:31.7 | Marge:3.0% | Vol:35.4% | Omzet:77,086,557 | actief
-MAERSK-B.CO      | opname:2026-07-19 | ROE:3.2% | Debt:31.7 | Marge:3.0% | Vol:37.5% | Omzet:278,237,967 | actief
-NKT.CO           | opname:2026-07-19 | ROE:13.4% | Debt:13.2 | Marge:7.8% | Vol:36.6% | Omzet:112,877,034 | actief
-NOVO-B.CO        | opname:2026-07-19 | ROE:71.4% | Debt:72.1 | Marge:37.2% | Vol:54.2% | Omzet:2,141,902,450 | actief
-PARKEN.CO        | opname:2026-07-19 | ROE:17.1% | Debt:84.4 | Marge:11.6% | Vol:33.6% | Omzet:816,041 | actief
-SPG.CO           | opname:2026-07-19 | ROE:15.8% | Debt:85.5 | Marge:9.1% | Vol:32.0% | Omzet:5,095,428 | actief
-TRMD-A.CO        | opname:2026-07-19 | ROE:15.7% | Debt:47.6 | Marge:24.5% | Vol:41.3% | Omzet:36,267,251 | actief
-VWS.CO           | opname:2026-07-19 | ROE:23.2% | Debt:100.6 | Marge:4.4% | Vol:44.7% | Omzet:396,172,130 | actief
+BOOZT-DKK.CO     | opname:2026-07-19 | ROE:11.0% | Debt:26.1 | Marge:3.7% | Vol:37.5% | Omzet:3,115,053 | actief
+DNORD.CO         | opname:2026-07-19 | ROE:7.7% | Debt:59.4 | Marge:3.2% | Vol:40.0% | Omzet:19,520,251 | actief
+FLS.CO           | opname:2026-07-26 | ROE:12.7% | Debt:24.2 | Marge:4.5% | Vol:35.1% | Omzet:61,333,812 | actief
+GMAB.CO          | opname:2026-07-19 | ROE:15.0% | Debt:94.2 | Marge:21.0% | Vol:34.8% | Omzet:252,635,563 | actief
+MAERSK-A.CO      | opname:2026-07-19 | ROE:3.2% | Debt:31.7 | Marge:3.0% | Vol:35.3% | Omzet:76,991,649 | actief
+MAERSK-B.CO      | opname:2026-07-19 | ROE:3.2% | Debt:31.7 | Marge:3.0% | Vol:37.5% | Omzet:277,770,193 | actief
+NKT.CO           | opname:2026-07-19 | ROE:13.4% | Debt:13.2 | Marge:7.8% | Vol:36.6% | Omzet:113,436,041 | actief
+NOVO-B.CO        | opname:2026-07-19 | ROE:71.4% | Debt:72.1 | Marge:37.2% | Vol:53.9% | Omzet:2,131,721,856 | actief
+PARKEN.CO        | opname:2026-07-19 | ROE:17.1% | Debt:84.4 | Marge:11.6% | Vol:32.9% | Omzet:795,145 | actief
+SPG.CO           | opname:2026-07-19 | ROE:15.8% | Debt:85.5 | Marge:9.1% | Vol:31.9% | Omzet:5,080,712 | actief
+TRMD-A.CO        | opname:2026-07-19 | ROE:15.7% | Debt:47.6 | Marge:24.5% | Vol:41.2% | Omzet:36,488,472 | actief
+VWS.CO           | opname:2026-07-19 | ROE:23.2% | Debt:100.6 | Marge:4.4% | Vol:41.6% | Omzet:391,374,571 | actief
+DSV.CO           | opname:2026-07-19 | ROE:6.3% | Debt:75.8 | Marge:2.4% | Vol:33.6% | Omzet:551,180,636 | zwakker | weken_buiten:1
