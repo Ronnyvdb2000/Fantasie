@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-07-27,053 Kopenhagen,NOVO-B.CO,4,326.5,44.3,✓ herstel (44.3 up),✓ bullish crossover,32.3,✓ 32.3% opwaarts (ratio 5.7:1),223.78,✗ 45.9% boven bodem (223.78),431.98,307.98,496.0,✓ 496.00%
+2026-07-27,053 Kopenhagen,TRMD-A.CO,3,196.0,60.1,✓ momentum (60.1 up),✓ histogram up (7.568),12.2,✗ 12.2% / ratio 1.6:1,112.74,✗ 73.8% boven bodem (112.74),219.83,181.52,908.0,✓ 908.00%
+2026-07-27,053 Kopenhagen,DNORD.CO,3,330.8,64.8,✓ momentum (64.8 up),✓ histogram up (11.507),1.8,✗ 1.8% / ratio 0.3:1,211.31,✗ 56.5% boven bodem (211.31),336.8,307.32,238.0,✓ 238.00%

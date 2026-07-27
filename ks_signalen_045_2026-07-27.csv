@@ -1,0 +1,5 @@
+datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
+2026-07-27,045 Londen,HIK.L,3,1577.0,43.8,✓ herstel (43.8 up),✗ neutraal (-141.561),26.4,✓ 26.4% opwaarts (ratio 4.5:1),1190.67,✗ 32.4% boven bodem (1190.67),1994.06,1483.34,390.0,✓ 390.00%
+2026-07-27,045 Londen,JD.L,3,92.7,47.4,✓ herstel (47.4 up),✓ histogram up (2.577),12.8,✗ 12.8% / ratio 2.0:1,65.27,✗ 42.0% boven bodem (65.27),104.54,86.89,135.0,✓ 135.00%
+2026-07-27,045 Londen,FOUR.L,3,4036.0,50.8,✓ herstel (50.8 up),✓ histogram up (42.910),9.7,✗ 9.7% / ratio 1.3:1,3054.02,✗ 32.2% boven bodem (3054.02),4428.58,3724.21,455.0,✓ 455.00%
+2026-07-27,045 Londen,ROR.L,3,488.0,70.2,✓ momentum (70.2 up),✓ bullish crossover,0.0,✗ onvoldoende,288.4,✗ 69.2% boven bodem (288.40),488.0,462.1,170.0,✓ 170.00%
