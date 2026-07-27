@@ -1,0 +1,6 @@
+datum,exchange,ticker,score,price,rev_growth,rev_rank,rs,rs_rank,high52w,pct_from_high,breakout,breakout_vol,ma50,above_ma50,stop,total_score
+2026-07-27,049 Stockholm,HOFI.ST,4,212.4,2.4,38.9,94.5,95.5,212.4,0.0,True,2.4,172.9,True,191.16,88.3
+2026-07-27,049 Stockholm,BOOZT.ST,3,163.2,0.5,31.9,85.9,86.7,163.2,0.0,True,0.48,140.4,True,146.88,70.8
+2026-07-27,049 Stockholm,BRAV.ST,3,140.4,-4.9,16.1,79.6,80.4,140.4,0.0,True,0.32,123.5,True,126.36,68.9
+2026-07-27,049 Stockholm,SSAB-B.ST,3,99.0,-6.7,10.0,79.3,80.1,101.1,2.1,False,0.93,94.74,True,89.1,53.8
+2026-07-27,049 Stockholm,MILDEF.ST,3,225.3,70.3,98.2,54.3,54.8,231.0,2.5,False,0.96,188.32,True,202.77,37.0

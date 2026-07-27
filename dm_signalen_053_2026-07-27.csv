@@ -1,0 +1,2 @@
+datum,exchange,ticker,score,price,rev_growth,rev_rank,rs,rs_rank,high52w,pct_from_high,breakout,breakout_vol,ma50,above_ma50,stop,total_score
+2026-07-27,053 Kopenhagen,BOOZT-DKK.CO,3,109.9,0.5,31.9,87.7,88.6,109.9,0.0,True,1.08,95.28,True,98.91,71.3

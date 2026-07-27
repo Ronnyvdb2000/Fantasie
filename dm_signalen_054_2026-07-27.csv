@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,rev_growth,rev_rank,rs,rs_rank,high52w,pct_from_high,breakout,breakout_vol,ma50,above_ma50,stop,total_score
+2026-07-27,054 Helsinki,SSABBH.HE,3,8.95,-6.7,10.0,95.4,96.4,9.29,3.6,False,1.0,8.63,True,8.05,58.6
+2026-07-27,054 Helsinki,ORNAV.HE,3,79.2,22.5,85.1,35.8,36.1,79.2,0.0,True,0.68,70.78,True,71.28,47.2
+2026-07-27,054 Helsinki,ORNBV.HE,3,79.55,22.5,85.1,35.5,35.8,79.55,0.0,True,1.16,70.96,True,71.6,47.2

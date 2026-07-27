@@ -1,0 +1,2 @@
+datum,exchange,ticker,score,price,rev_growth,rev_rank,rs,rs_rank,high52w,pct_from_high,breakout,breakout_vol,ma50,above_ma50,stop,total_score
+2026-07-27,044 Spanje/Port,REP.MC,3,25.54,-4.0,17.9,86.5,87.3,26.41,3.3,False,0.73,22.5,True,22.99,56.0

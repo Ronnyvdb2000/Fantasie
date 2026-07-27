@@ -1,0 +1,4 @@
+datum,exchange,ticker,score,price,rev_growth,rev_rank,rs,rs_rank,high52w,pct_from_high,breakout,breakout_vol,ma50,above_ma50,stop,total_score
+2026-07-27,048 Nasdaq/NYSE,DINO,3,90.78,-6.0,12.5,92.7,93.7,91.69,1.0,False,1.53,74.23,True,81.7,62.8
+2026-07-27,048 Nasdaq/NYSE,VLO,3,304.93,-5.5,13.7,91.2,92.2,314.8,3.1,False,0.63,266.08,True,274.44,57.4
+2026-07-27,048 Nasdaq/NYSE,LLY,3,1197.53,44.7,94.8,71.6,72.3,1235.56,3.1,False,0.37,1133.02,True,1077.78,34.5
