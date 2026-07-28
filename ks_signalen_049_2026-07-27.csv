@@ -1,4 +1,0 @@
-datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
-2026-07-27,049 Stockholm,CEVI.ST,3,141.8,42.3,✓ herstel (42.3 up),✗ neutraal (-19.470),30.0,✓ 30.0% opwaarts (ratio 4.0:1),117.58,✗ 20.6% boven bodem (117.58),184.3,131.08,196.0,✓ 196.00%
-2026-07-27,049 Stockholm,BTS-B.ST,3,186.4,48.6,✓ herstel (48.6 up),✓ histogram up (2.457),10.2,✗ 10.2% / ratio 1.8:1,105.17,✗ 77.2% boven bodem (105.17),205.49,175.9,237.0,✓ 237.00%
-2026-07-27,049 Stockholm,ALIV-SDB.ST,3,1145.0,55.1,✓ momentum (55.1 up),✓ histogram up (8.836),8.2,✗ 8.2% / ratio 1.5:1,930.75,✗ 23.0% boven bodem (930.75),1239.12,1084.21,283.0,✓ 283.00%

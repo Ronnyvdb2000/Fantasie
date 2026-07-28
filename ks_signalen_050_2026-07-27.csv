@@ -1,4 +1,0 @@
-datum,exchange,ticker,score,price,rsi_monthly,rsi_label,macd_label,rr_pct,rr_label,support,support_label,resistance,stop,div_yield,div_label
-2026-07-27,050 Zurich,SKAN.SW,4,58.2,46.9,✓ herstel (46.9 up),✓ bullish crossover,30.7,✓ 30.7% opwaarts (ratio 3.9:1),40.21,✗ 44.7% boven bodem (40.21),76.05,53.63,38.0,✓ 38.00%
-2026-07-27,050 Zurich,FORN.SW,3,789.0,45.8,✓ herstel (45.8 up),✓ histogram up (9.887),18.1,✗ 18.1% / ratio 3.6:1,659.48,✗ 19.6% boven bodem (659.48),932.16,749.0,322.0,✓ 322.00%
-2026-07-27,050 Zurich,LOGN.SW,3,87.02,55.4,✓ momentum (55.4 up),✓ bullish crossover,16.2,✗ 16.2% / ratio 2.8:1,66.64,✗ 30.6% boven bodem (66.64),101.15,81.97,158.0,✓ 158.00%
