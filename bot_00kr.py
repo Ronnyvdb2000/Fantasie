@@ -19,7 +19,6 @@ Gebruik:
 import os
 import sys
 import math
-import csv
 import warnings
 import datetime as dt
 import time
@@ -154,11 +153,6 @@ def send_email(subject: str, body: str) -> None:
         print(f"Email verzonden naar {EMAIL_RECEIVER}")
     except Exception as e:
         print(f"Email fout: {e}")
-
-def ensure_csv_header(path: str, header: List[str]) -> None:
-    if not os.path.exists(path):
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(header)
 
 def _yahoo_link(ticker: str) -> str:
     return f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
@@ -522,26 +516,6 @@ def format_bericht(
 
 
 # ============================================================
-# CSV LOGGING
-# ============================================================
-
-def _log_csv(signalen: List[KSSignaal], exchange: str):
-    fname  = f"ks_signalen_{exchange.split()[0]}_{today_str()}.csv"
-    header = ["datum","exchange","ticker","score","price","rsi_monthly",
-              "rsi_label","macd_label","rr_pct","rr_label","support",
-              "support_label","resistance","stop","div_yield","div_label"]
-    ensure_csv_header(fname, header)
-    with open(fname, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        for s in signalen:
-            w.writerow([today_str(), exchange, s.ticker, s.score, s.price,
-                        s.rsi_monthly, s.rsi_label, s.macd_label,
-                        s.rr_pct, s.rr_label, s.support, s.support_label,
-                        s.resistance, s.stop, s.div_yield, s.div_label])
-    print(f"  CSV: {fname}")
-
-
-# ============================================================
 # LIVE ENGINE
 # ============================================================
 
@@ -601,9 +575,6 @@ def run_live_engine():
             print(f"  → Telegram verstuurd")
         else:
             print(f"  → Overgeslagen: {ex_name}")
-
-        if signalen:
-            _log_csv(signalen, ex_name)
 
     if email_delen:
         send_email(
