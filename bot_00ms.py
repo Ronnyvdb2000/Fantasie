@@ -29,7 +29,6 @@ Gebruik:
 import os
 import sys
 import math
-import csv
 import warnings
 import datetime as dt
 import time
@@ -170,11 +169,6 @@ def send_email(subject: str, body: str) -> None:
         print(f"Email verzonden naar {EMAIL_RECEIVER}")
     except Exception as e:
         print(f"Email fout: {e}")
-
-def ensure_csv_header(path: str, header: List[str]) -> None:
-    if not os.path.exists(path):
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(header)
 
 def _yahoo_link(ticker: str) -> str:
     return f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
@@ -622,24 +616,6 @@ def format_bericht(exchange_name: str, signalen: List[SEPASignaal],
 
 
 # ============================================================
-# CSV LOGGING
-# ============================================================
-
-def _log_csv(signalen: List[SEPASignaal], exchange: str):
-    fname  = f"ms_signalen_{exchange.split()[0]}_{today_str()}.csv"
-    header = ["datum","exchange","ticker","vcp_score","rs","price",
-              "pivot","stop","pct_from_high","pct_from_low","total_score"]
-    ensure_csv_header(fname, header)
-    with open(fname, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        for s in signalen:
-            w.writerow([today_str(), exchange, s.ticker, s.vcp_score, s.rs,
-                        s.price, s.pivot, s.stop,
-                        s.pct_from_high, s.pct_from_low, s.total_score])
-    print(f"  CSV: {fname}")
-
-
-# ============================================================
 # LIVE ENGINE
 # ============================================================
 
@@ -702,9 +678,6 @@ def run_live_engine():
             print(f"  → Telegram verstuurd")
         else:
             print(f"  → Overgeslagen: {ex_name}")
-
-        if signalen:
-            _log_csv(signalen, ex_name)
 
     # Email met alle exchanges samen
     if email_delen:
