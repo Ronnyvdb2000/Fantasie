@@ -57,6 +57,12 @@ EXCHANGES = {
     "046 Milaan":      "tickers_046x.txt",
     "047 Toronto":     "tickers_047x.txt",
     "048 Nasdaq/NYSE": "tickers_048x.txt",
+    "049 Stockholm":   "tickers_049x.txt",
+    "050 Zurich":      "tickers_050x.txt",
+    "051 Warschau":    "tickers_051x.txt",
+    "052 Oslo":        "tickers_052x.txt",
+    "053 Kopenhagen":  "tickers_053x.txt",
+    "054 Helsinki":    "tickers_054x.txt",
 }
 
 FALLBACK_TICKERS = {
