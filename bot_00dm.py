@@ -31,7 +31,6 @@ GitHub Actions: dagelijks om 22:10 UTC
 import os
 import sys
 import math
-import csv
 import warnings
 import datetime as dt
 import time
@@ -171,11 +170,6 @@ def send_email(subject: str, body: str) -> None:
         print(f"Email verzonden naar {EMAIL_RECEIVER}")
     except Exception as e:
         print(f"Email fout: {e}")
-
-def ensure_csv_header(path: str, header: List[str]) -> None:
-    if not os.path.exists(path):
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(header)
 
 def _yahoo_link(ticker: str) -> str:
     return f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
@@ -786,33 +780,9 @@ def run_live_engine():
         else:
             print(f"  → Overgeslagen: {ex_name}")
 
-        if signalen:
-            _log_csv(signalen, ex_name)
-
     print(f"\n{'='*60}")
     print("Klaar.")
 
-
-# ============================================================
-# CSV LOGGING
-# ============================================================
-
-def _log_csv(signalen: List[DMSignaal], exchange: str):
-    fname  = f"dm_signalen_{exchange.split()[0]}_{today_str()}.csv"
-    header = ["datum","exchange","ticker","score","price","rev_growth","rev_rank",
-              "rs","rs_rank","high52w","pct_from_high","breakout","breakout_vol",
-              "ma50","above_ma50","stop","total_score"]
-    ensure_csv_header(fname, header)
-    with open(fname, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        for s in signalen:
-            w.writerow([
-                today_str(), exchange, s.ticker, s.score, s.price,
-                s.rev_growth, s.rev_rank, s.rs, s.rs_rank,
-                s.high52w, s.pct_from_high, s.breakout, s.breakout_vol,
-                s.ma50, s.above_ma50, s.stop, s.total_score,
-            ])
-    print(f"  CSV: {fname}")
 
 
 # ============================================================
