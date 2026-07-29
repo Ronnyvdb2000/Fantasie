@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install yfinance pandas numpy requests python-dotenv
+      - run: pip install yfinance pandas numpy requests python-dotenv supabase
       - name: Run bot_00mr EOD
         env:
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
@@ -29,14 +29,14 @@ jobs:
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
           SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY:     ${{ secrets.SUPABASE_KEY }}      
+          SUPABASE_KEY:     ${{ secrets.SUPABASE_KEY }}
         run: python bot_00mr.py ${{ github.event.inputs.mode || 'eod' }}
       - name: Opslaan state
         if: always()
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f mr_portfolio.json mr_trades.csv mr_snapshots.csv 2>/dev/null || true
+          git add -f mr_portfolio.json 2>/dev/null || true
           git diff --cached --quiet || git commit -m "bot_00mr EOD $(date '+%Y-%m-%d')"
           git pull --rebase=false -X ours origin main
           git push
