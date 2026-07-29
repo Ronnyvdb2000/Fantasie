@@ -39,7 +39,6 @@ GitHub Actions:
 import os
 import sys
 import math
-import csv
 import json
 import warnings
 import datetime as dt
@@ -55,6 +54,12 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+try:
+    from supabase import create_client, Client
+    _SUPABASE_AVAILABLE = True
+except ImportError:
+    _SUPABASE_AVAILABLE = False
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -62,9 +67,13 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # ============================================================
 
 PORTFOLIO_FILE   = "mr_portfolio.json"
-TRADES_FILE      = "mr_trades.csv"
-SNAPSHOT_FILE    = "mr_snapshots.csv"
 PERF_FILE        = "mr_performance.json"
+
+# Supabase-tabellen (vervangen mr_trades.csv / mr_snapshots.csv)
+SUPABASE_URL     = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY     = os.getenv("SUPABASE_KEY", "")
+TRADES_TABLE     = "mr_trades"
+SNAPSHOTS_TABLE  = "mr_snapshots"
 
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
@@ -200,10 +209,18 @@ def send_telegram(text: str) -> None:
         except Exception as e:
             print(f"Telegram fout: {e}")
 
-def ensure_csv(path: str, header: List[str]) -> None:
-    if not os.path.exists(path):
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(header)
+def _get_supabase() -> Optional["Client"]:
+    if not _SUPABASE_AVAILABLE:
+        print("[supabase] package niet geïnstalleerd — trade/snapshot niet opgeslagen.")
+        return None
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("[supabase] SUPABASE_URL/SUPABASE_KEY ontbreken — trade/snapshot niet opgeslagen.")
+        return None
+    try:
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"[supabase] Kon geen verbinding maken: {e}")
+        return None
 
 def _yahoo_link(ticker: str) -> str:
     return f"[Grafiek](https://finance.yahoo.com/quote/{ticker})"
@@ -256,21 +273,32 @@ def max_daily_loss_bereikt(p: Dict, prices: Dict[str, float]) -> bool:
     return p["daily_pnl"] <= -(totaal * CFG["max_daily_loss_pct"])
 
 def log_trade(datum, ticker, systeem, side, price, size, cost, pnl, tax, net, reason=""):
-    ensure_csv(TRADES_FILE, ["datum","ticker","systeem","side","price","size",
-                              "cost","pnl","tax","net","reason"])
-    with open(TRADES_FILE, "a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow([datum, ticker, systeem, side, price, size,
-                                  cost, pnl, tax, net, reason])
+    sb = _get_supabase()
+    if sb is None:
+        return
+    try:
+        sb.table(TRADES_TABLE).insert({
+            "datum": str(datum), "ticker": ticker, "systeem": systeem,
+            "side": side, "price": price, "size": size, "cost": cost,
+            "pnl": pnl, "tax": tax, "net": net, "reason": reason,
+        }).execute()
+    except Exception as e:
+        print(f"[supabase] Kon trade voor {ticker} niet wegschrijven: {e}")
 
 def log_snapshot(p: Dict, prices: Dict[str, float]) -> None:
-    ensure_csv(SNAPSHOT_FILE, ["datum","cash","pos_value","total","n_pos",
-                                "daily_pnl"])
+    sb = _get_supabase()
+    if sb is None:
+        return
     totaal  = portfolio_waarde(p, prices)
     pos_val = totaal - p["cash"]
-    with open(SNAPSHOT_FILE, "a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow([today_str(), round(p["cash"], 2),
-                                  round(pos_val, 2), round(totaal, 2),
-                                  len(p["positions"]), round(p["daily_pnl"], 2)])
+    try:
+        sb.table(SNAPSHOTS_TABLE).insert({
+            "datum": today_str(), "cash": round(p["cash"], 2),
+            "pos_value": round(pos_val, 2), "total": round(totaal, 2),
+            "n_pos": len(p["positions"]), "daily_pnl": round(p["daily_pnl"], 2),
+        }).execute()
+    except Exception as e:
+        print(f"[supabase] Kon snapshot niet wegschrijven: {e}")
 
 
 # ============================================================
@@ -645,18 +673,21 @@ def generate_orb_signals(tickers: List[str], exchange: str) -> List[ORBSignaal]:
 # ============================================================
 
 def compute_performance() -> Dict:
-    """Berekent performance per systeem uit trades CSV."""
+    """Berekent performance per systeem uit de mr_trades Supabase-tabel."""
     perf = {
         "MR":  {"trades": 0, "win": 0, "net": 0.0, "tax": 0.0},
         "ORB": {"trades": 0, "win": 0, "net": 0.0, "tax": 0.0},
     }
-    if not os.path.exists(TRADES_FILE):
+    sb = _get_supabase()
+    if sb is None:
         return perf
 
     try:
-        df = pd.read_csv(TRADES_FILE)
-        if df.empty:
+        resp = sb.table(TRADES_TABLE).select("*").execute()
+        rows = resp.data or []
+        if not rows:
             return perf
+        df = pd.DataFrame(rows)
         for systeem in ["MR", "ORB"]:
             sub = df[df["systeem"] == systeem]
             if sub.empty:
@@ -674,13 +705,16 @@ def compute_performance() -> Dict:
     return perf
 
 def compute_cagr_drawdown() -> Tuple[float, float]:
-    """Berekent CAGR en max drawdown uit portfolio snapshots."""
-    if not os.path.exists(SNAPSHOT_FILE):
+    """Berekent CAGR en max drawdown uit de mr_snapshots Supabase-tabel."""
+    sb = _get_supabase()
+    if sb is None:
         return 0.0, 0.0
     try:
-        df = pd.read_csv(SNAPSHOT_FILE)
-        if len(df) < 2:
+        resp = sb.table(SNAPSHOTS_TABLE).select("*").order("datum").execute()
+        rows = resp.data or []
+        if len(rows) < 2:
             return 0.0, 0.0
+        df = pd.DataFrame(rows)
         df["datum"] = pd.to_datetime(df["datum"])
         start_val = float(df["total"].iloc[0])
         end_val   = float(df["total"].iloc[-1])
