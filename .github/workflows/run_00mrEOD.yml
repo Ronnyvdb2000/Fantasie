@@ -28,6 +28,8 @@ jobs:
           EMAIL_USER:       ${{ secrets.EMAIL_USER }}
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
+          SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:     ${{ secrets.SUPABASE_KEY }}      
         run: python bot_00mr.py ${{ github.event.inputs.mode || 'eod' }}
       - name: Opslaan state
         if: always()
