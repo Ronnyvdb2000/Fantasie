@@ -28,11 +28,11 @@ def haal_week_performance(ticker_list):
             df = yf.download(t, period="5d", progress=False)
             if df.empty or len(df) < 2:
                 continue
-            
+
             # Voorkom 'identically-labeled' fout door om te zetten naar pure getallen
             start_prijs = float(df['Close'].iloc[0])
             eind_prijs = float(df['Close'].iloc[-1])
-            
+
             if start_prijs > 0:
                 perc = ((eind_prijs - start_prijs) / start_prijs) * 100
                 results.append({'ticker': t, 'perf': float(perc)})
@@ -40,20 +40,28 @@ def haal_week_performance(ticker_list):
             print(f"Fout bij ticker {t}: {e}")
     return results
 
+def bouw_bestandslijst():
+    """
+    Bouwt de volledige lijst van tickerbestanden:
+      - tickers_01.txt t/m tickers_09.txt   (originele reeks)
+      - tickers_041a.txt t/m tickers_059a.txt (nieuwe reeks, nummers kunnen ontbreken)
+    Niet-bestaande bestanden worden verderop gewoon overgeslagen.
+    """
+    bestanden = []
+
+    # Originele reeks: 01 t/m 09
+    for n in range(1, 10):
+        bestanden.append(f"tickers_{n:02d}.txt")
+
+    # Nieuwe reeks: 041a t/m 059a
+    for n in range(41, 60):
+        bestanden.append(f"tickers_{n:03d}a.txt")
+
+    return bestanden
+
 def main():
-    # Lijst met al je tickerbestanden
-    all_files = [
-        'tickers_01.txt', 
-        'tickers_02.txt', 
-        'tickers_03.txt', 
-        'tickers_04.txt', 
-        'tickers_05.txt',
-        'tickers_06.txt',
-        'tickers_07.txt',
-        'tickers_08.txt',
-        'tickers_09.txt'
-    ]
-    
+    all_files = bouw_bestandslijst()
+
     alle_data = []
 
     for f_name in all_files:
@@ -71,18 +79,19 @@ def main():
         stuur_telegram("📊 *Wekelijks Rapport:* Geen data gevonden om te analyseren.")
         return
 
-    # Maak DataFrame en sorteer
+    # Maak DataFrame en verwijder eventuele dubbele tickers (kunnen in meerdere lijsten voorkomen)
     df_res = pd.DataFrame(alle_data)
-    
+    df_res = df_res.drop_duplicates(subset='ticker', keep='first')
+
     # Sorteer op 'perf' kolom (simpele numerieke sortering)
     df_res = df_res.sort_values(by='perf', ascending=False)
-    
+
     top_10 = df_res.head(10)
     bottom_10 = df_res.tail(10)
 
     rapport = "🏆 *WEKELIJKSE HALL OF FAME & SHAME*\n"
     rapport += "----------------------------------\n\n"
-    
+
     rapport += "🚀 *TOP PERFORMERS (DEZE WEEK):*\n"
     for _, row in top_10.iterrows():
         rapport += f"• `{row['ticker']}` : +{row['perf']:.2f}%\n"
@@ -92,7 +101,7 @@ def main():
         rapport += f"• `{row['ticker']}` : {row['perf']:.2f}%\n"
 
     rapport += "\n💡 *Tip:* Check of de stijgers een RSI-oververhitting vertonen voordat je actie onderneemt op Bolero!"
-    
+
     stuur_telegram(rapport)
     print("Rapport verzonden naar Telegram.")
 
