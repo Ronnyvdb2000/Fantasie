@@ -1,4 +1,4 @@
-name: Weekly Report
+name: Weekly Report backtest
 
 on:
   schedule:
