@@ -2,7 +2,7 @@ name: Weekly Report backtest
 
 on:
   schedule:
-    - cron: '0 21 * * 5'   # Elke vrijdag om 21:00 UTC (na sluiting Wall Street)
+    - cron: '0 22 * * 5'   # Elke vrijdag om 21:00 UTC (na sluiting Wall Street)
   workflow_dispatch:
 
 jobs:
