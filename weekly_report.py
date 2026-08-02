@@ -57,8 +57,13 @@ def haal_week_performance(ticker_list):
             start_prijs = float(df['Close'].iloc[0])
             eind_prijs = float(df['Close'].iloc[-1])
 
+            if pd.isna(start_prijs) or pd.isna(eind_prijs):
+                continue
+
             if start_prijs > 0:
                 perc = ((eind_prijs - start_prijs) / start_prijs) * 100
+                if pd.isna(perc):
+                    continue
                 results.append({'ticker': t, 'perf': float(perc)})
         except Exception as e:
             print(f"Fout bij ticker {t}: {e}")
