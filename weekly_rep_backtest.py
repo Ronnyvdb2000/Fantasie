@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+backtest_toppers.py
+
+Backtest van de top 5 stijgers per beurs uit het wekelijkse
+Hall-of-Fame-rapport: had de Trend Template + VCP + momentum-logica
+(zoals gebruikt in bot_00super.py) deze bewegingen vroeger al kunnen
+zien aankomen?
+
+Werking:
+  Voor elke ticker wordt de koershistoriek gedownload en worden de
+  laatste `--dagen-terug` handelsdagen weggeknipt VOORDAT de indicatoren
+  worden berekend. Zo simuleer je wat de bot had gezien als hij enkele
+  dagen vóór de grote beweging had gedraaid — in plaats van te "cheaten"
+  met de koers van na de piek.
+
+Belangrijke beperking t.o.v. bot_00super.py:
+  De volledige RS-rating (percentiel-rank t.o.v. alle andere tickers op
+  dezelfde beurs) vereist het downloaden van de hele beursuniverse
+  (honderden tickers). Voor deze losse verkenning is dat overkill, dus
+  dit script gebruikt een eenvoudigere momentum-proxy (% verandering
+  over 3 en 12 maanden) in plaats van de RS-percentiel.
+
+  Verder: EMGS.OL, KING.OL, PMI.SW en LEHN.SW zitten niet in de
+  'x'-kwaliteitslijsten die bot_00super.py scant — die bot zou deze
+  tickers dus sowieso nooit hebben gezien, ongeacht de parameters.
+
+Vereist: yfinance, pandas (met internettoegang naar Yahoo Finance).
+Dit is NIET beschikbaar in de Claude-sandbox — draai dit lokaal.
+
+Gebruik:
+  python backtest_toppers.py                  # default: 5 handelsdagen terug
+  python backtest_toppers.py --dagen-terug 15  # 3 weken terug
+"""
+
+import argparse
+import math
+import warnings
+
+import pandas as pd
+import yfinance as yf
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+# Top 5 stijgers per beurs uit het laatste weekrapport (ticker, weekperf %)
+TOPPERS = [
+    ("048 Nasdaq/NYSE", "MKTX", 37.58),
+    ("048 Nasdaq/NYSE", "GRMN", 21.16),
+    ("048 Nasdaq/NYSE", "MSFT", 19.43),
+    ("048 Nasdaq/NYSE", "CTSH", 17.64),
+    ("048 Nasdaq/NYSE", "AMZN", 17.37),
+    ("049 Stockholm", "CORE-A.ST", 28.16),
+    ("049 Stockholm", "ORTI-A.ST", 22.34),
+    ("049 Stockholm", "ELUX-A.ST", 19.17),
+    ("049 Stockholm", "CTM.ST", 16.82),
+    ("049 Stockholm", "MEAB-B.ST", 14.57),
+    ("050 Zurich", "PMI.SW", 65.05),
+    ("050 Zurich", "LEHN.SW", 32.63),
+    ("050 Zurich", "CLN.SW", 23.40),
+    ("050 Zurich", "AUTN.SW", 18.73),
+    ("050 Zurich", "FORN.SW", 15.59),
+    ("051 Warschau", "CCE.WA", 12.86),
+    ("051 Warschau", "RHD.WA", 12.24),
+    ("051 Warschau", "ASM.WA", 12.16),
+    ("051 Warschau", "WPL.WA", 11.48),
+    ("051 Warschau", "INC.WA", 11.44),
+    ("052 Oslo", "EMGS.OL", 146.87),
+    ("052 Oslo", "KING.OL", 46.67),
+    ("052 Oslo", "TRMED.OL", 30.41),
+    ("052 Oslo", "ININ.OL", 19.86),
+    ("052 Oslo", "TEKNA.OL", 15.47),
+    ("053 Kopenhagen", "AGF-B.CO", 18.18),
+    ("053 Kopenhagen", "NTG.CO", 9.46),
+    ("053 Kopenhagen", "GERHSP.CO", 7.86),
+    ("053 Kopenhagen", "ROCK-B.CO", 6.45),
+    ("053 Kopenhagen", "ROCK-A.CO", 5.56),
+    ("054 Helsinki", "ALMA.HE", 8.58),
+    ("054 Helsinki", "REMEDY.HE", 7.67),
+    ("054 Helsinki", "SITOWS.HE", 6.30),
+    ("054 Helsinki", "KAMUX.HE", 6.11),
+    ("054 Helsinki", "MANTA.HE", 6.07),
+]
+
+CFG = {
+    "vcp_lookback": 60,
+    "vol_contraction_pct": 20.0,
+    "volume_dry_pct": 30.0,
+    "pivot_lookback": 20,
+    "pivot_breakout_vol": 1.5,
+}
+
+
+def wilder_smooth(series, period):
+    result = pd.Series(index=series.index, dtype=float)
+    valid = series.dropna()
+    if len(valid) < period:
+        return result
+    result[valid.index[period - 1]] = valid.iloc[:period].mean()
+    for i in range(period, len(valid)):
+        result[valid.index[i]] = (
+            result[valid.index[i - 1]] * (period - 1) / period + valid.iloc[i] / period
+        )
+    return result
+
+
+def fmt(val, suffix=""):
+    return "n.v.t." if val is None else f"{val:.1f}{suffix}"
+
+
+def analyseer(ticker, dagen_terug):
+    try:
+        df = yf.download(ticker, period="2y", progress=False, auto_adjust=True)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        if df.empty:
+            return None
+
+        if dagen_terug > 0:
+            df = df.iloc[:-dagen_terug]
+        if len(df) < 260:
+            return None
+
+        close, high, low, vol = df["Close"], df["High"], df["Low"], df["Volume"]
+
+        ma50 = close.rolling(50).mean()
+        ma150 = close.rolling(150).mean()
+        ma200 = close.rolling(200).mean()
+        ma200_slope = ma200.diff(20)
+        vol_ma20 = vol.rolling(20).mean()
+        high52 = close.rolling(252).max()
+        low52 = close.rolling(252).min()
+
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low - close.shift()).abs(),
+        ], axis=1).max(axis=1)
+        atr14 = wilder_smooth(tr, 14)
+
+        c = float(close.iloc[-1])
+
+        def safe(x):
+            try:
+                v = float(x)
+                return None if math.isnan(v) else v
+            except Exception:
+                return None
+
+        s_ma50, s_ma150, s_ma200 = safe(ma50.iloc[-1]), safe(ma150.iloc[-1]), safe(ma200.iloc[-1])
+        s_slope = safe(ma200_slope.iloc[-1])
+
+        trend_ok = (
+            s_ma50 is not None and s_ma150 is not None and s_ma200 is not None and s_slope is not None
+            and c > s_ma150 and c > s_ma200 and s_ma150 > s_ma200 and s_slope > 0
+            and s_ma50 > s_ma150 > s_ma200 and c > s_ma50
+        )
+
+        h52, l52 = safe(high52.iloc[-1]), safe(low52.iloc[-1])
+        pct_from_high = round((h52 - c) / h52 * 100, 1) if h52 else None
+        pct_from_low = round((c - l52) / l52 * 100, 1) if l52 else None
+
+        mom_3m = round((c - close.iloc[-63]) / close.iloc[-63] * 100, 1) if len(close) > 63 else None
+        mom_12m = round((c - close.iloc[-252]) / close.iloc[-252] * 100, 1) if len(close) > 252 else None
+
+        # VCP-achtige score (0-4)
+        vcp_score = 0
+        lb = CFG["vcp_lookback"]
+        atr_now, atr_start = safe(atr14.iloc[-1]), safe(atr14.iloc[-lb])
+        if atr_now is not None and atr_start and atr_start > 0:
+            contraction = (atr_start - atr_now) / atr_start * 100
+            if contraction >= CFG["vol_contraction_pct"]:
+                vcp_score += 1
+
+        vol_now, vol_mean = safe(vol.iloc[-1]), safe(vol_ma20.iloc[-1])
+        if vol_now is not None and vol_mean and vol_mean > 0:
+            if (vol_now / vol_mean * 100) <= (100 - CFG["volume_dry_pct"]):
+                vcp_score += 1
+
+        recent = df.iloc[-lb:]
+        n = len(recent)
+        third = n // 3
+        if third >= 5:
+            r1, r2, r3 = recent.iloc[:third]["Close"], recent.iloc[third:2*third]["Close"], recent.iloc[2*third:]["Close"]
+            range1, range2, range3 = float(r1.max()-r1.min()), float(r2.max()-r2.min()), float(r3.max()-r3.min())
+            if range1 > 0 and range2 < range1 and range3 < range2:
+                vcp_score += 1
+
+        piv = CFG["pivot_lookback"]
+        very_recent = df.iloc[-piv:]
+        pivot_high = float(very_recent["Close"].iloc[:-1].max())
+        vol_recent_mean = safe(vol_ma20.iloc[-piv])
+        if c > pivot_high and vol_recent_mean and vol_recent_mean > 0:
+            if vol.iloc[-1] >= vol_recent_mean * CFG["pivot_breakout_vol"]:
+                vcp_score += 1
+
+        return {
+            "close": round(c, 2),
+            "trend_ok": trend_ok,
+            "vcp_score": vcp_score,
+            "pct_from_high": pct_from_high,
+            "pct_from_low": pct_from_low,
+            "mom_3m": mom_3m,
+            "mom_12m": mom_12m,
+            "laatste_datum": df.index[-1].strftime("%Y-%m-%d"),
+        }
+    except Exception as e:
+        print(f"Fout bij {ticker}: {e}")
+        return None
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dagen-terug", type=int, default=5,
+        help="Aantal handelsdagen weggeknipt vóór analyse, om de piekweek zelf "
+             "niet mee te nemen (default: 5 = 1 handelsweek)."
+    )
+    args = parser.parse_args()
+
+    print(f"{'Beurs':<16}{'Ticker':<11}{'Weekperf':>9}  {'Trend':<6}{'VCP':<5}"
+          f"{'%<high':>8}{'%>low':>8}{'Mom3m':>8}{'Mom12m':>8}  Analysedatum")
+    print("-" * 105)
+
+    for beurs, ticker, week_perf in TOPPERS:
+        r = analyseer(ticker, args.dagen_terug)
+        if r is None:
+            print(f"{beurs:<16}{ticker:<11}{week_perf:>8.1f}%  geen data / te weinig historiek")
+            continue
+        print(
+            f"{beurs:<16}{ticker:<11}{week_perf:>8.1f}%  "
+            f"{'JA' if r['trend_ok'] else 'nee':<6}{r['vcp_score']}/4  "
+            f"{fmt(r['pct_from_high'], '%'):>7}  {fmt(r['pct_from_low'], '%'):>7}  "
+            f"{fmt(r['mom_3m'], '%'):>7}  {fmt(r['mom_12m'], '%'):>7}  {r['laatste_datum']}"
+        )
+
+    print("\nLegende:")
+    print("  Trend  = voldoet aan Trend Template (JA/nee), vóór de piekweek")
+    print("  VCP    = VCP-achtige score 0-4 (ATR-contractie, volume-droogte, pullbacks, breakout)")
+    print("  %<high = % onder 52w-high | %>low = % boven 52w-low")
+    print("  Mom3m/12m = momentum-proxy (i.p.v. volledige RS-rank t.o.v. beursuniverse)")
+
+
+if __name__ == "__main__":
+    main()
