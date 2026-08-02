@@ -2,7 +2,7 @@ name: Weekly Report backtest
 
 on:
   schedule:
-    - cron: '0 22 * * 5'   # Elke vrijdag om 21:00 UTC (na sluiting Wall Street)
+    - cron: '0 22 * * 5'   # Elke vrijdag om 22:00 UTC (1u na weekly_report.py)
   workflow_dispatch:
 
 jobs:
@@ -16,7 +16,7 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: pip install yfinance pandas requests python-dotenv
-      - name: Run Report
+      - name: Run Backtest
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
