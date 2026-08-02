@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import os
+import json
 import requests
 from dotenv import load_dotenv
 
@@ -128,6 +129,7 @@ def main():
     all_files = bouw_bestandslijst()
 
     secties = []
+    toppers_export = []
 
     for f_name in all_files:
         if not os.path.exists(f_name):
@@ -159,6 +161,11 @@ def main():
         sectie += "🚀 Top 5 stijgers:\n"
         for _, row in top_5.iterrows():
             sectie += f"• `{row['ticker']}` : +{row['perf']:.2f}%\n"
+            toppers_export.append({
+                "beurs": label,
+                "ticker": row['ticker'],
+                "week_perf": round(float(row['perf']), 2),
+            })
 
         sectie += "🔻 Top 5 dalers:\n"
         for _, row in bottom_5.iterrows():
@@ -169,6 +176,13 @@ def main():
     if not secties:
         stuur_telegram("📊 *Wekelijks Rapport:* Geen data gevonden om te analyseren.")
         return
+
+    # Schrijf de top 5 stijgers per lijst weg zodat weekly_rep_backtest.py ze
+    # kan inlezen. Dit bestand wordt elke run volledig overschreven — bevat
+    # dus altijd enkel de resultaten van de MEEST RECENTE run.
+    with open("laatste_toppers.json", "w", encoding="utf-8") as f:
+        json.dump(toppers_export, f, ensure_ascii=False, indent=2)
+    print(f"{len(toppers_export)} toppers weggeschreven naar laatste_toppers.json")
 
     kop = "🏆 *WEKELIJKSE HALL OF FAME & SHAME — PER LIJST*\n"
     kop += "==================================\n\n"
