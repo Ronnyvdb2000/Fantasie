@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-backtest_toppers.py
+weekly_rep_backtest.py
 
 Backtest van de top 5 stijgers per beurs uit het wekelijkse
-Hall-of-Fame-rapport: had de Trend Template + VCP + momentum-logica
-(zoals gebruikt in bot_00super.py) deze bewegingen vroeger al kunnen
-zien aankomen?
+Hall-of-Fame-rapport (weekly_report.py): had de Trend Template + VCP +
+momentum-logica (zoals gebruikt in bot_00super.py) deze bewegingen
+vroeger al kunnen zien aankomen?
 
 Werking:
+  De tickerlijst komt niet meer hardcoded in dit bestand te staan, maar
+  wordt ingelezen uit laatste_toppers.json — het bestand dat
+  weekly_report.py bij elke run wegschrijft. Dat bestand wordt dus elke
+  week volledig OVERSCHREVEN met de nieuwste top 5 per lijst; deze
+  backtest test daardoor automatisch altijd de meest recente winnaars,
+  nooit een oude/vaste lijst.
+
   Voor elke ticker wordt de koershistoriek gedownload en worden de
   laatste `--dagen-terug` handelsdagen weggeknipt VOORDAT de indicatoren
   worden berekend. Zo simuleer je wat de bot had gezien als hij enkele
@@ -22,65 +29,73 @@ Belangrijke beperking t.o.v. bot_00super.py:
   dit script gebruikt een eenvoudigere momentum-proxy (% verandering
   over 3 en 12 maanden) in plaats van de RS-percentiel.
 
-  Verder: EMGS.OL, KING.OL, PMI.SW en LEHN.SW zitten niet in de
-  'x'-kwaliteitslijsten die bot_00super.py scant — die bot zou deze
-  tickers dus sowieso nooit hebben gezien, ongeacht de parameters.
-
-Vereist: yfinance, pandas (met internettoegang naar Yahoo Finance).
-Dit is NIET beschikbaar in de Claude-sandbox — draai dit lokaal.
+Vereist: yfinance, pandas, requests (met internettoegang naar Yahoo
+Finance). Dit is NIET beschikbaar in de Claude-sandbox — draai dit lokaal.
 
 Gebruik:
-  python backtest_toppers.py                  # default: 5 handelsdagen terug
-  python backtest_toppers.py --dagen-terug 15  # 3 weken terug
+  python weekly_rep_backtest.py                  # default: 5 handelsdagen terug
+  python weekly_rep_backtest.py --dagen-terug 15  # 3 weken terug
 """
 
 import argparse
+import json
 import math
+import os
 import warnings
 
 import pandas as pd
+import requests
 import yfinance as yf
+from dotenv import load_dotenv
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-# Top 5 stijgers per beurs uit het laatste weekrapport (ticker, weekperf %)
-TOPPERS = [
-    ("048 Nasdaq/NYSE", "MKTX", 37.58),
-    ("048 Nasdaq/NYSE", "GRMN", 21.16),
-    ("048 Nasdaq/NYSE", "MSFT", 19.43),
-    ("048 Nasdaq/NYSE", "CTSH", 17.64),
-    ("048 Nasdaq/NYSE", "AMZN", 17.37),
-    ("049 Stockholm", "CORE-A.ST", 28.16),
-    ("049 Stockholm", "ORTI-A.ST", 22.34),
-    ("049 Stockholm", "ELUX-A.ST", 19.17),
-    ("049 Stockholm", "CTM.ST", 16.82),
-    ("049 Stockholm", "MEAB-B.ST", 14.57),
-    ("050 Zurich", "PMI.SW", 65.05),
-    ("050 Zurich", "LEHN.SW", 32.63),
-    ("050 Zurich", "CLN.SW", 23.40),
-    ("050 Zurich", "AUTN.SW", 18.73),
-    ("050 Zurich", "FORN.SW", 15.59),
-    ("051 Warschau", "CCE.WA", 12.86),
-    ("051 Warschau", "RHD.WA", 12.24),
-    ("051 Warschau", "ASM.WA", 12.16),
-    ("051 Warschau", "WPL.WA", 11.48),
-    ("051 Warschau", "INC.WA", 11.44),
-    ("052 Oslo", "EMGS.OL", 146.87),
-    ("052 Oslo", "KING.OL", 46.67),
-    ("052 Oslo", "TRMED.OL", 30.41),
-    ("052 Oslo", "ININ.OL", 19.86),
-    ("052 Oslo", "TEKNA.OL", 15.47),
-    ("053 Kopenhagen", "AGF-B.CO", 18.18),
-    ("053 Kopenhagen", "NTG.CO", 9.46),
-    ("053 Kopenhagen", "GERHSP.CO", 7.86),
-    ("053 Kopenhagen", "ROCK-B.CO", 6.45),
-    ("053 Kopenhagen", "ROCK-A.CO", 5.56),
-    ("054 Helsinki", "ALMA.HE", 8.58),
-    ("054 Helsinki", "REMEDY.HE", 7.67),
-    ("054 Helsinki", "SITOWS.HE", 6.30),
-    ("054 Helsinki", "KAMUX.HE", 6.11),
-    ("054 Helsinki", "MANTA.HE", 6.07),
-]
+load_dotenv()
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+TOPPERS_BESTAND = "laatste_toppers.json"
+
+
+def stuur_telegram(bericht):
+    if not TOKEN or not CHAT_ID:
+        print("Telegram configuratie ontbreekt.")
+        return
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}
+    try:
+        requests.post(url, data=payload)
+    except Exception as e:
+        print(f"Telegram fout: {e}")
+
+
+def stuur_telegram_lang(volledige_tekst, limiet=4000):
+    """Zelfde chunking-logica als in weekly_report.py — nooit halverwege
+    een sectie opknippen als het bericht toch te lang wordt."""
+    if len(volledige_tekst) <= limiet:
+        stuur_telegram(volledige_tekst)
+        return
+
+    secties = volledige_tekst.split("\n\n")
+    huidig = ""
+    for sectie in secties:
+        kandidaat = (huidig + "\n\n" + sectie) if huidig else sectie
+        if len(kandidaat) > limiet:
+            if huidig:
+                stuur_telegram(huidig)
+            huidig = sectie
+        else:
+            huidig = kandidaat
+    if huidig:
+        stuur_telegram(huidig)
+
+
+def laad_toppers():
+    if not os.path.exists(TOPPERS_BESTAND):
+        return None
+    with open(TOPPERS_BESTAND, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return [(d["beurs"], d["ticker"], d["week_perf"]) for d in data]
 
 CFG = {
     "vcp_lookback": 60,
@@ -218,14 +233,27 @@ def main():
     )
     args = parser.parse_args()
 
+    toppers = laad_toppers()
+    if not toppers:
+        melding = (
+            f"⚠️ *Backtest overgeslagen:* `{TOPPERS_BESTAND}` niet gevonden of leeg. "
+            f"Draai eerst weekly_report.py."
+        )
+        print(melding)
+        stuur_telegram(melding)
+        return
+
     print(f"{'Beurs':<16}{'Ticker':<11}{'Weekperf':>9}  {'Trend':<6}{'VCP':<5}"
           f"{'%<high':>8}{'%>low':>8}{'Mom3m':>8}{'Mom12m':>8}  Analysedatum")
     print("-" * 105)
 
-    for beurs, ticker, week_perf in TOPPERS:
+    regels_tg = []
+
+    for beurs, ticker, week_perf in toppers:
         r = analyseer(ticker, args.dagen_terug)
         if r is None:
             print(f"{beurs:<16}{ticker:<11}{week_perf:>8.1f}%  geen data / te weinig historiek")
+            regels_tg.append(f"• `{ticker}` ({beurs}): +{week_perf:.1f}% — geen data")
             continue
         print(
             f"{beurs:<16}{ticker:<11}{week_perf:>8.1f}%  "
@@ -233,12 +261,30 @@ def main():
             f"{fmt(r['pct_from_high'], '%'):>7}  {fmt(r['pct_from_low'], '%'):>7}  "
             f"{fmt(r['mom_3m'], '%'):>7}  {fmt(r['mom_12m'], '%'):>7}  {r['laatste_datum']}"
         )
+        trend_icoon = "✅" if r["trend_ok"] else "❌"
+        regels_tg.append(
+            f"• `{ticker}` ({beurs}): +{week_perf:.1f}% | Trend:{trend_icoon} "
+            f"VCP:{r['vcp_score']}/4 | Mom3m:{fmt(r['mom_3m'], '%')}"
+        )
 
     print("\nLegende:")
     print("  Trend  = voldoet aan Trend Template (JA/nee), vóór de piekweek")
     print("  VCP    = VCP-achtige score 0-4 (ATR-contractie, volume-droogte, pullbacks, breakout)")
     print("  %<high = % onder 52w-high | %>low = % boven 52w-low")
     print("  Mom3m/12m = momentum-proxy (i.p.v. volledige RS-rank t.o.v. beursuniverse)")
+
+    kop = (
+        f"🔍 *BACKTEST — HADDEN WE DIT KUNNEN ZIEN?*\n"
+        f"_Indicatoren berekend {args.dagen_terug} handelsdag(en) vóór de piekweek_\n"
+        "==================================\n\n"
+    )
+    voet = (
+        "\n\n💡 Trend✅ + hoge VCP-score = zat al vroeger in een gezonde setup. "
+        "Trend❌ + lage VCP = puur nieuws-gedreven, niet te voorspellen via technische signalen."
+    )
+    bericht = kop + "\n".join(regels_tg) + voet
+    stuur_telegram_lang(bericht)
+    print("\nBacktest-samenvatting verzonden naar Telegram.")
 
 
 if __name__ == "__main__":
