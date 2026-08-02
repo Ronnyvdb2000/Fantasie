@@ -9,18 +9,21 @@ momentum-logica (zoals gebruikt in bot_00super.py) deze bewegingen
 vroeger al kunnen zien aankomen?
 
 Werking:
-  De tickerlijst komt niet meer hardcoded in dit bestand te staan, maar
-  wordt ingelezen uit laatste_toppers.json — het bestand dat
-  weekly_report.py bij elke run wegschrijft. Dat bestand wordt dus elke
-  week volledig OVERSCHREVEN met de nieuwste top 5 per lijst; deze
-  backtest test daardoor automatisch altijd de meest recente winnaars,
-  nooit een oude/vaste lijst.
+  De tickerlijst komt niet hardcoded in dit bestand te staan, maar wordt
+  ingelezen uit laatste_toppers.json — het bestand dat weekly_report.py
+  bij elke run wegschrijft. Dat bestand wordt dus elke week volledig
+  OVERSCHREVEN met de nieuwste top 5 per lijst; deze backtest test
+  daardoor automatisch altijd de meest recente winnaars, nooit een
+  oude/vaste lijst.
 
-  Voor elke ticker wordt de koershistoriek gedownload en worden de
-  laatste `--dagen-terug` handelsdagen weggeknipt VOORDAT de indicatoren
-  worden berekend. Zo simuleer je wat de bot had gezien als hij enkele
-  dagen vóór de grote beweging had gedraaid — in plaats van te "cheaten"
-  met de koers van na de piek.
+  Voor elke ticker wordt de koershistoriek gedownload. In plaats van
+  standaard N handelsdagen uniform weg te knippen (waardoor je bij
+  nieuws dat pas midweek viel ook de dagen ervóór zou missen), zoekt
+  het script eerst binnen het zoekvenster naar de dag met de grootste
+  dagelijkse koerssprong — vermoedelijk de nieuwsdag — en knipt de data
+  pas net vóór díe specifieke dag af. Zo blijven eventuele vroege
+  technische signalen op de dagen vóór het nieuws gewoon zichtbaar,
+  ongeacht op welke dag van de week het nieuws viel.
 
 Belangrijke beperking t.o.v. bot_00super.py:
   De volledige RS-rating (percentiel-rank t.o.v. alle andere tickers op
@@ -33,8 +36,8 @@ Vereist: yfinance, pandas, requests (met internettoegang naar Yahoo
 Finance). Dit is NIET beschikbaar in de Claude-sandbox — draai dit lokaal.
 
 Gebruik:
-  python weekly_rep_backtest.py                  # default: 5 handelsdagen terug
-  python weekly_rep_backtest.py --dagen-terug 15  # 3 weken terug
+  python weekly_rep_backtest.py                    # default: zoekvenster van 10 dagen
+  python weekly_rep_backtest.py --zoekvenster 15    # breder zoekvenster
 """
 
 import argparse
@@ -123,7 +126,35 @@ def fmt(val, suffix=""):
     return "n.v.t." if val is None else f"{val:.1f}{suffix}"
 
 
-def analyseer(ticker, dagen_terug):
+def vind_piekdag_en_snijd(df, zoekvenster):
+    """
+    Zoekt binnen de laatste `zoekvenster` handelsdagen naar de dag met de
+    grootste ABSOLUTE dagelijkse koersverandering — vermoedelijk de dag
+    waarop het nieuws viel — en knipt de data af tot net VÓÓR die dag.
+
+    Dit i.p.v. altijd exact N dagen weg te knippen: als het nieuws bv. op
+    woensdag valt, blijven maandag en dinsdag (met mogelijk al vroege
+    technische signalen) gewoon zichtbaar voor de indicatoren, in plaats
+    van standaard mee weg te vallen omdat ze toevallig in dezelfde
+    kalenderweek liggen.
+
+    Retourneert (afgesneden_df, datum_piekdag_of_None).
+    """
+    if zoekvenster <= 0 or len(df) < 2:
+        return df, None
+
+    venster = df.tail(min(zoekvenster, len(df) - 1))
+    dag_rendement = venster["Close"].pct_change().abs()
+    dag_rendement = dag_rendement.dropna()
+    if dag_rendement.empty:
+        return df, None
+
+    piek_datum = dag_rendement.idxmax()
+    positie = df.index.get_loc(piek_datum)
+    return df.iloc[:positie], piek_datum
+
+
+def analyseer(ticker, zoekvenster):
     try:
         df = yf.download(ticker, period="2y", progress=False, auto_adjust=True)
         if isinstance(df.columns, pd.MultiIndex):
@@ -131,8 +162,7 @@ def analyseer(ticker, dagen_terug):
         if df.empty:
             return None
 
-        if dagen_terug > 0:
-            df = df.iloc[:-dagen_terug]
+        df, piek_datum = vind_piekdag_en_snijd(df, zoekvenster)
         if len(df) < 260:
             return None
 
@@ -218,6 +248,7 @@ def analyseer(ticker, dagen_terug):
             "mom_3m": mom_3m,
             "mom_12m": mom_12m,
             "laatste_datum": df.index[-1].strftime("%Y-%m-%d"),
+            "piek_datum": piek_datum.strftime("%Y-%m-%d") if piek_datum is not None else None,
         }
     except Exception as e:
         print(f"Fout bij {ticker}: {e}")
@@ -227,9 +258,11 @@ def analyseer(ticker, dagen_terug):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--dagen-terug", type=int, default=5,
-        help="Aantal handelsdagen weggeknipt vóór analyse, om de piekweek zelf "
-             "niet mee te nemen (default: 5 = 1 handelsweek)."
+        "--zoekvenster", type=int, default=10,
+        help="Aantal recente handelsdagen waarin gezocht wordt naar de piekdag "
+             "(grootste dagsprong = vermoedelijke nieuwsdag). De analyse knipt "
+             "de data af tot net vóór díe dag, niet uniform N dagen terug "
+             "(default: 10)."
     )
     args = parser.parse_args()
 
@@ -244,38 +277,42 @@ def main():
         return
 
     print(f"{'Beurs':<16}{'Ticker':<11}{'Weekperf':>9}  {'Trend':<6}{'VCP':<5}"
-          f"{'%<high':>8}{'%>low':>8}{'Mom3m':>8}{'Mom12m':>8}  Analysedatum")
-    print("-" * 105)
+          f"{'%<high':>8}{'%>low':>8}{'Mom3m':>8}{'Mom12m':>8}  Analysedatum  Piekdag")
+    print("-" * 118)
 
     regels_tg = []
 
     for beurs, ticker, week_perf in toppers:
-        r = analyseer(ticker, args.dagen_terug)
+        r = analyseer(ticker, args.zoekvenster)
         if r is None:
             print(f"{beurs:<16}{ticker:<11}{week_perf:>8.1f}%  geen data / te weinig historiek")
             regels_tg.append(f"• `{ticker}` ({beurs}): +{week_perf:.1f}% — geen data")
             continue
+        piek = r["piek_datum"] or "n.v.t."
         print(
             f"{beurs:<16}{ticker:<11}{week_perf:>8.1f}%  "
             f"{'JA' if r['trend_ok'] else 'nee':<6}{r['vcp_score']}/4  "
             f"{fmt(r['pct_from_high'], '%'):>7}  {fmt(r['pct_from_low'], '%'):>7}  "
-            f"{fmt(r['mom_3m'], '%'):>7}  {fmt(r['mom_12m'], '%'):>7}  {r['laatste_datum']}"
+            f"{fmt(r['mom_3m'], '%'):>7}  {fmt(r['mom_12m'], '%'):>7}  {r['laatste_datum']}  {piek}"
         )
         trend_icoon = "✅" if r["trend_ok"] else "❌"
         regels_tg.append(
             f"• `{ticker}` ({beurs}): +{week_perf:.1f}% | Trend:{trend_icoon} "
-            f"VCP:{r['vcp_score']}/4 | Mom3m:{fmt(r['mom_3m'], '%')}"
+            f"VCP:{r['vcp_score']}/4 | Mom3m:{fmt(r['mom_3m'], '%')} | Piekdag:{piek}"
         )
 
     print("\nLegende:")
-    print("  Trend  = voldoet aan Trend Template (JA/nee), vóór de piekweek")
-    print("  VCP    = VCP-achtige score 0-4 (ATR-contractie, volume-droogte, pullbacks, breakout)")
-    print("  %<high = % onder 52w-high | %>low = % boven 52w-low")
+    print("  Trend    = voldoet aan Trend Template (JA/nee), berekend tot net vóór de piekdag")
+    print("  VCP      = VCP-achtige score 0-4 (ATR-contractie, volume-droogte, pullbacks, breakout)")
+    print("  %<high   = % onder 52w-high | %>low = % boven 52w-low")
     print("  Mom3m/12m = momentum-proxy (i.p.v. volledige RS-rank t.o.v. beursuniverse)")
+    print("  Piekdag  = dag met de grootste koerssprong in het zoekvenster (vermoedelijke nieuwsdag);")
+    print("             alle indicatoren zijn berekend met data tot en met de dag ervóór")
 
     kop = (
         f"🔍 *BACKTEST — HADDEN WE DIT KUNNEN ZIEN?*\n"
-        f"_Indicatoren berekend {args.dagen_terug} handelsdag(en) vóór de piekweek_\n"
+        f"_Indicatoren berekend tot net vóór de gedetecteerde piekdag "
+        f"(grootste dagsprong binnen laatste {args.zoekvenster} handelsdagen)_\n"
         "==================================\n\n"
     )
     voet = (
