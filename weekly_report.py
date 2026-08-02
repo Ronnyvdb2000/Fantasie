@@ -54,6 +54,12 @@ def haal_week_performance(ticker_list):
             if df.empty or len(df) < 2:
                 continue
 
+            # yfinance geeft soms MultiIndex-kolommen terug, ook voor 1 ticker.
+            # Zonder deze fix is df['Close'].iloc[0] een Series i.p.v. een getal,
+            # en crasht float() daarop met "must be a string or a real number".
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
             # Voorkom 'identically-labeled' fout door om te zetten naar pure getallen
             start_prijs = float(df['Close'].iloc[0])
             eind_prijs = float(df['Close'].iloc[-1])
