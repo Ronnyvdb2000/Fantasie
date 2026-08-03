@@ -60,6 +60,7 @@ import argparse
 import json
 import math
 import os
+import time
 import warnings
 
 import pandas as pd
@@ -83,7 +84,9 @@ def stuur_telegram(bericht):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": bericht, "parse_mode": "Markdown"}
     try:
-        requests.post(url, data=payload)
+        resp = requests.post(url, data=payload)
+        if resp.status_code != 200:
+            print(f"Telegram fout: HTTP {resp.status_code} — {resp.text[:300]}")
     except Exception as e:
         print(f"Telegram fout: {e}")
 
@@ -326,13 +329,18 @@ def main():
           f"{'%<high':>8}{'%>low':>8}{'Mom3m':>8}{'Mom12m':>8}{'RVOL':>7}{'Short%':>8}{'Float(M)':>10}  Analysedatum  Piekdag")
     print("-" * 150)
 
-    regels_tg = []
+    # Per-beurs groeperen i.p.v. één lange lijst, zodat elk beurs een eigen
+    # (kleiner) Telegram-bericht krijgt in plaats van één te lang bericht dat
+    # boven Telegram's 4096-tekenlimiet uitkomt en dan stil faalt.
+    regels_per_beurs = {}
 
     for beurs, ticker, week_perf in toppers:
         r = analyseer(ticker, args.zoekvenster)
         if r is None:
             print(f"{beurs:<16}{ticker:<11}{week_perf:>8.1f}%  geen data / te weinig historiek")
-            regels_tg.append(f"• `{ticker}` ({beurs}): +{week_perf:.1f}% — geen data")
+            regels_per_beurs.setdefault(beurs, []).append(
+                f"• `{ticker}`: +{week_perf:.1f}% — geen data"
+            )
             continue
         piek = r["piek_datum"] or "n.v.t."
         rvol_str = f"{r['rvol']:.0f}%" if r["rvol"] is not None else "n.v.t."
@@ -346,8 +354,8 @@ def main():
             f"{rvol_str:>7}{short_str:>8}{float_str:>10}  {r['laatste_datum']}  {piek}"
         )
         trend_icoon = "✅" if r["trend_ok"] else "❌"
-        regels_tg.append(
-            f"• `{ticker}` ({beurs}): +{week_perf:.1f}% | Trend:{trend_icoon} "
+        regels_per_beurs.setdefault(beurs, []).append(
+            f"• `{ticker}`: +{week_perf:.1f}% | Trend:{trend_icoon} "
             f"VCP:{r['vcp_score']}/4 | RVOL:{rvol_str} | Short:{short_str} | "
             f"Float:{float_str}M | Piekdag:{piek}"
         )
@@ -363,20 +371,24 @@ def main():
     print("  Piekdag  = dag met de grootste koerssprong in het zoekvenster (vermoedelijke nieuwsdag);")
     print("             alle indicatoren zijn berekend met data tot en met de dag ervóór")
 
-    kop = (
-        f"🔍 *BACKTEST — HADDEN WE DIT KUNNEN ZIEN?*\n"
-        f"_Indicatoren berekend tot net vóór de gedetecteerde piekdag "
-        f"(grootste dagsprong binnen laatste {args.zoekvenster} handelsdagen)_\n"
-        "==================================\n\n"
-    )
     voet = (
         "\n\n💡 Trend✅ + hoge VCP-score = zat al vroeger in een gezonde setup. "
         "Hoge RVOL of klein float + hoge Short% = mogelijk vroeg teken van "
         "opbouw/squeeze-potentieel, ook zonder klassieke trend."
     )
-    bericht = kop + "\n".join(regels_tg) + voet
-    stuur_telegram_lang(bericht)
-    print("\nBacktest-samenvatting verzonden naar Telegram.")
+
+    for beurs, regels in regels_per_beurs.items():
+        kop = (
+            f"🔍 *BACKTEST — {beurs}*\n"
+            f"_Indicatoren berekend tot net vóór de gedetecteerde piekdag "
+            f"(grootste dagsprong binnen laatste {args.zoekvenster} handelsdagen)_\n"
+            "==================================\n\n"
+        )
+        bericht = kop + "\n".join(regels) + voet
+        stuur_telegram_lang(bericht)
+        time.sleep(1)  # voorkom Telegram rate-limit bij ~30 losse berichten
+
+    print(f"\nBacktest-samenvatting verzonden naar Telegram ({len(regels_per_beurs)} berichten, 1 per beurs).")
 
 
 if __name__ == "__main__":
