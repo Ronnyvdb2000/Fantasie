@@ -32,6 +32,22 @@ Belangrijke beperking t.o.v. bot_00super.py:
   dit script gebruikt een eenvoudigere momentum-proxy (% verandering
   over 3 en 12 maanden) in plaats van de RS-percentiel.
 
+Extra parameters gericht op vroegtijdig zicht op "verrassings"-bewegingen
+(in tegenstelling tot Trend Template/VCP, die vooral voortzetting van een
+bestaande trend detecteren):
+  - RVOL: volume t.o.v. het 20-daags gemiddelde, als losstaand signaal
+    los van prijs — een abnormale volumepiek loopt vaak 1-2 dagen vóór
+    de koersbeweging.
+  - Short% (short interest als % van de free float): hoge short interest
+    + plotse stijging wijst op een mogelijke short squeeze.
+  - Float(M): grootte van de vrij verhandelbare aandelen in miljoenen —
+    een klein float versterkt elke nieuwsgebeurtenis, en verklaart
+    vermoedelijk deels waarom de allergrootste sprongen (zoals EMGS.OL)
+    uit dunne, kleine namen komen.
+  Beide laatste twee komen uit `yf.Ticker(t).info` — een aparte, tragere
+  call per ticker die niet altijd data teruggeeft (vooral bij Europese
+  small-caps); ontbrekende waarden tonen "n.v.t.".
+
 Vereist: yfinance, pandas, requests (met internettoegang naar Yahoo
 Finance). Dit is NIET beschikbaar in de Claude-sandbox — draai dit lokaal.
 
@@ -239,6 +255,33 @@ def analyseer(ticker, zoekvenster):
             if vol.iloc[-1] >= vol_recent_mean * CFG["pivot_breakout_vol"]:
                 vcp_score += 1
 
+        # RVOL: volume op de laatst gekende dag (net vóór de piekdag) t.o.v.
+        # het 20-daags gemiddelde. Een piek hierin loopt vaak 1-2 dagen vóór
+        # de koersbeweging, ook zonder VCP-contractie.
+        rvol = None
+        if vol_now is not None and vol_mean and vol_mean > 0:
+            rvol = round(vol_now / vol_mean * 100, 0)
+
+        # Short interest (% van de free float) en float-grootte: klein float +
+        # hoge short interest versterkt elke nieuwsgebeurtenis (short squeeze-
+        # potentieel), en verklaart vaak net de allergrootste, meest verrassende
+        # sprongen (bv. dunne small-caps zoals EMGS.OL).
+        short_pct_float = None
+        float_mln = None
+        try:
+            info = yf.Ticker(ticker).info
+            float_shares = info.get("floatShares")
+            shares_short = info.get("sharesShort")
+            short_pct = info.get("shortPercentOfFloat")
+            if short_pct is not None:
+                short_pct_float = round(short_pct * 100, 1)
+            elif float_shares and shares_short:
+                short_pct_float = round(shares_short / float_shares * 100, 1)
+            if float_shares:
+                float_mln = round(float_shares / 1_000_000, 1)
+        except Exception:
+            pass
+
         return {
             "close": round(c, 2),
             "trend_ok": trend_ok,
@@ -247,6 +290,9 @@ def analyseer(ticker, zoekvenster):
             "pct_from_low": pct_from_low,
             "mom_3m": mom_3m,
             "mom_12m": mom_12m,
+            "rvol": rvol,
+            "short_pct_float": short_pct_float,
+            "float_mln": float_mln,
             "laatste_datum": df.index[-1].strftime("%Y-%m-%d"),
             "piek_datum": piek_datum.strftime("%Y-%m-%d") if piek_datum is not None else None,
         }
@@ -277,8 +323,8 @@ def main():
         return
 
     print(f"{'Beurs':<16}{'Ticker':<11}{'Weekperf':>9}  {'Trend':<6}{'VCP':<5}"
-          f"{'%<high':>8}{'%>low':>8}{'Mom3m':>8}{'Mom12m':>8}  Analysedatum  Piekdag")
-    print("-" * 118)
+          f"{'%<high':>8}{'%>low':>8}{'Mom3m':>8}{'Mom12m':>8}{'RVOL':>7}{'Short%':>8}{'Float(M)':>10}  Analysedatum  Piekdag")
+    print("-" * 150)
 
     regels_tg = []
 
@@ -289,16 +335,21 @@ def main():
             regels_tg.append(f"• `{ticker}` ({beurs}): +{week_perf:.1f}% — geen data")
             continue
         piek = r["piek_datum"] or "n.v.t."
+        rvol_str = f"{r['rvol']:.0f}%" if r["rvol"] is not None else "n.v.t."
+        short_str = f"{r['short_pct_float']:.1f}%" if r["short_pct_float"] is not None else "n.v.t."
+        float_str = f"{r['float_mln']:.1f}" if r["float_mln"] is not None else "n.v.t."
         print(
             f"{beurs:<16}{ticker:<11}{week_perf:>8.1f}%  "
             f"{'JA' if r['trend_ok'] else 'nee':<6}{r['vcp_score']}/4  "
             f"{fmt(r['pct_from_high'], '%'):>7}  {fmt(r['pct_from_low'], '%'):>7}  "
-            f"{fmt(r['mom_3m'], '%'):>7}  {fmt(r['mom_12m'], '%'):>7}  {r['laatste_datum']}  {piek}"
+            f"{fmt(r['mom_3m'], '%'):>7}  {fmt(r['mom_12m'], '%'):>7}"
+            f"{rvol_str:>7}{short_str:>8}{float_str:>10}  {r['laatste_datum']}  {piek}"
         )
         trend_icoon = "✅" if r["trend_ok"] else "❌"
         regels_tg.append(
             f"• `{ticker}` ({beurs}): +{week_perf:.1f}% | Trend:{trend_icoon} "
-            f"VCP:{r['vcp_score']}/4 | Mom3m:{fmt(r['mom_3m'], '%')} | Piekdag:{piek}"
+            f"VCP:{r['vcp_score']}/4 | RVOL:{rvol_str} | Short:{short_str} | "
+            f"Float:{float_str}M | Piekdag:{piek}"
         )
 
     print("\nLegende:")
@@ -306,6 +357,9 @@ def main():
     print("  VCP      = VCP-achtige score 0-4 (ATR-contractie, volume-droogte, pullbacks, breakout)")
     print("  %<high   = % onder 52w-high | %>low = % boven 52w-low")
     print("  Mom3m/12m = momentum-proxy (i.p.v. volledige RS-rank t.o.v. beursuniverse)")
+    print("  RVOL     = volume op de laatst gekende dag t.o.v. 20-daags gemiddelde (>100% = bovengemiddeld)")
+    print("  Short%   = short interest als % van de free float (hoog + klein float = squeeze-potentieel)")
+    print("  Float(M) = vrij verhandelbare aandelen in miljoenen (klein float = elke move versterkt)")
     print("  Piekdag  = dag met de grootste koerssprong in het zoekvenster (vermoedelijke nieuwsdag);")
     print("             alle indicatoren zijn berekend met data tot en met de dag ervóór")
 
@@ -317,7 +371,8 @@ def main():
     )
     voet = (
         "\n\n💡 Trend✅ + hoge VCP-score = zat al vroeger in een gezonde setup. "
-        "Trend❌ + lage VCP = puur nieuws-gedreven, niet te voorspellen via technische signalen."
+        "Hoge RVOL of klein float + hoge Short% = mogelijk vroeg teken van "
+        "opbouw/squeeze-potentieel, ook zonder klassieke trend."
     )
     bericht = kop + "\n".join(regels_tg) + voet
     stuur_telegram_lang(bericht)
