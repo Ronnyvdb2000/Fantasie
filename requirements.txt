@@ -4,3 +4,4 @@ pandas_ta
 vaderSentiment
 newsapi-python
 python-telegram-bot
+psycopg2-binary
