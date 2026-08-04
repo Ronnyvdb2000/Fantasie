@@ -178,7 +178,7 @@ def bereken_atr_positie(
 ) -> Tuple[int, float, float]:
     risico_eur   = portfolio_waarde * risico_pct
     stop_afstand = sl_mult * atr
-    if stop_afstand <= 0 or entry_prijs <= 0:
+    if math.isnan(stop_afstand) or math.isnan(entry_prijs) or stop_afstand <= 0 or entry_prijs <= 0:
         return 0, entry_prijs, 0.0
     aandelen    = max(1, int(risico_eur / stop_afstand))
     stop_loss   = entry_prijs - stop_afstand
