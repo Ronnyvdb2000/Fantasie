@@ -33,6 +33,13 @@ import pandas as pd
 import yfinance as yf
 import requests
 
+try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -567,6 +574,27 @@ def run_live_engine():
         alle.sort(key=lambda s: (s.score * 10 + s.rr_pct), reverse=True)
 
         print(f"  → {len(signalen)} kandidaten (score >= {KS_CFG['min_score']}) | top-2 uit {len(alle)} geanalyseerd")
+
+        for s in signalen:
+            log_selectie(
+                ticker=s.ticker,
+                datum=today_str(),
+                strategie="bot_00kr",
+                beurs=ex_name,
+                koers=s.price,
+                parameters={
+                    "score": s.score,
+                    "rsi_monthly": s.rsi_monthly,
+                    "rsi_label": s.rsi_label,
+                    "macd_label": s.macd_label,
+                    "rr_pct": s.rr_pct,
+                    "resistance": s.resistance,
+                    "stop": s.stop,
+                    "support": s.support,
+                    "div_yield": s.div_yield,
+                    "atr": s.atr,
+                },
+            )
 
         bericht = format_bericht(ex_name, signalen, alle, portfolio_waarde)
         if bericht:
