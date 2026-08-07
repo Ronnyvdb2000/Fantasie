@@ -354,7 +354,7 @@ def analyse_ticker(ticker: str, df_ticker: pd.DataFrame) -> Optional[KSSignaal]:
         low   = g["Low"]
 
         current_price = safe_float(close.iloc[-1])
-        if current_price <= 0:
+        if current_price <= 0 or math.isnan(current_price):
             return None
 
         atr_day = compute_atr_series(high, low, close, KS_CFG["atr_period"])
