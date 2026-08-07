@@ -37,6 +37,7 @@ Gedrag bij fouten:
 
 import os
 import json
+import math
 import logging
 from datetime import date, datetime
 
@@ -49,6 +50,22 @@ _DB_URL_ENV = "SUPABASE_DB_URL"
 # Als de DSN zelf ongeldig blijkt (config-fout), zetten we dit op True
 # zodat we niet bij elke ticker dezelfde fout opnieuw proberen/loggen.
 _dsn_invalid = False
+
+
+def _sanitize(value):
+    """
+    Vervangt NaN/Infinity door None (overal, ook genest in dicts/lijsten).
+    Nodig omdat Python's json.dumps NaN/Infinity schrijft als de letterlijke
+    tokens NaN/Infinity, wat GEEN geldige JSON is -- Postgres' jsonb-type
+    weigert dat met 'invalid input syntax for type json'.
+    """
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return None
+    if isinstance(value, dict):
+        return {k: _sanitize(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize(v) for v in value]
+    return value
 
 
 def _get_connection():
@@ -97,6 +114,8 @@ def log_selectie(
     if isinstance(datum, (date, datetime)):
         datum = datum.isoformat()
 
+    koers = _sanitize(koers)
+    parameters = _sanitize(parameters)
     params_json = json.dumps(parameters) if parameters is not None else None
 
     try:
@@ -150,8 +169,9 @@ def log_selecties_bulk(rows: list) -> int:
                 datum = row.get("datum")
                 if isinstance(datum, (date, datetime)):
                     datum = datum.isoformat()
+                koers_val = _sanitize(row.get("koers"))
                 params_json = (
-                    json.dumps(row["parameters"])
+                    json.dumps(_sanitize(row["parameters"]))
                     if row.get("parameters") is not None
                     else None
                 )
@@ -167,7 +187,7 @@ def log_selecties_bulk(rows: list) -> int:
                             datum,
                             row.get("strategie"),
                             row.get("beurs"),
-                            row.get("koers"),
+                            koers_val,
                             params_json,
                         ),
                     )
