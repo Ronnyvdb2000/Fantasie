@@ -44,6 +44,13 @@ import pandas as pd
 import yfinance as yf
 import requests
 
+try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -688,6 +695,28 @@ def run_live_engine():
         print(f"  → {len(signalen)} VCP kandidaten | {sum(s.vcp.breakout for s in signalen)} breakouts")
 
         alle_kandidaten.extend(s.ticker for s in signalen)
+
+        for s in signalen:
+            log_selectie(
+                ticker=s.ticker,
+                datum=today_str(),
+                strategie="bot_00vcp",
+                beurs=ex_name,
+                koers=s.price,
+                parameters={
+                    "score": s.score,
+                    "total_score": s.total_score,
+                    "n_contracties": s.vcp.n_contracties,
+                    "pivot": s.vcp.pivot,
+                    "laatste_pct": s.vcp.laatste_pct,
+                    "breakout": s.vcp.breakout,
+                    "breakout_vol": s.vcp.breakout_vol,
+                    "stage2": s.stage2,
+                    "atr": s.atr,
+                    "stop": s.stop,
+                    "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
+                },
+            )
 
         bericht = format_bericht(ex_name, signalen, portfolio_waarde)
         if bericht:
