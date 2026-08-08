@@ -35,6 +35,13 @@ import pandas as pd
 import yfinance as yf
 import requests
 
+try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -617,6 +624,29 @@ def run_live_engine():
 
         signalen.sort(key=lambda s: s.total_score, reverse=True)
         print(f"  → {len(signalen)} CAN SLIM kandidaten")
+
+        for s in signalen:
+            log_selectie(
+                ticker=s.ticker,
+                datum=today_str(),
+                strategie="bot_00cs",
+                beurs=ex_name,
+                koers=s.price,
+                parameters={
+                    "score": s.score,
+                    "total_score": s.total_score,
+                    "eps_q_growth_pct": s.eps_q_growth,
+                    "eps_annual_cagr_pct": s.eps_cagr,
+                    "rs": s.rs,
+                    "pct_from_high": s.pct_from_high,
+                    "vol_ratio": s.vol_ratio,
+                    "inst_pct": s.inst_pct,
+                    "ma200": s.ma200,
+                    "high52w": s.high52w,
+                    "stop": s.stop,
+                    "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
+                },
+            )
 
         bericht = format_bericht(ex_name, signalen, portfolio_waarde)
         if bericht:
