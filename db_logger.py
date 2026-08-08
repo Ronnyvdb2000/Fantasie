@@ -51,6 +51,25 @@ _DB_URL_ENV = "SUPABASE_DB_URL"
 # zodat we niet bij elke ticker dezelfde fout opnieuw proberen/loggen.
 _dsn_invalid = False
 
+# Kolommen die daadwerkelijk als aparte kolom in `selecties` bestaan
+# (ALTER TABLE al uitgevoerd op 2026-08-08). Enkel keys uit `parameters`
+# die hierin voorkomen worden als losse kolom meegeschreven; de rest
+# blijft (ook) gewoon in de `parameters`-JSON-kolom staan. Zo faalt een
+# insert nooit doordat een bot een key gebruikt die nog geen kolom heeft.
+_KOLOM_WHITELIST = {
+    "score", "total_score", "grafiek",
+    # bot_00kr
+    "rsi_monthly", "rsi_label", "macd_label", "rr_pct",
+    "resistance", "support", "div_yield", "atr", "stop",
+    # bot_00ms / bot_00cs / bot_00dm
+    "rs", "pivot", "pct_from_high", "pct_from_low",
+    # bot_00db / bot_00vcp
+    "n_boxes", "box_top", "box_bottom", "box_pct",
+    "n_contracties", "laatste_pct", "breakout", "breakout_vol", "stage2",
+    # bot_00cs
+    "eps_q_growth_pct", "eps_annual_cagr_pct", "inst_pct", "ma200", "high52w",
+}
+
 
 def _sanitize(value):
     """
@@ -87,6 +106,20 @@ def _get_connection():
     return psycopg2.connect(db_url)
 
 
+def _bouw_insert(parameters: dict):
+    """
+    Bouwt de kolomlijst/placeholders/waarden voor de losse parameter-kolommen,
+    op basis van welke keys uit `parameters` in _KOLOM_WHITELIST voorkomen.
+    Keys die niet in de whitelist staan, komen enkel in de `parameters`-JSON
+    terecht (geen aparte kolom voor -> zou de insert laten falen).
+    """
+    if not parameters:
+        return [], []
+    kolommen = [k for k in parameters.keys() if k in _KOLOM_WHITELIST]
+    waarden = [parameters[k] for k in kolommen]
+    return kolommen, waarden
+
+
 def log_selectie(
     ticker: str,
     datum,
@@ -99,7 +132,9 @@ def log_selectie(
     Schrijft één selectie weg naar de `selecties`-tabel in Supabase.
 
     - datum: str (bv. "2026-08-04") of een date/datetime object.
-    - parameters: gewone dict, wordt automatisch naar JSON geserialiseerd.
+    - parameters: gewone dict. Wordt zowel als JSON in de `parameters`-kolom
+      geschreven, als (voor de bekende keys uit _KOLOM_WHITELIST) in hun
+      eigen losse kolom.
 
     Geeft True terug bij succes, False bij een fout (fout wordt gelogd,
     niet opgegooid -- zo blijft de bot draaien ook als de DB-insert faalt).
@@ -117,6 +152,7 @@ def log_selectie(
     koers = _sanitize(koers)
     parameters = _sanitize(parameters)
     params_json = json.dumps(parameters) if parameters is not None else None
+    extra_kolommen, extra_waarden = _bouw_insert(parameters)
 
     try:
         conn = _get_connection()
@@ -126,14 +162,14 @@ def log_selectie(
         return False
 
     try:
+        kolommen = ["ticker", "datum", "strategie", "beurs", "koers", "parameters"] + extra_kolommen
+        waarden  = [ticker, datum, strategie, beurs, koers, params_json] + extra_waarden
+        placeholders = ", ".join(["%s"] * len(waarden))
+        kolom_lijst  = ", ".join(kolommen)
         with conn.cursor() as cur:
             cur.execute(
-                """
-                INSERT INTO selecties
-                    (ticker, datum, strategie, beurs, koers, parameters)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                (ticker, datum, strategie, beurs, koers, params_json),
+                f"INSERT INTO selecties ({kolom_lijst}) VALUES ({placeholders})",
+                waarden,
             )
         conn.commit()
         return True
@@ -170,26 +206,20 @@ def log_selecties_bulk(rows: list) -> int:
                 if isinstance(datum, (date, datetime)):
                     datum = datum.isoformat()
                 koers_val = _sanitize(row.get("koers"))
-                params_json = (
-                    json.dumps(_sanitize(row["parameters"]))
-                    if row.get("parameters") is not None
-                    else None
-                )
+                parameters = _sanitize(row.get("parameters"))
+                params_json = json.dumps(parameters) if parameters is not None else None
+                extra_kolommen, extra_waarden = _bouw_insert(parameters)
                 try:
+                    kolommen = ["ticker", "datum", "strategie", "beurs", "koers", "parameters"] + extra_kolommen
+                    waarden = [
+                        row.get("ticker"), datum, row.get("strategie"),
+                        row.get("beurs"), koers_val, params_json,
+                    ] + extra_waarden
+                    placeholders = ", ".join(["%s"] * len(waarden))
+                    kolom_lijst  = ", ".join(kolommen)
                     cur.execute(
-                        """
-                        INSERT INTO selecties
-                            (ticker, datum, strategie, beurs, koers, parameters)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            row.get("ticker"),
-                            datum,
-                            row.get("strategie"),
-                            row.get("beurs"),
-                            koers_val,
-                            params_json,
-                        ),
+                        f"INSERT INTO selecties ({kolom_lijst}) VALUES ({placeholders})",
+                        waarden,
                     )
                     aantal_ok += 1
                 except Exception as exc:
