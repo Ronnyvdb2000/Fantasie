@@ -55,6 +55,13 @@ import pandas as pd
 import yfinance as yf
 import requests
 
+try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -670,6 +677,29 @@ def run_live_engine():
 
         signalen.sort(key=lambda s: s.total_score, reverse=True)
         print(f"  → {len(signalen)} Darvas kandidaten | {sum(s.db.breakout for s in signalen)} breakouts")
+
+        for s in signalen:
+            log_selectie(
+                ticker=s.ticker,
+                datum=today_str(),
+                strategie="bot_00db",
+                beurs=ex_name,
+                koers=s.price,
+                parameters={
+                    "score": s.score,
+                    "total_score": s.total_score,
+                    "n_boxes": s.db.n_boxes,
+                    "box_top": s.db.huidige_box.top,
+                    "box_bottom": s.db.huidige_box.bottom,
+                    "box_pct": s.db.huidige_box.pct,
+                    "breakout": s.db.breakout,
+                    "breakout_vol": s.db.breakout_vol,
+                    "stage2": s.stage2,
+                    "atr": s.atr,
+                    "stop": s.stop,
+                    "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
+                },
+            )
 
         bericht = format_bericht(ex_name, signalen, portfolio_waarde)
         if bericht:
