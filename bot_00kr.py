@@ -593,6 +593,7 @@ def run_live_engine():
                     "support": s.support,
                     "div_yield": s.div_yield,
                     "atr": s.atr,
+                    "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                 },
             )
 
