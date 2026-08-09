@@ -1,21 +1,21 @@
 # MASTERLIJST 053 — Kopenhagen
-# Laatste update: 02/08/2026
+# Laatste update: 09/08/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-BOOZT-DKK.CO     | opname:2026-07-19 | ROE:11.0% | Debt:26.1 | Marge:3.7% | Vol:37.6% | Omzet:3,143,818 | actief
-DNORD.CO         | opname:2026-07-19 | ROE:7.7% | Debt:59.4 | Marge:3.2% | Vol:40.0% | Omzet:19,451,474 | actief
-FLS.CO           | opname:2026-07-26 | ROE:12.7% | Debt:24.2 | Marge:4.5% | Vol:35.3% | Omzet:61,787,442 | actief
-GMAB.CO          | opname:2026-07-19 | ROE:15.0% | Debt:94.2 | Marge:21.0% | Vol:34.8% | Omzet:253,345,273 | actief
-GUBRA.CO         | opname:2026-08-02 | ROE:211.8% | Debt:9.4 | Marge:64.1% | Vol:53.3% | Omzet:13,387,826 | actief
-MAERSK-A.CO      | opname:2026-07-19 | ROE:3.2% | Debt:31.7 | Marge:3.0% | Vol:35.3% | Omzet:77,031,914 | actief
-MAERSK-B.CO      | opname:2026-07-19 | ROE:3.2% | Debt:31.7 | Marge:3.0% | Vol:37.4% | Omzet:277,432,460 | actief
-NETC.CO          | opname:2026-08-02 | ROE:7.9% | Debt:116.7 | Marge:3.3% | Vol:37.4% | Omzet:39,224,128 | actief
-NKT.CO           | opname:2026-07-19 | ROE:13.4% | Debt:13.2 | Marge:7.8% | Vol:37.1% | Omzet:115,501,091 | actief
-NOVO-B.CO        | opname:2026-07-19 | ROE:71.4% | Debt:72.1 | Marge:37.2% | Vol:48.7% | Omzet:2,059,788,456 | actief
-PARKEN.CO        | opname:2026-07-19 | ROE:17.1% | Debt:84.4 | Marge:11.6% | Vol:32.7% | Omzet:783,573 | actief
-RBREW.CO         | opname:2026-08-02 | ROE:23.8% | Debt:92.3 | Marge:10.1% | Vol:33.2% | Omzet:58,401,542 | actief
-SPG.CO           | opname:2026-07-19 | ROE:15.8% | Debt:85.5 | Marge:9.1% | Vol:31.0% | Omzet:5,002,417 | actief
-TRMD-A.CO        | opname:2026-07-19 | ROE:15.7% | Debt:47.6 | Marge:24.5% | Vol:41.0% | Omzet:36,369,901 | actief
-VWS.CO           | opname:2026-07-19 | ROE:23.2% | Debt:100.6 | Marge:4.4% | Vol:42.1% | Omzet:392,151,953 | actief
-DSV.CO           | opname:2026-07-19 | ROE:6.3% | Debt:75.8 | Marge:2.4% | Vol:33.5% | Omzet:558,782,255 | zwakker | weken_buiten:2
+BOOZT-DKK.CO     | opname:2026-07-19 | ROE:11.0% | Debt:26.1 | Marge:3.7% | Vol:36.2% | Omzet:3,177,824 | actief
+DNORD.CO         | opname:2026-07-19 | ROE:7.7% | Debt:59.4 | Marge:3.2% | Vol:40.0% | Omzet:19,425,375 | actief
+FLS.CO           | opname:2026-07-26 | ROE:12.7% | Debt:24.2 | Marge:4.5% | Vol:35.5% | Omzet:61,942,272 | actief
+GMAB.CO          | opname:2026-07-19 | ROE:14.0% | Debt:88.5 | Marge:19.1% | Vol:34.6% | Omzet:255,701,874 | actief
+MAERSK-A.CO      | opname:2026-07-19 | ROE:3.2% | Debt:31.7 | Marge:3.0% | Vol:35.0% | Omzet:76,910,983 | actief
+MAERSK-B.CO      | opname:2026-07-19 | ROE:3.2% | Debt:31.7 | Marge:3.0% | Vol:37.1% | Omzet:276,929,840 | actief
+NETC.CO          | opname:2026-08-02 | ROE:7.9% | Debt:116.7 | Marge:3.3% | Vol:37.5% | Omzet:39,427,836 | actief
+NKT.CO           | opname:2026-07-19 | ROE:13.4% | Debt:13.2 | Marge:7.8% | Vol:36.7% | Omzet:116,830,886 | actief
+NOVO-B.CO        | opname:2026-07-19 | ROE:59.8% | Debt:63.3 | Marge:35.3% | Vol:48.6% | Omzet:1,996,047,672 | actief
+PARKEN.CO        | opname:2026-07-19 | ROE:17.1% | Debt:84.4 | Marge:11.6% | Vol:32.7% | Omzet:781,904 | actief
+RBREW.CO         | opname:2026-08-02 | ROE:23.8% | Debt:92.3 | Marge:10.1% | Vol:33.3% | Omzet:58,692,767 | actief
+SPG.CO           | opname:2026-07-19 | ROE:15.8% | Debt:85.5 | Marge:9.1% | Vol:30.8% | Omzet:5,023,477 | actief
+TRMD-A.CO        | opname:2026-07-19 | ROE:15.7% | Debt:47.6 | Marge:24.5% | Vol:40.8% | Omzet:36,572,278 | actief
+VWS.CO           | opname:2026-07-19 | ROE:23.2% | Debt:100.6 | Marge:4.4% | Vol:42.2% | Omzet:393,374,281 | actief
+GUBRA.CO         | opname:2026-08-02 | ROE:211.8% | Debt:9.4 | Marge:64.1% | Vol:53.0% | Omzet:13,303,816 | zwakker | weken_buiten:1
+DSV.CO           | opname:2026-07-19 | ROE:6.3% | Debt:75.8 | Marge:2.4% | Vol:33.5% | Omzet:576,276,865 | verwijderd | verwijderd:2026-08-09
