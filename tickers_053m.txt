@@ -1,6 +1,6 @@
-# MASTERLIJST 053 — Kopenhagen
-# Laatste update: 09/08/2026
-# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
+# MASTERLIJST 053 — Lijst 053
+# Laatste update: 11/08/2026
+# Criteria: ROE>8% | Debt<120 | Marge>7% | Vol 22%-70% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
 BOOZT-DKK.CO     | opname:2026-07-19 | ROE:11.0% | Debt:26.1 | Marge:3.7% | Vol:36.2% | Omzet:3,177,824 | actief

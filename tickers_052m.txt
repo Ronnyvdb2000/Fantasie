@@ -1,6 +1,6 @@
-# MASTERLIJST 052 — Oslo
-# Laatste update: 09/08/2026
-# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
+# MASTERLIJST 052 — Lijst 052
+# Laatste update: 11/08/2026
+# Criteria: ROE>8% | Debt<120 | Marge>7% | Vol 22%-70% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
 AKER.OL          | opname:2026-07-19 | ROE:45.1% | Debt:63.6 | Marge:69.3% | Vol:31.7% | Omzet:63,339,446 | actief

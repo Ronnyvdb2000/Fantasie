@@ -1,6 +1,6 @@
-# MASTERLIJST 050 — Zurich
-# Laatste update: 09/08/2026
-# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
+# MASTERLIJST 050 — Lijst 050
+# Laatste update: 11/08/2026
+# Criteria: ROE>8% | Debt<120 | Marge>7% | Vol 22%-70% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
 AUTN.SW          | opname:2026-08-02 | ROE:13.9% | Debt:75.6 | Marge:2.7% | Vol:34.0% | Omzet:1,027,876 | actief
