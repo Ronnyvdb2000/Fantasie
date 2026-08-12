@@ -109,9 +109,9 @@ BEURS_NAMEN = {
     "tickers_056a.txt": "054 NYSE int", 
     "tickers_057a.txt": "054 NYSE", 
     "tickers_058a.txt": "054 TSXV", 
-    "tickers_059a.txt": "054 Osstenrijk Slovenie Slovakije",
-    
+    "tickers_059a.txt": "054 Osstenrijk Slovenie Slovakije",   
 }
+
 for _nr, _naam in SECTOR_NAMEN.items():
     BEURS_NAMEN[f"tickers_{_nr}.txt"] = f"{_nr} {_naam}"
 
