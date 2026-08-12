@@ -8,15 +8,17 @@ zowel het gemiddelde/mediaan rendement als een "getrimd" gemiddelde
 niet vertekenen.
 
 Vereist env var: SUPABASE_DB_URL  (zelfde secret als db_logger.py gebruikt)
+Optioneel voor --telegram: TELEGRAM_TOKEN, TELEGRAM_CHAT_ID (zelfde secrets als de andere bots)
 
 Installatie:
-    pip install psycopg2-binary yfinance pandas --break-system-packages
+    pip install psycopg2-binary yfinance pandas requests --break-system-packages
 
 Gebruik:
     python analyse_selecties.py
     python analyse_selecties.py --strategie dm          # filter op 1 strategie
     python analyse_selecties.py --sinds 2026-05-01       # alleen selecties vanaf datum
     python analyse_selecties.py --trim 0.10               # trim 10% langs elke kant (default)
+    python analyse_selecties.py --telegram                # stuur beknopte samenvatting via Telegram
 """
 
 import argparse
@@ -27,6 +29,7 @@ from datetime import date, datetime
 import pandas as pd
 import psycopg2
 import psycopg2.extras
+import requests
 import yfinance as yf
 
 
@@ -168,6 +171,56 @@ def rapporteer(df: pd.DataFrame, trim: float):
           f"mediaan={mediaan:.2f}%  getrimd={getrimd:.2f}%")
 
 
+def bouw_telegram_samenvatting(df: pd.DataFrame, trim: float) -> str:
+    """Beknopte samenvatting per strategie, gesorteerd op getrimd gemiddelde (hoog naar laag)."""
+    regels = [f"*Selecties-analyse* ({date.today().isoformat()})", ""]
+
+    stats = []
+    for strat, groep in df.groupby("strategie"):
+        stats.append(
+            {
+                "strategie": strat,
+                "n": len(groep),
+                "win_rate": (groep["rendement_pct"] > 0).mean() * 100,
+                "gemiddeld": groep["rendement_pct"].mean(),
+                "mediaan": groep["rendement_pct"].median(),
+                "getrimd": getrimd_gemiddelde(groep["rendement_pct"], trim),
+            }
+        )
+    stats.sort(key=lambda s: s["getrimd"], reverse=True)
+
+    for s in stats:
+        regels.append(
+            f"*{s['strategie']}*  (n={s['n']})  win-rate {s['win_rate']:.0f}%\n"
+            f"  gem {s['gemiddeld']:+.1f}%  med {s['mediaan']:+.1f}%  "
+            f"getrimd {s['getrimd']:+.1f}%"
+        )
+
+    n = len(df)
+    win_rate = (df["rendement_pct"] > 0).mean() * 100
+    getrimd = getrimd_gemiddelde(df["rendement_pct"], trim)
+    regels.append("")
+    regels.append(f"*Totaal*  n={n}  win-rate {win_rate:.0f}%  getrimd {getrimd:+.1f}%")
+
+    return "\n".join(regels)
+
+
+def verstuur_telegram(tekst: str):
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        sys.exit("Fout: TELEGRAM_TOKEN of TELEGRAM_CHAT_ID env var ontbreekt.")
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    # Telegram limiet is 4096 tekens per bericht; splits indien nodig
+    max_len = 4000
+    for i in range(0, len(tekst), max_len):
+        chunk = tekst[i:i + max_len]
+        resp = requests.post(url, data={"chat_id": chat_id, "text": chunk, "parse_mode": "Markdown"})
+        if resp.status_code != 200:
+            print(f"waarschuwing: Telegram-verzending mislukt ({resp.status_code}): {resp.text}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Analyseer selecties-tabel per strategie")
     parser.add_argument("--strategie", help="Filter op 1 strategie (bv. dm, cs, vcp)")
@@ -175,6 +228,7 @@ def main():
     parser.add_argument("--trim", type=float, default=0.10,
                          help="Fractie om te trimmen langs elke kant voor getrimd gemiddelde (default 0.10)")
     parser.add_argument("--csv", help="Optioneel: schrijf ruwe resultaten weg naar dit csv-pad")
+    parser.add_argument("--telegram", action="store_true", help="Stuur beknopte samenvatting via Telegram")
     args = parser.parse_args()
 
     df = haal_selecties_op(args.sinds, args.strategie)
@@ -189,6 +243,11 @@ def main():
         print(f"Ruwe resultaten weggeschreven naar {args.csv}")
 
     rapporteer(resultaten, args.trim)
+
+    if args.telegram:
+        samenvatting = bouw_telegram_samenvatting(resultaten, args.trim)
+        verstuur_telegram(samenvatting)
+        print("Samenvatting verstuurd via Telegram.")
 
 
 if __name__ == "__main__":
