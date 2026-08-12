@@ -91,7 +91,7 @@ SECTOR_NAMEN = {
 
 # Vriendelijke namen voor de bekende beurs-lijsten (enkel ter info in het rapport)
 BEURS_NAMEN = {
-    "tickers_041a.txt": "041 Benelux",
+    "tickers_041a.txt": "041 Benelux Ierland",
     "tickers_042a.txt": "042 Parijs",
     "tickers_043a.txt": "043 Frankfurt",
     "tickers_044a.txt": "044 Spanje/Portugal",
@@ -105,6 +105,12 @@ BEURS_NAMEN = {
     "tickers_052a.txt": "052 Oslo",
     "tickers_053a.txt": "053 Kopenhagen",
     "tickers_054a.txt": "054 Helsinki",
+    "tickers_055a.txt": "054 CBoe", 
+    "tickers_056a.txt": "054 NYSE int", 
+    "tickers_057a.txt": "054 NYSE", 
+    "tickers_058a.txt": "054 TSXV", 
+    "tickers_059a.txt": "054 Osstenrijk Slovenie Slovakije",
+    
 }
 for _nr, _naam in SECTOR_NAMEN.items():
     BEURS_NAMEN[f"tickers_{_nr}.txt"] = f"{_nr} {_naam}"
