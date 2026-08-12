@@ -1,0 +1,29 @@
+name: Analyse Selecties
+
+on:
+  schedule:
+    # Zaterdag 08:00 UTC — na de wekelijkse Hall of Fame/Shame van vrijdag 21:00 UTC
+    - cron: '0 8 * * 6'
+  workflow_dispatch: {}
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installeer dependencies
+        run: pip install psycopg2-binary yfinance pandas requests --break-system-packages
+
+      - name: Run analyse
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python analyse_selecties.py --telegram
