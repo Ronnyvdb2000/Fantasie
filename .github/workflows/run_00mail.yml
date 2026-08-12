@@ -8,10 +8,6 @@ jobs:
   run_trading_bot:
     runs-on: ubuntu-latest
 
-    # Cruciaal voor het bijwerken van portfolio.json in je repo
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,15 +31,3 @@ jobs:
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
         run: python bot_00mail.py
-
-      - name: Commit and Push changes
-        if: always() # Zorg dat de data altijd wordt opgeslagen, ook als de bot een foutmelding geeft
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-
-          # Check of er wijzigingen zijn in de portfolio.json
-          git add portfolio.json
-
-          # Alleen committen als er echt iets veranderd is (om foutmeldingen te voorkomen)
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update portfolio: $(date +'%d-%m-%Y %H:%M')" && git pull --rebase=false -X ours origin main && git push)
