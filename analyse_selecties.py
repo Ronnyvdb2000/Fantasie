@@ -9,6 +9,7 @@ niet vertekenen.
 
 Vereist env var: SUPABASE_DB_URL  (zelfde secret als db_logger.py gebruikt)
 Optioneel voor --telegram: TELEGRAM_TOKEN, TELEGRAM_CHAT_ID (zelfde secrets als de andere bots)
+Optioneel voor --email: EMAIL_USER, EMAIL_PASS, EMAIL_RECEIVER (zelfde Gmail SMTP-secrets als de andere bots)
 
 Installatie:
     pip install psycopg2-binary yfinance pandas requests --break-system-packages
@@ -19,13 +20,16 @@ Gebruik:
     python analyse_selecties.py --sinds 2026-05-01       # alleen selecties vanaf datum
     python analyse_selecties.py --trim 0.10               # trim 10% langs elke kant (default)
     python analyse_selecties.py --telegram                # stuur beknopte samenvatting via Telegram
+    python analyse_selecties.py --email                   # stuur beknopte samenvatting via e-mail
     python analyse_selecties.py --check-duplicates         # zoek dubbele (ticker, strategie, datum) records en stop
 """
 
 import argparse
 import os
+import smtplib
 import sys
 from datetime import date, datetime
+from email.mime.text import MIMEText
 
 import pandas as pd
 import psycopg2
@@ -266,6 +270,76 @@ def verstuur_telegram(tekst: str):
             print(f"waarschuwing: Telegram-verzending mislukt ({resp.status_code}): {resp.text}")
 
 
+def bouw_platte_samenvatting(df: pd.DataFrame, trim: float) -> str:
+    """Zelfde als bouw_telegram_samenvatting maar zonder Markdown, voor e-mail."""
+    regels = [f"Selecties-analyse ({date.today().isoformat()})", ""]
+
+    stats = []
+    for strat, groep in df.groupby("strategie"):
+        stats.append(
+            {
+                "strategie": strat,
+                "n": len(groep),
+                "win_rate": (groep["rendement_pct"] > 0).mean() * 100,
+                "gemiddeld": groep["rendement_pct"].mean(),
+                "mediaan": groep["rendement_pct"].median(),
+                "getrimd": getrimd_gemiddelde(groep["rendement_pct"], trim),
+            }
+        )
+    stats.sort(key=lambda s: s["getrimd"], reverse=True)
+
+    for s in stats:
+        regels.append(
+            f"{s['strategie']}  (n={s['n']})  win-rate {s['win_rate']:.0f}%\n"
+            f"  gem {s['gemiddeld']:+.1f}%  med {s['mediaan']:+.1f}%  "
+            f"getrimd {s['getrimd']:+.1f}%"
+        )
+
+    n = len(df)
+    win_rate = (df["rendement_pct"] > 0).mean() * 100
+    getrimd = getrimd_gemiddelde(df["rendement_pct"], trim)
+    regels.append("")
+    regels.append(f"Totaal  n={n}  win-rate {win_rate:.0f}%  getrimd {getrimd:+.1f}%")
+
+    return "\n".join(regels)
+
+
+def bouw_platte_duplicaten(dups: pd.DataFrame) -> str:
+    if dups.empty:
+        return f"Duplicaten-check ({date.today().isoformat()})\nGeen duplicaten gevonden."
+    totaal_extra = int((dups["aantal"] - 1).sum())
+    regels = [
+        f"Duplicaten-check ({date.today().isoformat()})",
+        f"{len(dups)} combinaties met duplicaten, {totaal_extra} overtollige records.",
+        "",
+    ]
+    per_strat = dups.groupby("strategie")["aantal"].apply(lambda s: (s - 1).sum()).sort_values(ascending=False)
+    for strat, n in per_strat.items():
+        regels.append(f"  {strat}: {int(n)} overtollig")
+    regels.append("")
+    regels.append("Top 15 combinaties:")
+    for _, r in dups.head(15).iterrows():
+        regels.append(f"  {r['ticker']}  {r['strategie']}  {r['datum']}  x{r['aantal']}")
+    return "\n".join(regels)
+
+
+def verstuur_email(onderwerp: str, tekst: str):
+    user = os.environ.get("EMAIL_USER")
+    wachtwoord = os.environ.get("EMAIL_PASS")
+    ontvanger = os.environ.get("EMAIL_RECEIVER")
+    if not user or not wachtwoord or not ontvanger:
+        sys.exit("Fout: EMAIL_USER, EMAIL_PASS of EMAIL_RECEIVER env var ontbreekt.")
+
+    msg = MIMEText(tekst, "plain", "utf-8")
+    msg["Subject"] = onderwerp
+    msg["From"] = user
+    msg["To"] = ontvanger
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(user, wachtwoord)
+        server.sendmail(user, [ontvanger], msg.as_string())
+
+
 def main():
     parser = argparse.ArgumentParser(description="Analyseer selecties-tabel per strategie")
     parser.add_argument("--strategie", help="Filter op 1 strategie (bv. dm, cs, vcp)")
@@ -274,6 +348,7 @@ def main():
                          help="Fractie om te trimmen langs elke kant voor getrimd gemiddelde (default 0.10)")
     parser.add_argument("--csv", help="Optioneel: schrijf ruwe resultaten weg naar dit csv-pad")
     parser.add_argument("--telegram", action="store_true", help="Stuur beknopte samenvatting via Telegram")
+    parser.add_argument("--email", action="store_true", help="Stuur beknopte samenvatting via e-mail")
     parser.add_argument("--check-duplicates", action="store_true",
                          help="Zoek dubbele (ticker, strategie, datum) records en stop (geen yfinance nodig)")
     args = parser.parse_args()
@@ -287,6 +362,9 @@ def main():
         if args.telegram:
             verstuur_telegram(bouw_telegram_duplicaten(dups))
             print("Duplicaten-check verstuurd via Telegram.")
+        if args.email:
+            verstuur_email("Duplicaten-check selecties", bouw_platte_duplicaten(dups))
+            print("Duplicaten-check verstuurd via e-mail.")
         return
 
     resultaten = bereken_rendementen(df)
@@ -303,6 +381,10 @@ def main():
         samenvatting = bouw_telegram_samenvatting(resultaten, args.trim)
         verstuur_telegram(samenvatting)
         print("Samenvatting verstuurd via Telegram.")
+
+    if args.email:
+        verstuur_email("Selecties-analyse", bouw_platte_samenvatting(resultaten, args.trim))
+        print("Samenvatting verstuurd via e-mail.")
 
 
 if __name__ == "__main__":
