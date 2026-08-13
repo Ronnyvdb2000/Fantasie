@@ -2,7 +2,7 @@ name: Analyse Selecties
 
 on:
   schedule:
-    # Zaterdag 08:00 UTC — na de wekelijkse Hall of Fame/Shame van vrijdag 21:00 UTC
+    # Zaterdag 08:00 UTC â€” na de wekelijkse Hall of Fame/Shame van vrijdag 21:00 UTC
     - cron: '0 8 * * 6'
   workflow_dispatch: {}
 
@@ -26,4 +26,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python analyse_selecties.py --telegram
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+        run: python analyse_selecties.py --telegram --email
