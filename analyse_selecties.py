@@ -19,6 +19,7 @@ Gebruik:
     python analyse_selecties.py --sinds 2026-05-01       # alleen selecties vanaf datum
     python analyse_selecties.py --trim 0.10               # trim 10% langs elke kant (default)
     python analyse_selecties.py --telegram                # stuur beknopte samenvatting via Telegram
+    python analyse_selecties.py --check-duplicates         # zoek dubbele (ticker, strategie, datum) records en stop
 """
 
 import argparse
@@ -126,6 +127,50 @@ def bereken_rendementen(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(resultaten)
 
 
+def vind_duplicaten(df: pd.DataFrame) -> pd.DataFrame:
+    """Groepeert op (ticker, strategie, datum) en geeft groepen met meer dan 1 record terug."""
+    groep = (
+        df.groupby(["ticker", "strategie", "datum"])
+        .size()
+        .reset_index(name="aantal")
+        .sort_values("aantal", ascending=False)
+    )
+    return groep[groep["aantal"] > 1]
+
+
+def rapporteer_duplicaten(dups: pd.DataFrame):
+    print("\n" + "=" * 70)
+    print("DUBBELE SELECTIES (zelfde ticker + strategie + datum)")
+    print("=" * 70)
+    if dups.empty:
+        print("Geen duplicaten gevonden.")
+        return
+    totaal_extra = int((dups["aantal"] - 1).sum())
+    print(f"{len(dups)} unieke combinaties met duplicaten, {totaal_extra} overtollige records in totaal.\n")
+    per_strat = dups.groupby("strategie")["aantal"].apply(lambda s: (s - 1).sum())
+    print("Overtollige records per strategie:")
+    for strat, n in per_strat.sort_values(ascending=False).items():
+        print(f"  {strat}: {int(n)}")
+    print("\nTop 15 combinaties:")
+    for _, r in dups.head(15).iterrows():
+        print(f"  {r['ticker']:>10}  {r['strategie']:<12}  {r['datum']}  x{r['aantal']}")
+
+
+def bouw_telegram_duplicaten(dups: pd.DataFrame) -> str:
+    if dups.empty:
+        return f"*Duplicaten-check* ({date.today().isoformat()})\nGeen duplicaten gevonden."
+    totaal_extra = int((dups["aantal"] - 1).sum())
+    regels = [
+        f"*Duplicaten-check* ({date.today().isoformat()})",
+        f"{len(dups)} combinaties met duplicaten, {totaal_extra} overtollige records.",
+        "",
+    ]
+    per_strat = dups.groupby("strategie")["aantal"].apply(lambda s: (s - 1).sum()).sort_values(ascending=False)
+    for strat, n in per_strat.items():
+        regels.append(f"  {strat}: {int(n)} overtollig")
+    return "\n".join(regels)
+
+
 def getrimd_gemiddelde(reeks: pd.Series, trim: float) -> float:
     """Gemiddelde na het weglaten van de top/bottom `trim` fractie (bv. 0.10 = 10%)."""
     if len(reeks) < 5:
@@ -229,10 +274,20 @@ def main():
                          help="Fractie om te trimmen langs elke kant voor getrimd gemiddelde (default 0.10)")
     parser.add_argument("--csv", help="Optioneel: schrijf ruwe resultaten weg naar dit csv-pad")
     parser.add_argument("--telegram", action="store_true", help="Stuur beknopte samenvatting via Telegram")
+    parser.add_argument("--check-duplicates", action="store_true",
+                         help="Zoek dubbele (ticker, strategie, datum) records en stop (geen yfinance nodig)")
     args = parser.parse_args()
 
     df = haal_selecties_op(args.sinds, args.strategie)
     print(f"{len(df)} selecties opgehaald uit Supabase.")
+
+    if args.check_duplicates:
+        dups = vind_duplicaten(df)
+        rapporteer_duplicaten(dups)
+        if args.telegram:
+            verstuur_telegram(bouw_telegram_duplicaten(dups))
+            print("Duplicaten-check verstuurd via Telegram.")
+        return
 
     resultaten = bereken_rendementen(df)
     if resultaten.empty:
