@@ -24,8 +24,8 @@ Output — zelfde bekende wijze als de overige bots:
   - Geen CSV-logging
 
 Beurzen: alle 041-059 waarvoor een tickers_XXXx.txt bestand bestaat.
-Beurzen die nog niet zijn aangemaakt (bv. 055-059) worden automatisch
-meegenomen zodra het bestand er is — draai zonder aanpassing.
+Beurzen die nog niet zijn aangemaakt worden automatisch meegenomen
+zodra het bestand er is — draai zonder aanpassing.
 
 Draaimoment — 2 runs vlak vóór elke market open:
   De analyse gebruikt altijd de laatst afgesloten dagcandle (van gisteren
@@ -34,14 +34,14 @@ Draaimoment — 2 runs vlak vóór elke market open:
   je nog kan handelen op de opening:
     - Europa-run  ~06:30 UTC (vóór Londen/Frankfurt/Parijs/etc. open
       rond 07:00-08:00 UTC, seizoensafhankelijk door zomer-/wintertijd)
-    - Noord-Amerika-run ~13:15 UTC (vóór Nasdaq/NYSE/Toronto open om
-      13:30 UTC EDT / 14:30 UTC EST)
+    - Noord-Amerika-run ~13:15 UTC (vóór Nasdaq/NYSE/Toronto/Cboe/TSXV
+      open om 13:30 UTC EDT / 14:30 UTC EST)
   Let op: cron-tijden zijn vaste UTC-tijden en schuiven dus 1 uur mee
   met de eigen zomer-/wintertijd-overgangen van elke beurs.
 
 Gebruik:
   python bot_00super.py europa       # alleen Europese beurzen
-  python bot_00super.py namerika     # alleen Toronto + Nasdaq/NYSE
+  python bot_00super.py namerika     # alleen Noord-Amerikaanse beurzen
   python bot_00super.py alle         # alles in 1 run (default)
 """
 
@@ -84,17 +84,19 @@ BEURS_NAMEN = {
     "044": "Spanje/Portugal", "045": "Londen",       "046": "Milaan",
     "047": "Toronto",         "048": "Nasdaq/NYSE",  "049": "Stockholm",
     "050": "Zurich",          "051": "Warschau",     "052": "Oslo",
-    "053": "Kopenhagen",      "054": "Helsinki",     "055": "Beurs 055",
-    "056": "Beurs 056",       "057": "Beurs 057",    "058": "Beurs 058",
-    "059": "Beurs 059",
+    "053": "Kopenhagen",      "054": "Helsinki",     "055": "CBoe",
+    "056": "NYSE int",        "057": "NYSE",         "058": "TSXV",
+    "059": "Oostenrijk Slovenie Slovakije",
 }
 REEKS_START = 41
 REEKS_EINDE = 59
 
-# Regio-indeling voor de 2 open-tijd runs. 047/048 zijn Noord-Amerika,
-# de rest (incl. nog niet aangemaakte 055-059) wordt als Europa behandeld
-# totdat je een nieuwe beurs toevoegt met een andere regio.
-NOORD_AMERIKA_BEURZEN = {"047", "048"}
+# Regio-indeling voor de 2 open-tijd runs. 047/048 (Toronto/Nasdaq-NYSE)
+# en 055-058 (CBoe, NYSE int, NYSE, TSXV) zijn Noord-Amerikaanse beurzen.
+# De rest (incl. 059, Oostenrijk/Slovenië/Slowakije, en nog niet
+# aangemaakte hogere nummers) wordt als Europa behandeld totdat je een
+# nieuwe beurs toevoegt met een andere regio.
+NOORD_AMERIKA_BEURZEN = {"047", "048", "055", "056", "057", "058"}
 
 SUPER_CFG = {
     "ma_fast":             50,
