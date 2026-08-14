@@ -24,8 +24,8 @@ BESTANDSNAMEN:
   tickers_041d.txt  → delisted cache
 
 CRITERIA (gedifferentieerd per beurstype):
-  Europa (041-046): ROE>7% | Debt<130 | Marge>4% | Vol 18%-65% | Omzet>150k
-  Noord-Amerika (047-048): ROE>8% | Debt<120 | Marge>7% | Vol 22%-70% | Omzet>500k
+  Europa (041-046, 049-054, 059): ROE>7% | Debt<130 | Marge>4% | Vol 18%-65% | Omzet>150k
+  Noord-Amerika (047-048, 055-058): ROE>8% | Debt<120 | Marge>7% | Vol 22%-70% | Omzet>500k
 """
 
 import os
@@ -63,6 +63,11 @@ def send_telegram(tekst: str) -> None:
             print(f"  ⚠️  Telegram fout: {e}")
 
 # ── Beursconfiguratie ─────────────────────────────────────────────────────────
+# suffixen: [""] betekent "geen suffix" (Nasdaq/NYSE/CBoe-stijl, VS-notering).
+# NB: 059 (Oostenrijk/Slovenie/Slowakije) is een gemengde lijst. Wenen (.VI)
+# en Ljubljana (.LJ) zijn hier opgenomen; de Yahoo-suffix voor de Slowaakse
+# beurs (Bratislava) is niet met voldoende zekerheid bekend en is bewust
+# weggelaten — geef die door zodra bevestigd, in plaats van te gokken.
 BEURS_CONFIG = {
     "041": {"naam": "Benelux",         "suffixen": [".AS", ".BR", ".LU"]},
     "042": {"naam": "Parijs",          "suffixen": [".PA"]},
@@ -72,6 +77,17 @@ BEURS_CONFIG = {
     "046": {"naam": "Milaan",          "suffixen": [".MI"]},
     "047": {"naam": "Toronto",         "suffixen": [".TO", ".V"]},
     "048": {"naam": "Nasdaq/NYSE",     "suffixen": [""]},
+    "049": {"naam": "Stockholm",       "suffixen": [".ST"]},
+    "050": {"naam": "Zurich",          "suffixen": [".SW"]},
+    "051": {"naam": "Warschau",        "suffixen": [".WA"]},
+    "052": {"naam": "Oslo",            "suffixen": [".OL"]},
+    "053": {"naam": "Kopenhagen",      "suffixen": [".CO"]},
+    "054": {"naam": "Helsinki",        "suffixen": [".HE"]},
+    "055": {"naam": "CBoe",            "suffixen": [""]},
+    "056": {"naam": "NYSE int",        "suffixen": [""]},
+    "057": {"naam": "NYSE",            "suffixen": [""]},
+    "058": {"naam": "TSXV",            "suffixen": [".V"]},
+    "059": {"naam": "Oostenrijk Slovenie Slovakije", "suffixen": [".VI", ".LJ"]},
 }
 
 ALLE_SUFFIXEN = set()
@@ -81,7 +97,12 @@ for _cfg in BEURS_CONFIG.values():
             ALLE_SUFFIXEN.add(_s)
 
 # ── Criteria per beurstype ────────────────────────────────────────────────────
-EUROPA_BEURZEN = {"041", "042", "043", "044", "045", "046"}
+# Europese beurzen (lichtere drempels); alle overige (incl. nog niet
+# geconfigureerde nieuwe lijsten) vallen terug op de Noord-Amerika criteria.
+EUROPA_BEURZEN = {
+    "041", "042", "043", "044", "045", "046",
+    "049", "050", "051", "052", "053", "054", "059",
+}
 
 CRITERIA = {
     "europa": {
@@ -120,7 +141,11 @@ def pad_export(g):   return f"tickers_{g}x.txt"
 def pad_delisted(g): return f"tickers_{g}d.txt"
 
 # ── Suffix-correctie ──────────────────────────────────────────────────────────
-def heeft_geldig_suffix(ticker: str, suffixen: list) -> bool:
+def heeft_geldig_suffix(ticker: str, suffixen) -> bool:
+    # Onbekende/niet-geconfigureerde beurs (suffixen=None): ticker niet
+    # aanraken i.p.v. hem als "niet gevonden" af te keuren.
+    if suffixen is None:
+        return True
     if suffixen == [""]:
         return not any(ticker.endswith(s) for s in ALLE_SUFFIXEN if s)
     return any(ticker.endswith(s) for s in suffixen)
@@ -131,7 +156,7 @@ def strip_suffix(ticker: str) -> str:
             return ticker[:-len(s)]
     return ticker
 
-def corrigeer_suffix(ticker: str, suffixen: list) -> tuple:
+def corrigeer_suffix(ticker: str, suffixen) -> tuple:
     """Geeft (gecorrigeerde_ticker, was_gewijzigd, reden) terug."""
     if heeft_geldig_suffix(ticker, suffixen):
         return ticker, False, ""
@@ -144,7 +169,7 @@ def corrigeer_suffix(ticker: str, suffixen: list) -> tuple:
         except Exception:
             pass
         return ticker, False, "niet gevonden Nasdaq/NYSE"
-    for suffix in suffixen:
+    for suffix in (suffixen or []):
         kandidaat = basis + suffix
         try:
             fi = yf.Ticker(kandidaat).fast_info
@@ -388,7 +413,7 @@ def update_master(master: dict, ticker: str, door_filter: bool,
 
 # ── Scan één lijst ────────────────────────────────────────────────────────────
 def scan_lijst(getal: str) -> dict:
-    config   = BEURS_CONFIG.get(getal, {"naam": f"Lijst {getal}", "suffixen": []})
+    config   = BEURS_CONFIG.get(getal, {"naam": f"Lijst {getal}", "suffixen": None})
     naam     = config["naam"]
     suffixen = config["suffixen"]
     crit     = get_criteria(getal)
