@@ -1,0 +1,242 @@
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from statsmodels.tsa.stattools import coint
+from itertools import combinations
+import matplotlib.pyplot as plt
+from pathlib import Path
+import warnings
+warnings.filterwarnings('ignore')
+
+# -------------------------------
+# 1. Configuratie
+# -------------------------------
+BEURS_CONFIG = {
+    "041": {"naam": "Benelux",         "suffixen": [".AS", ".BR", ".LU"]},
+    "042": {"naam": "Parijs",          "suffixen": [".PA"]},
+    "043": {"naam": "Frankfurt",       "suffixen": [".DE"]},
+    "044": {"naam": "Spanje/Portugal", "suffixen": [".MC", ".LS"]},
+    "045": {"naam": "Londen",          "suffixen": [".L"]},
+    "046": {"naam": "Milaan",          "suffixen": [".MI"]},
+    "047": {"naam": "Toronto",         "suffixen": [".TO", ".V"]},
+    "048": {"naam": "Nasdaq/NYSE",     "suffixen": [""]},
+    "049": {"naam": "Stockholm",       "suffixen": [".ST"]},
+    "050": {"naam": "Zurich",          "suffixen": [".SW"]},
+    "051": {"naam": "Warschau",        "suffixen": [".WA"]},
+    "052": {"naam": "Oslo",            "suffixen": [".OL"]},
+    "053": {"naam": "Kopenhagen",      "suffixen": [".CO"]},
+    "054": {"naam": "Helsinki",        "suffixen": [".HE"]},
+}
+
+# Parameters
+LOOKBACK = 60          # dagen voor rolling gemiddelde
+ENTRY_Z = 2.0
+EXIT_Z = 0.5
+MAX_PAIRS_PER_BEURS = 5  # aantal beste pairs om te testen
+
+# -------------------------------
+# 2. Ticker-lijsten inlezen
+# -------------------------------
+def laad_tickers(beurs_code):
+    """Leest tickers_XXXa.txt en voegt suffix toe"""
+    bestand = f"tickers_{beurs_code}a.txt"
+    if not Path(bestand).exists():
+        print(f"⚠️ {bestand} niet gevonden")
+        return []
+    
+    with open(bestand, 'r') as f:
+        tickers = [line.strip() for line in f if line.strip()]
+    
+    # Voeg suffixen toe (alle combinaties)
+    suffixen = BEURS_CONFIG[beurs_code]["suffixen"]
+    volledige_tickers = []
+    for t in tickers:
+        for suffix in suffixen:
+            if suffix:  # als suffix niet leeg is
+                volledige_tickers.append(f"{t}{suffix}")
+            else:
+                volledige_tickers.append(t)  # Nasdaq/NYSE heeft geen suffix
+    
+    return list(set(volledige_tickers))  # dubbele verwijderen
+
+# -------------------------------
+# 3. Co-integratie test voor alle pairs
+# -------------------------------
+def test_cointegratie(tickers, data, beurs_naam):
+    """Test alle pairs en retourneer gesorteerde lijst"""
+    results = []
+    for a, b in combinations(tickers, 2):
+        try:
+            score, p_value, _ = coint(data[a], data[b])
+            if p_value < 0.05:  # Alleen significante pairs
+                spread = data[a] / data[b]
+                half_life = schat_half_life(spread)
+                results.append({
+                    'pair': f"{a} / {b}",
+                    'p_value': p_value,
+                    'half_life': half_life,
+                    'spread_std': spread.std()
+                })
+        except:
+            continue
+    
+    # Sorteer op p-waarde (laagste = beste co-integratie)
+    results = sorted(results, key=lambda x: x['p_value'])
+    return results[:MAX_PAIRS_PER_BEURS]
+
+def schat_half_life(spread):
+    """Schat half-life van mean reversion (in dagen)"""
+    spread_lag = spread.shift(1).dropna()
+    spread_diff = spread.diff().dropna()
+    # OLS: spread_diff = alpha + beta * spread_lag
+    beta = np.cov(spread_lag, spread_diff)[0,1] / np.var(spread_lag)
+    if beta < 0:
+        return -np.log(2) / beta
+    else:
+        return np.inf
+
+# -------------------------------
+# 4. Pairs Trading Strategy
+# -------------------------------
+def run_pairs_strategy(data, pair_a, pair_b, lookback=60):
+    """Voer de strategie uit voor 1 pair"""
+    spread = data[pair_a] / data[pair_b]
+    spread_mean = spread.rolling(lookback).mean()
+    spread_std = spread.rolling(lookback).std()
+    z_score = (spread - spread_mean) / spread_std
+    
+    # Posities
+    positions = pd.Series(0, index=data.index)
+    entry_price = pd.Series(np.nan, index=data.index)
+    
+    for i in range(lookback, len(z_score)):
+        z = z_score.iloc[i]
+        if positions.iloc[i-1] == 0:
+            if z > ENTRY_Z:
+                positions.iloc[i] = -1  # Short spread
+                entry_price.iloc[i] = spread.iloc[i]
+            elif z < -ENTRY_Z:
+                positions.iloc[i] = 1   # Long spread
+                entry_price.iloc[i] = spread.iloc[i]
+        else:
+            if abs(z) < EXIT_Z:
+                positions.iloc[i] = 0   # Sluiten
+            else:
+                positions.iloc[i] = positions.iloc[i-1]
+                entry_price.iloc[i] = entry_price.iloc[i-1]
+    
+    # Rendementen (met transactiekosten: 0.1%)
+    returns = data.pct_change().fillna(0)
+    strategy_returns = positions.shift(1) * (returns[pair_a] - returns[pair_b])
+    
+    # Kosten toevoegen bij open/sluit
+    trade_indicator = (positions != positions.shift(1)).astype(int)
+    strategy_returns -= trade_indicator * 0.001  # 0.1% kosten per trade
+    
+    return strategy_returns, z_score, positions
+
+# -------------------------------
+# 5. Main loop - alle beurzen
+# -------------------------------
+alle_resultaten = {}
+
+for beurs_code, config in BEURS_CONFIG.items():
+    print(f"\n{'='*60}")
+    print(f"📊 {config['naam']} ({beurs_code})")
+    
+    # Laad tickers
+    tickers = laad_tickers(beurs_code)
+    if len(tickers) < 2:
+        print(f"⚠️ Te weinig tickers voor {config['naam']}")
+        continue
+    
+    # Download data
+    try:
+        data = yf.download(tickers, start='2020-01-01', end='2023-12-31', 
+                          group_by='ticker', progress=False)['Adj Close']
+        data = data.dropna(axis=1, how='all')
+        data = data.dropna()
+    except Exception as e:
+        print(f"❌ Fout bij downloaden: {e}")
+        continue
+    
+    if len(data.columns) < 2:
+        print(f"⚠️ Onvoldoende data voor {config['naam']}")
+        continue
+    
+    # Test co-integratie
+    beste_pairs = test_cointegratie(data.columns.tolist(), data, config['naam'])
+    
+    if not beste_pairs:
+        print(f"❌ Geen co-geintegreerde pairs gevonden")
+        continue
+    
+    print(f"✅ {len(beste_pairs)} co-geintegreerde pairs gevonden:")
+    for p in beste_pairs:
+        print(f"   {p['pair']} (p={p['p_value']:.4f}, half-life={p['half_life']:.1f}d)")
+    
+    # Test de beste pairs
+    beurs_resultaten = []
+    for pair_info in beste_pairs:
+        a, b = pair_info['pair'].split(' / ')
+        try:
+            ret, z, pos = run_pairs_strategy(data, a, b)
+            cum_ret = (1 + ret).cumprod()
+            
+            metrics = {
+                'pair': pair_info['pair'],
+                'p_value': pair_info['p_value'],
+                'sharpe': np.sqrt(252) * ret.mean() / ret.std() if ret.std() > 0 else 0,
+                'max_drawdown': (cum_ret.cummax() - cum_ret).max(),
+                'win_rate': (ret[ret != 0] > 0).mean() if (ret != 0).any() else 0,
+                'total_return': cum_ret.iloc[-1] - 1,
+                'num_trades': (pos != pos.shift(1)).sum() // 2
+            }
+            beurs_resultaten.append(metrics)
+            
+            # Optioneel: plot voor beste pair
+            if len(beurs_resultaten) == 1:
+                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6))
+                ax1.plot(z, label='Z-score', color='blue')
+                ax1.axhline(ENTRY_Z, linestyle='--', color='red')
+                ax1.axhline(-ENTRY_Z, linestyle='--', color='red')
+                ax1.axhline(EXIT_Z, linestyle=':', color='green')
+                ax1.axhline(-EXIT_Z, linestyle=':', color='green')
+                ax1.set_title(f"{config['naam']}: {a} / {b}")
+                ax1.legend()
+                
+                ax2.plot(cum_ret, color='purple', label='Strategie')
+                ax2.axhline(y=1, color='black', linestyle='-', alpha=0.3)
+                ax2.set_title(f"Rendement (Sharpe={metrics['sharpe']:.2f})")
+                ax2.legend()
+                plt.tight_layout()
+                plt.savefig(f"pair_{beurs_code}_{a}_{b}.png", dpi=150)
+                plt.close()
+                
+        except Exception as e:
+            print(f"⚠️ Fout bij {a}/{b}: {e}")
+            continue
+    
+    # Sla resultaten op
+    if beurs_resultaten:
+        df_res = pd.DataFrame(beurs_resultaten)
+        df_res.to_csv(f"resultaten_{beurs_code}.csv", index=False)
+        alle_resultaten[beurs_code] = df_res
+        
+        print(f"\n📈 Beste pair: {df_res.iloc[0]['pair']}")
+        print(f"   Sharpe: {df_res.iloc[0]['sharpe']:.2f}")
+        print(f"   Win-rate: {df_res.iloc[0]['win_rate']:.1%}")
+        print(f"   Max DD: {df_res.iloc[0]['max_drawdown']:.1%}")
+
+# -------------------------------
+# 6. Overzicht alle beurzen
+# -------------------------------
+print("\n" + "="*60)
+print("📊 OVERZICHT ALLE BEURZEN")
+print("="*60)
+
+for code, df in alle_resultaten.items():
+    beste = df.iloc[0]
+    print(f"{BEURS_CONFIG[code]['naam']:20} | {beste['pair']:30} | "
+          f"Sharpe={beste['sharpe']:.2f} | Win={beste['win_rate']:.1%} | "
+          f"Trades={beste['num_trades']}")
