@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_pairs.py  — STATISTISCHE ARBITRAGE ENGINE v1.0
-Gebaseerd op co-integratie en mean reversion.
+bot_01cointegr.py  — STATISTISCHE ARBITRAGE ENGINE v1.0
+Gebaseerd op co-integratie en mean reversion (Pairs Trading).
 
-Pairs trading strategie:
+Strategie:
   - Test alle combinaties binnen elke beurs op co-integratie (Engle-Granger)
   - Handel de spread via z-score: entry bij ±2σ, exit bij ±0.5σ
   - Backtest met transactiekosten en slippage
 
 Gebruik:
-  python bot_pairs.py live      # live rapport (Telegram + Email)
-  python bot_pairs.py backtest  # backtest modus
+  python bot_01cointegr.py live      # live rapport (Telegram + Email)
+  python bot_01cointegr.py backtest  # backtest modus
 """
 
 import os
@@ -21,7 +21,7 @@ import warnings
 import datetime as dt
 import time
 import smtplib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -43,7 +43,7 @@ except Exception as _e:
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
-# CONFIG
+# CONFIG — Hergebruik jouw bestaande variabelen
 # ============================================================
 
 START_CAPITAL        = 50_000.0
@@ -61,13 +61,35 @@ EXIT_Z               = 0.5         # exit drempel
 COINT_P_VALUE_MAX    = 0.05        # maximale p-waarde voor co-integratie
 MAX_HALF_LIFE        = 30          # maximale half-life in dagen
 
+# Gebruik jouw bestaande omgevingsvariabelen
 TELEGRAM_TOKEN   = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 EMAIL_USER       = os.getenv("EMAIL_USER", "")
 EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
 EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 
-# Vriendelijke namen voor de kwaliteits-lijsten (a-suffix), 041-059.
+# ============================================================
+# HERGEBRUIK: Laad tickers uit jouw bestaande bestanden
+# ============================================================
+
+def bouw_bestandslijst() -> List[str]:
+    """Bouwt lijst van tickers_041a.txt t/m tickers_059a.txt (jouw formaat)."""
+    return [f"tickers_{n:03d}a.txt" for n in range(41, 60)]
+
+def laad_tickers_uit_bestand(path: str) -> List[str]:
+    """Leest tickers uit bestand — hergebruik logica uit jouw andere bots."""
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        raw = f.read().replace(";", ",").replace(",", "\n").replace("$", "")
+    result = []
+    for line in raw.splitlines():
+        t = line.strip()
+        if t and not t.startswith("#"):
+            result.append(t)
+    return sorted(list(set(result)))
+
+# Vriendelijke namen voor de beurzen (zelfde als in jouw weekly_report.py)
 BEURS_NAMEN = {
     "tickers_041a.txt": "041 Benelux Ierland",
     "tickers_042a.txt": "042 Parijs",
@@ -90,47 +112,21 @@ BEURS_NAMEN = {
     "tickers_059a.txt": "059 Oostenrijk Slovenie Slovakije",
 }
 
-BACKTEST_START = "2021-01-01"
-BACKTEST_END   = dt.date.today().isoformat()
-
-# ============================================================
-# HULPFUNCTIES
-# ============================================================
-
-def today_str() -> str:
-    return dt.date.today().strftime("%Y-%m-%d")
-
-def safe_float(val, default: float = float("nan")):
-    try:
-        f = float(val)
-        return default if math.isnan(f) else f
-    except Exception:
-        return default
-
-def load_tickers_from_file(path: str) -> List[str]:
-    """Leest tickers uit bestand (tickers hebben al suffixen)."""
-    if not os.path.exists(path):
-        return []
-    with open(path, "r", encoding="utf-8") as f:
-        raw = f.read().replace(";", ",").replace(",", "\n").replace("$", "")
-    result = []
-    for line in raw.splitlines():
-        t = line.strip()
-        if t and not t.startswith("#"):
-            result.append(t)
-    return sorted(list(set(result)))
-
-def bouw_bestandslijst() -> List[str]:
-    """Bouwt lijst van tickers_041a.txt t/m tickers_059a.txt."""
-    return [f"tickers_{n:03d}a.txt" for n in range(41, 60)]
-
 def label_voor(f_name: str) -> str:
     return BEURS_NAMEN.get(f_name, f_name.replace(".txt", ""))
+
+# ============================================================
+# HERGEBRUIK: Email & Telegram functies (uit jouw bot_00mail.py)
+# ============================================================
 
 def trade_cost(amount: float) -> float:
     return TRADE_COST_FIXED + amount * TRADE_COST_PCT
 
+def today_str() -> str:
+    return dt.date.today().strftime("%Y-%m-%d")
+
 def send_telegram_message(text: str) -> None:
+    """Stuur Telegram bericht — identiek aan jouw bestaande functie."""
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print(text)
         return
@@ -146,6 +142,7 @@ def send_telegram_message(text: str) -> None:
         print(f"Telegram fout: {e}")
 
 def send_email(subject: str, body: str) -> None:
+    """Stuur Email — identiek aan jouw bestaande functie."""
     if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
         return
     try:
@@ -167,9 +164,6 @@ def send_email(subject: str, body: str) -> None:
 def _yahoo_link(ticker: str) -> str:
     return f"[{ticker}](https://finance.yahoo.com/quote/{ticker})"
 
-def _yahoo_pair_link(a: str, b: str) -> str:
-    return f"[{a}/{b}](https://finance.yahoo.com/quote/{a}/chart?p={a})"
-
 # ============================================================
 # CO-INTEGRATIE & HALF-LIFE
 # ============================================================
@@ -189,7 +183,7 @@ def schat_half_life(spread: pd.Series) -> float:
     return float('inf')
 
 # ============================================================
-# DATA DOWNLOAD
+# DATA DOWNLOAD (hergebruik uit jouw andere bots)
 # ============================================================
 
 def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
@@ -212,6 +206,7 @@ def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
     return df
 
 def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
+    """Download historische data — identiek aan jouw bestaande functie."""
     if not tickers:
         return pd.DataFrame()
     kwargs = dict(tickers=tickers, auto_adjust=True, group_by="ticker",
@@ -297,7 +292,9 @@ def analyseer_pair(
 ) -> Optional[PairSignaal]:
     """Analyseer 1 pair en bereken z-score + signaal."""
     try:
-        # Haal de koersreeksen
+        from statsmodels.tsa.stattools import coint
+        
+        # Check of tickers bestaan
         if ticker_a not in data.columns or ticker_b not in data.columns:
             return None
         
@@ -321,7 +318,6 @@ def analyseer_pair(
         z_score = (current_spread - current_mean) / current_std
         
         # Co-integratie test
-        from statsmodels.tsa.stattools import coint
         score, p_value, _ = coint(data[ticker_a], data[ticker_b])
         
         if p_value > COINT_P_VALUE_MAX:
@@ -361,21 +357,21 @@ def analyseer_pair(
         return None
 
 # ============================================================
-# PAIRS ENGINE
+# PAIRS ENGINE — LIVE
 # ============================================================
 
-def run_pairs_engine():
+def run_live_engine():
     """Live engine: vind co-geintegreerde pairs en stuur rapport."""
     print(f"{'='*60}")
     print(f"PAIRS TRADING — LIVE  {today_str()}")
     print(f"{'='*60}")
 
-    # Laad alle ticker bestanden
+    # Laad alle ticker bestanden (jouw formaat)
     exchange_tickers: Dict[str, List[str]] = {}
     all_tickers: List[str] = []
 
     for f_name in bouw_bestandslijst():
-        tlist = load_tickers_from_file(f_name)
+        tlist = laad_tickers_uit_bestand(f_name)
         if not tlist:
             print(f"Bestand {f_name} niet gevonden of leeg, overslaan.")
             continue
@@ -445,12 +441,12 @@ def run_pairs_engine():
         print(f"  → {len(actieve_signalen)} actieve signalen")
         
         if actieve_signalen:
-            # Log naar database
+            # Log naar database (hergebruik db_logger)
             for s in actieve_signalen[:3]:  # Max 3 per beurs loggen
                 log_selectie(
                     ticker=s.pair,
                     datum=today_str(),
-                    strategie="bot_pairs",
+                    strategie="bot_01cointegr",
                     beurs=ex_name,
                     koers=s.spread,
                     parameters={
@@ -475,7 +471,7 @@ def run_pairs_engine():
         else:
             print(f"  → Geen actieve signalen voor {ex_name}")
 
-    # Samenvatting email
+    # Samenvatting email (één mail met alle beurzen)
     if email_delen:
         send_email(
             subject=f"PAIRS TRADING rapport {today_str()}",
@@ -486,7 +482,7 @@ def run_pairs_engine():
     print("Klaar.")
 
 # ============================================================
-# FORMATTER
+# FORMATTER — Telegram bericht
 # ============================================================
 
 def format_pairs_bericht(
@@ -498,7 +494,6 @@ def format_pairs_bericht(
 
     nu = today_str()
     
-    # Emoji per signaal
     def signal_emoji(s: str) -> str:
         if s == "LONG":
             return "🟢 LONG"
@@ -522,8 +517,7 @@ def format_pairs_bericht(
             f"  Z-score: {s.current_z:.2f} | p={s.p_value:.4f} | Half-life: {s.half_life:.1f}d\n"
             f"  Spread: {s.spread:.4f} (mean={s.spread_mean:.4f}, σ={s.spread_std:.4f})\n"
             f"  {_yahoo_link(s.ticker_a)} / {_yahoo_link(s.ticker_b)} | "
-            f"Koers: {s.price_a:.2f} / {s.price_b:.2f}\n"
-            f"  📊 [Grafiek](https://finance.yahoo.com/quote/{s.ticker_a}/chart?p={s.ticker_a})"
+            f"Koers: {s.price_a:.2f} / {s.price_b:.2f}"
         )
     
     # Extra signalen (als er meer dan 3 zijn)
@@ -546,7 +540,11 @@ def format_pairs_bericht(
 # BACKTEST ENGINE
 # ============================================================
 
+BACKTEST_START = "2021-01-01"
+BACKTEST_END   = dt.date.today().isoformat()
+
 def run_backtest():
+    """Backtest de pairs trading strategie."""
     print(f"{'='*60}")
     print(f"PAIRS TRADING BACKTEST  {BACKTEST_START} -> {BACKTEST_END}")
     print(f"{'='*60}")
@@ -554,7 +552,7 @@ def run_backtest():
     # Laad alle tickers
     all_tickers: List[str] = []
     for f_name in bouw_bestandslijst():
-        all_tickers.extend(load_tickers_from_file(f_name))
+        all_tickers.extend(laad_tickers_uit_bestand(f_name))
     all_tickers = sorted(set(all_tickers))
 
     if not all_tickers:
@@ -574,7 +572,7 @@ def run_backtest():
 
     # Simuleer dagelijkse trading
     cash = START_CAPITAL
-    positions: Dict[str, Dict] = {}  # pair -> {entry_price, size_a, size_b, entry_date, ...}
+    positions: Dict[str, Dict] = {}
     trades: List[Dict] = []
     equity_curve: List[Dict] = []
 
@@ -616,11 +614,9 @@ def run_backtest():
             if exit_signal:
                 # Sluit positie
                 if pos['direction'] == 'LONG':
-                    # Long spread: koop A, verkoop B
                     pnl_a = (current_prices[a] - pos['entry_a']) * pos['size_a']
                     pnl_b = (pos['entry_b'] - current_prices[b]) * pos['size_b']
                 else:  # SHORT
-                    # Short spread: verkoop A, koop B
                     pnl_a = (pos['entry_a'] - current_prices[a]) * pos['size_a']
                     pnl_b = (current_prices[b] - pos['entry_b']) * pos['size_b']
                 
@@ -648,7 +644,6 @@ def run_backtest():
         
         # Open nieuwe posities (elke 5 dagen)
         if i % 5 == 0:
-            # Zoek nieuwe pairs
             beschikbaar = [t for t in pivot.columns if t in current_prices and not math.isnan(current_prices[t])]
             if len(beschikbaar) >= 2 and len(positions) < MAX_TOTAL_PAIRS:
                 candidates = []
@@ -659,15 +654,12 @@ def run_backtest():
                 
                 candidates.sort(key=lambda x: x[0].score, reverse=True)
                 
-                # Open top pairs
                 for sig, a, b in candidates[:MAX_PAIRS]:
                     pair_key = f"{a}/{b}"
                     if pair_key in positions:
                         continue
                     
-                    # Positiegrootte
-                    spread = current_prices[a] / current_prices[b]
-                    investering_per_pair = cash * 0.10  # 10% per pair
+                    investering_per_pair = cash * 0.10
                     size_a = int(investering_per_pair / current_prices[a] * 0.5)
                     size_b = int(investering_per_pair / current_prices[b] * 0.5)
                     
@@ -709,19 +701,21 @@ def run_backtest():
         n_win = (tdf['net_pnl'] > 0).sum()
         win_rate = n_win / len(tdf) * 100
         
-        # Profit factor
         gross_profit = tdf[tdf['net_pnl'] > 0]['net_pnl'].sum()
         gross_loss = abs(tdf[tdf['net_pnl'] <= 0]['net_pnl'].sum())
         profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0
         
-        # Max drawdown
         equity_df = pd.DataFrame(equity_curve)
         equity_df['peak'] = equity_df['value'].cummax()
         equity_df['drawdown'] = (equity_df['peak'] - equity_df['value']) / equity_df['peak']
         max_dd = equity_df['drawdown'].max() * 100
         
+        # Opslaan als CSV (in jouw backtest_results folder)
+        os.makedirs('backtest_results', exist_ok=True)
+        tdf.to_csv('backtest_results/backtest_cointegr.csv', index=False)
+        
         print(f"\n{'='*60}")
-        print(f"📊 BACKTEST RESULTATEN")
+        print(f"📊 BACKTEST RESULTATEN — bot_01cointegr")
         print(f"{'='*60}")
         print(f"Startkapitaal     : EUR{START_CAPITAL:>12,.2f}")
         print(f"Eindkapitaal      : EUR{final_value:>12,.2f}")
@@ -733,15 +727,12 @@ def run_backtest():
         print(f"Gem. houdduur     : {tdf['days'].mean():>11.1f} dagen")
         print(f"{'='*60}")
         
-        # Top 5 beste pairs
         top_pairs = tdf.groupby('pair')['net_pnl'].sum().sort_values(ascending=False).head(5)
         print("\n🏆 Beste pairs:")
         for pair, pnl in top_pairs.items():
             print(f"  {pair}: EUR{pnl:,.2f}")
         
-        # Store results
-        tdf.to_csv('backtest_pairs_trades.csv', index=False)
-        print("\n💾 Trades opgeslagen in backtest_pairs_trades.csv")
+        print("\n💾 Resultaten opgeslagen in backtest_results/backtest_cointegr.csv")
     else:
         print("Geen trades gegenereerd.")
 
@@ -754,4 +745,4 @@ if __name__ == "__main__":
     if mode == "backtest":
         run_backtest()
     else:
-        run_pairs_engine()
+        run_live_engine()
