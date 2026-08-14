@@ -72,22 +72,40 @@ EMAIL_USER       = os.getenv("EMAIL_USER", "")
 EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
 EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 
-EXCHANGES = {
-    "041 Benelux":     "tickers_041x.txt",
-    "042 Parijs":      "tickers_042x.txt",
-    "043 Frankfurt":   "tickers_043x.txt",
-    "044 Spanje/Port": "tickers_044x.txt",
-    "045 Londen":      "tickers_045x.txt",
-    "046 Milaan":      "tickers_046x.txt",
-    "047 Toronto":     "tickers_047x.txt",
-    "048 Nasdaq/NYSE": "tickers_048x.txt",
-    "049 Stockholm":   "tickers_049x.txt",
-    "050 Zurich":      "tickers_050x.txt",
-    "051 Warschau":    "tickers_051x.txt",
-    "052 Oslo":        "tickers_052x.txt",
-    "053 Kopenhagen":  "tickers_053x.txt",
-    "054 Helsinki":    "tickers_054x.txt",
+# Vriendelijke namen voor de kwaliteits-lijsten (x-suffix), 041-059.
+# Ontbrekende bestanden worden gewoon overgeslagen — dit is enkel voor labels.
+BEURS_NAMEN = {
+    "tickers_041x.txt": "041 Benelux Ierland",
+    "tickers_042x.txt": "042 Parijs",
+    "tickers_043x.txt": "043 Frankfurt",
+    "tickers_044x.txt": "044 Spanje/Portugal",
+    "tickers_045x.txt": "045 Londen",
+    "tickers_046x.txt": "046 Milaan",
+    "tickers_047x.txt": "047 Toronto",
+    "tickers_048x.txt": "048 Nasdaq/NYSE",
+    "tickers_049x.txt": "049 Stockholm",
+    "tickers_050x.txt": "050 Zurich",
+    "tickers_051x.txt": "051 Warschau",
+    "tickers_052x.txt": "052 Oslo",
+    "tickers_053x.txt": "053 Kopenhagen",
+    "tickers_054x.txt": "054 Helsinki",
+    "tickers_055x.txt": "055 CBoe",
+    "tickers_056x.txt": "056 NYSE int",
+    "tickers_057x.txt": "057 NYSE",
+    "tickers_058x.txt": "058 TSXV",
+    "tickers_059x.txt": "059 Oostenrijk Slovenie Slovakije",
 }
+
+def bouw_bestandslijst() -> List[str]:
+    """
+    Bouwt de volledige lijst van kwaliteits-tickerbestanden tickers_041x.txt
+    t/m tickers_059x.txt. Nummers kunnen ontbreken; niet-bestaande bestanden
+    worden verderop gewoon overgeslagen (zelfde patroon als weekly_report.py).
+    """
+    return [f"tickers_{n:03d}x.txt" for n in range(41, 60)]
+
+def label_voor(f_name: str) -> str:
+    return BEURS_NAMEN.get(f_name, f_name.replace(".txt", ""))
 
 VCP_CFG = {
     "min_contracties":       2,
@@ -651,12 +669,15 @@ def run_live_engine():
     exchange_tickers: Dict[str, List[str]] = {}
     all_tickers: List[str] = []
 
-    for ex_name, path in EXCHANGES.items():
-        tlist = load_tickers_from_file(path)
-        if tlist:
-            exchange_tickers[ex_name] = tlist
-            all_tickers.extend(tlist)
-            print(f"  {ex_name}: {len(tlist)} tickers")
+    for f_name in bouw_bestandslijst():
+        tlist = load_tickers_from_file(f_name)
+        if not tlist:
+            print(f"Bestand {f_name} niet gevonden of leeg, overslaan.")
+            continue
+        ex_name = label_voor(f_name)
+        exchange_tickers[ex_name] = tlist
+        all_tickers.extend(tlist)
+        print(f"  {ex_name}: {len(tlist)} tickers")
 
     all_tickers = sorted(set(all_tickers))
     if not all_tickers:
@@ -749,8 +770,8 @@ def run_backtest():
     print(f"{'='*60}")
 
     all_tickers: List[str] = []
-    for path in EXCHANGES.values():
-        all_tickers.extend(load_tickers_from_file(path))
+    for f_name in bouw_bestandslijst():
+        all_tickers.extend(load_tickers_from_file(f_name))
     all_tickers = sorted(set(all_tickers))
 
     if not all_tickers:
