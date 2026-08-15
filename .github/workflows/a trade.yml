@@ -21,7 +21,7 @@ jobs:
       - name: Installeer dependencies
         run: pip install psycopg2-binary requests
 
-      - name: Draai a trade.py
+      - name: Draai a_trade.py
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -32,4 +32,4 @@ jobs:
           LOOKBACK_DAYS: '3'
           BESCHIKBAAR_KAPITAAL: '2500'
           TRANSACTIE_BEDRAG: '2500'
-        run: python a trade.py
+        run: python a_trade.py
