@@ -385,20 +385,25 @@ def analyseer_pair_ruw(
 
         score_val = (1 / (p_value + 0.001)) * (1 / (half_life + 1))
 
+        # LET OP: coint()/pandas geven numpy float64 terug. round() op een
+        # float64 blijft een float64 — als dat ongewijzigd in een SQL-query
+        # terechtkomt (via db_logger) wordt het letterlijk als "np.float64(...)"
+        # ingevoegd, wat de insert doet crashen ("schema np does not exist").
+        # Daarom hier expliciet casten naar native Python float.
         return PairSignaal(
             pair=f"{ticker_a}/{ticker_b}",
             ticker_a=ticker_a,
             ticker_b=ticker_b,
-            p_value=round(p_value, 4),
-            half_life=round(half_life, 1),
-            current_z=round(z_score, 2),
-            spread=round(current_spread, 4),
-            spread_mean=round(current_mean, 4),
-            spread_std=round(current_std, 4),
-            price_a=round(data[ticker_a].iloc[-1], 2),
-            price_b=round(data[ticker_b].iloc[-1], 2),
+            p_value=float(round(p_value, 4)),
+            half_life=float(round(half_life, 1)),
+            current_z=float(round(z_score, 2)),
+            spread=float(round(current_spread, 4)),
+            spread_mean=float(round(current_mean, 4)),
+            spread_std=float(round(current_std, 4)),
+            price_a=float(round(data[ticker_a].iloc[-1], 2)),
+            price_b=float(round(data[ticker_b].iloc[-1], 2)),
             signal=signal,
-            score=score_val,
+            score=float(score_val),
         )
     except Exception:
         return None
