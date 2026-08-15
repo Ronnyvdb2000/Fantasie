@@ -264,27 +264,40 @@ def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
     df["Ticker"] = ticker
     return df
 
-def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
-    if not tickers:
-        return pd.DataFrame()
-    kwargs = dict(tickers=tickers, auto_adjust=True, group_by="ticker",
+# Yahoo Finance rate-limit t alle grote batches af als je duizenden tickers
+# in één yf.download()-call meegeeft — vandaar chunking + pauze tussen batches.
+DOWNLOAD_BATCH_SIZE = 250
+DOWNLOAD_BATCH_PAUSE = 2.0   # seconden tussen batches
+DOWNLOAD_BATCH_RETRIES = 2   # extra pogingen per batch bij rate-limit
+
+def _download_batch(batch: List[str], period: str) -> List[pd.DataFrame]:
+    """Download 1 batch tickers via yf.download(); retourneert lijst van
+    genormaliseerde per-ticker DataFrames. Retryt met backoff bij rate-limit."""
+    frames: List[pd.DataFrame] = []
+    kwargs = dict(tickers=batch, auto_adjust=True, group_by="ticker",
                   progress=False, threads=True, period=period)
-    frames = []
-    try:
-        data = yf.download(**kwargs)
-    except Exception as e:
-        print(f"[WARN] Batch mislukt ({e}), probeer 1-voor-1...")
-        data = pd.DataFrame()
+
+    data = None
+    for poging in range(DOWNLOAD_BATCH_RETRIES + 1):
+        try:
+            data = yf.download(**kwargs)
+            break
+        except Exception as e:
+            wacht = DOWNLOAD_BATCH_PAUSE * (2 ** poging)
+            print(f"[WARN] Batch mislukt ({e}), retry over {wacht:.0f}s "
+                  f"(poging {poging + 1}/{DOWNLOAD_BATCH_RETRIES + 1})...")
+            time.sleep(wacht)
+            data = None
 
     if data is not None and not data.empty:
         if isinstance(data.columns, pd.MultiIndex):
             ticker_level = 1
             for lvl in range(data.columns.nlevels):
-                if any(t in set(data.columns.get_level_values(lvl)) for t in tickers):
+                if any(t in set(data.columns.get_level_values(lvl)) for t in batch):
                     ticker_level = lvl
                     break
             available = set(data.columns.get_level_values(ticker_level))
-            for t in tickers:
+            for t in batch:
                 if t not in available:
                     continue
                 try:
@@ -294,24 +307,30 @@ def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
                 except Exception:
                     continue
         else:
-            norm = _normalise(data, tickers[0])
+            norm = _normalise(data, batch[0])
             if norm is not None:
                 frames.append(norm)
 
-    if not frames:
-        for t in tickers:
-            try:
-                raw = yf.download(t, period=period, auto_adjust=True, progress=False)
-                if raw is None or (isinstance(raw, pd.DataFrame) and raw.empty):
-                    continue
-                if isinstance(raw, pd.DataFrame) and isinstance(raw.columns, pd.MultiIndex):
-                    raw.columns = raw.columns.get_level_values(0)
-                norm = _normalise(raw, t)
-                if norm is not None:
-                    frames.append(norm)
-                time.sleep(0.2)
-            except Exception:
-                continue
+    return frames
+
+def download_history(tickers: List[str], period: str = "2y") -> pd.DataFrame:
+    """Download historische koersdata in batches van DOWNLOAD_BATCH_SIZE
+    tickers, met een pauze ertussen — voorkomt dat Yahoo Finance de hele
+    aanvraag rate-limit't zoals bij één grote call met duizenden tickers."""
+    if not tickers:
+        return pd.DataFrame()
+
+    frames: List[pd.DataFrame] = []
+    batches = [tickers[i:i + DOWNLOAD_BATCH_SIZE]
+               for i in range(0, len(tickers), DOWNLOAD_BATCH_SIZE)]
+
+    for i, batch in enumerate(batches):
+        frames.extend(_download_batch(batch, period))
+        if i < len(batches) - 1:
+            time.sleep(DOWNLOAD_BATCH_PAUSE)
+        if (i + 1) % 10 == 0 or i == len(batches) - 1:
+            print(f"  → batch {i + 1}/{len(batches)} verwerkt "
+                  f"({len(frames)} tickers met data tot nu toe)")
 
     if not frames:
         return pd.DataFrame()
