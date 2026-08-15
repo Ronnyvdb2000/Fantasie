@@ -1,4 +1,4 @@
-name: bot_01cointegr
+name: "Bot 01 Pairs tradin"
 
 on:
   schedule:
