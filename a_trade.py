@@ -30,7 +30,6 @@ Env vars (zelfde secrets als de rest van de Fantasie-repo):
 
 import os
 import sys
-import json
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
@@ -69,15 +68,21 @@ EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER")
 # Data ophalen
 # --------------------------------------------------------------------------
 def haal_selecties_op(lookback_days: int):
-    """Haalt alle selecties op van de laatste `lookback_days` dagen."""
+    """Haalt alle selecties op van de laatste `lookback_days` dagen.
+
+    Let op: de kolom `datum` is van het type text, in ISO-formaat
+    (YYYY-MM-DD, geen tijdstip) -- dus we vergelijken met een string in
+    hetzelfde formaat, geen datetime-object (dat geeft anders een
+    type-mismatch-fout in Postgres).
+    """
     if not SUPABASE_DB_URL:
         print("FOUT: SUPABASE_DB_URL ontbreekt.", file=sys.stderr)
         sys.exit(1)
 
-    since = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    since = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
 
     query = """
-        SELECT ticker, beurs, strategie, datum, koers, parameters
+        SELECT ticker, beurs, strategie, datum, koers, score, grafiek
         FROM selecties
         WHERE datum >= %s
         ORDER BY datum DESC;
@@ -113,23 +118,15 @@ def bouw_ranking(rows):
         g = groepen[key]
         g["strategieen"].add(row["strategie"])
 
-        params = row.get("parameters")
-        if isinstance(params, str):
-            try:
-                params = json.loads(params)
-            except (TypeError, json.JSONDecodeError):
-                params = {}
-        params = params or {}
-
-        score = params.get("score")
+        score = row.get("score")
         if score is not None:
             try:
                 g["scores"].append(float(score))
             except (TypeError, ValueError):
                 pass
 
-        if params.get("grafiek"):
-            g["grafiek"] = params["grafiek"]
+        if row.get("grafiek"):
+            g["grafiek"] = row["grafiek"]
 
         if row["koers"] is not None:
             g["koers"] = row["koers"]
