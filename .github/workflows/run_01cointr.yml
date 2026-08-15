@@ -1,4 +1,4 @@
-name: "Bot 01 Pairs tradin"
+name: "Bot 01: FULL scanner (041-059) Pairs trading"
 
 on:
   schedule:
