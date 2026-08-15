@@ -1,0 +1,35 @@
+name: bot_00best - Beste Signaal
+
+on:
+  schedule:
+    # elke weekdag om 20:15 UTC, na de andere bots (19:30-20:10 UTC)
+    - cron: '15 20 * * 1-5'
+  workflow_dispatch: {}
+
+jobs:
+  beste-signaal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installeer dependencies
+        run: pip install psycopg2-binary requests
+
+      - name: Draai a trade.py
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          LOOKBACK_DAYS: '3'
+          BESCHIKBAAR_KAPITAAL: '2500'
+          TRANSACTIE_BEDRAG: '2500'
+        run: python a trade.py
