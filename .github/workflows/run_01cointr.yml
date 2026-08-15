@@ -1,23 +1,48 @@
-# .github/workflows/pairs_trading.yml
-name: Pairs Trading Scan
+name: bot_01cointegr
+
 on:
   schedule:
-    - cron: '30 17 * * *'  # 17:30 UTC
+    # Weekdagen 19:50 UTC â€” binnen het bestaande 19:30-20:10 UTC-venster van de andere bots
+    - cron: '50 19 * * 1-5'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Modus: live of backtest'
+        required: false
+        default: 'live'
+        type: choice
+        options:
+          - live
+          - backtest
 
 jobs:
-  run:
+  run-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Pull laatste wijzigingen (rebase-safe)
+        run: |
+          git pull --rebase=false -X ours
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-      - run: pip install -r requirements.txt
-      - run: python bot_01cointegr.py live
+          python-version: '3.11'
+
+      - name: Installeer dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy requests statsmodels psycopg2-binary
+
+      - name: Draai bot_01cointegr
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          EMAIL
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python bot_01cointegr.py ${{ github.event.inputs.mode || 'live' }}
