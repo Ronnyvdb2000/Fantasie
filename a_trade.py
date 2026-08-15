@@ -1,5 +1,5 @@
 """
-bot_00best.py
+a_trade.py
 =============
 Leest de Supabase `selecties`-tabel uit (gevuld door de andere Fantasie-bots:
 bot_00kr, bot_00ms, bot_00db, bot_00cs, bot_00vcp, ...), en pikt daar het
