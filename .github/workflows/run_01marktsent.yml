@@ -1,0 +1,28 @@
+name: "Bot 01: Marktsentiment (technisch + nieuwssentiment)"
+
+on:
+  schedule:
+    - cron: "50 19 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  bot-01marktsent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install yfinance pandas numpy requests vaderSentiment psycopg2-binary
+      - name: Run bot_01marktsent
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
+          SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
+          NEWSAPI_KEY:      ${{ secrets.NEWSAPI_KEY }}
+        run: python bot_01marktsent.py live
