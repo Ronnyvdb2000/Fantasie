@@ -1,0 +1,33 @@
+name: "Boy 01: FULL scan (041-059) repetitieve patroon"
+
+on:
+  schedule:
+    # 07:15 UTC op weekdagen — vóór de Europese opening, los van het
+    # bestaande 19:30-20:10 UTC-slot van de andere bots
+    - cron: '15 7 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  seizoensbot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installeer dependencies
+        run: pip install yfinance pandas numpy scipy requests psycopg2-binary
+
+      - name: Voer seizoensbot uit (live)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: python bot_01repititief.py live
