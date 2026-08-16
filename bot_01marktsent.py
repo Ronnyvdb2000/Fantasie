@@ -80,6 +80,7 @@ NEWSAPI_KEY      = os.getenv("NEWSAPI_KEY", "")
 
 NEWSAPI_DAILY_BUDGET = 95          # marge onder de 100/dag-limiet
 _newsapi_calls_used   = 0
+_newsapi_rate_limited = False  # blijft True voor de rest van de run na 1x HTTP 429
 
 BEURS_NAMEN = {
     "tickers_041x.txt": "041 Benelux Ierland",
@@ -359,11 +360,17 @@ def fetch_news_sentiment(ticker: str, company_hint: str = "") -> Tuple[Optional[
     ALLEEN aanroepen voor tickers die al door de technische score komen,
     nooit voor de volledige scanlijst.
     """
-    global _newsapi_calls_used
+    global _newsapi_calls_used, _newsapi_rate_limited
 
     if not NEWSAPI_KEY:
         return None, 0
     if _newsapi_calls_used >= NEWSAPI_DAILY_BUDGET:
+        return None, 0
+    if _newsapi_rate_limited:
+        # Al 1x een 429 gehad deze run -> het 24u-rolling-window-budget is
+        # elders al verbruikt (bv. door een eerdere handmatige testrun
+        # dezelfde dag). Verdere pogingen zijn zinloos en kosten alleen
+        # runtime, dus we stoppen meteen voor de rest van deze run.
         return None, 0
 
     query   = company_hint or ticker
@@ -376,6 +383,11 @@ def fetch_news_sentiment(ticker: str, company_hint: str = "") -> Tuple[Optional[
     try:
         _newsapi_calls_used += 1
         resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code == 429:
+            _newsapi_rate_limited = True
+            print(f"[WARN] NewsAPI 429 (rate limited) -- 24u-quota elders al verbruikt. "
+                  f"Stop met verdere sentiment-calls voor de rest van deze run.")
+            return None, 0
         if resp.status_code != 200:
             print(f"[WARN] NewsAPI {resp.status_code} voor {ticker} (query='{query}'): {resp.text[:150]}")
             return None, 0
@@ -489,7 +501,7 @@ def analyse_ticker(ticker: str, df_ticker: pd.DataFrame, met_sentiment: bool = F
             tech_score += 1.0
 
     sent_score, sent_n = (None, 0)
-    if met_sentiment:
+    if met_sentiment and NEWSAPI_KEY and not _newsapi_rate_limited:
         naam = resolve_company_name(ticker)
         sent_score, sent_n = fetch_news_sentiment(ticker, company_hint=naam)
 
