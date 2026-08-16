@@ -112,13 +112,18 @@ def label_voor(f_name: str) -> str:
     return BEURS_NAMEN.get(f_name, f_name.replace(".txt", ""))
 
 MS_CFG = {
-    "rsi_period":       14,
-    "rsi_oversold":     40.0,
-    "rsi_momentum":     55.0,
-    "macd_fast":        12,
-    "macd_slow":        26,
-    "macd_signal":      9,
-    "atr_period":       14,
+    "rsi_period":         14,
+    "rsi_oversold":       35.0,   # oversold-bounce kandidaat
+    "rsi_momentum_low":   55.0,   # gezonde momentumzone: [low, high]
+    "rsi_momentum_high":  70.0,   # boven deze grens = overbought, geen punt meer
+    "macd_fast":          12,
+    "macd_slow":          26,
+    "macd_signal":        9,
+    "macd_cross_lookback": 5,     # crossover moet binnen N dagen liggen (vers signaal)
+    "sma_trend_period":   200,
+    "sma_short_period":   50,
+    "max_pct_above_sma_short": 15.0,  # max. % boven SMA50 -- filtert parabolische spikes
+    "atr_period":         14,
     "sentiment_lookback_days": 7,
     "sentiment_min_articles":  2,
     # eindscore = technische score (0-4) + sentiment-bonus (-1..+1)
@@ -402,40 +407,64 @@ class MSSignaal:
 
 def analyse_ticker(ticker: str, df_ticker: pd.DataFrame, met_sentiment: bool = False) -> Optional[MSSignaal]:
     df = df_ticker.sort_values("Date").reset_index(drop=True)
-    if len(df) < 60:
+    # Minimaal genoeg historiek voor een betrouwbare SMA200/252d-hoogtepunt.
+    if len(df) < 210:
         return None
 
     close = df["Close"]
     high  = df["High"] if "High" in df.columns else close
     low   = df["Low"] if "Low" in df.columns else close
 
-    rsi_series           = compute_rsi_series(close, MS_CFG["rsi_period"])
+    rsi_series = compute_rsi_series(close, MS_CFG["rsi_period"])
     macd_line, signal_line, hist = compute_macd_series(
         close, MS_CFG["macd_fast"], MS_CFG["macd_slow"], MS_CFG["macd_signal"])
-    atr_series            = compute_atr_series(high, low, close, MS_CFG["atr_period"])
+    atr_series = compute_atr_series(high, low, close, MS_CFG["atr_period"])
+    sma_trend  = close.rolling(MS_CFG["sma_trend_period"], min_periods=MS_CFG["sma_trend_period"]).mean()
+    sma_short  = close.rolling(MS_CFG["sma_short_period"], min_periods=MS_CFG["sma_short_period"]).mean()
 
-    rsi   = safe_float(rsi_series.iloc[-1])
-    macd  = safe_float(macd_line.iloc[-1])
-    sig   = safe_float(signal_line.iloc[-1])
-    h_now = safe_float(hist.iloc[-1])
+    rsi    = safe_float(rsi_series.iloc[-1])
+    macd   = safe_float(macd_line.iloc[-1])
+    sig    = safe_float(signal_line.iloc[-1])
+    h_now  = safe_float(hist.iloc[-1])
     h_prev = safe_float(hist.iloc[-2]) if len(hist) > 1 else float("nan")
-    atr   = safe_float(atr_series.iloc[-1])
-    price = safe_float(close.iloc[-1])
+    atr    = safe_float(atr_series.iloc[-1])
+    price  = safe_float(close.iloc[-1])
+    sma    = safe_float(sma_trend.iloc[-1])
+    sma50  = safe_float(sma_short.iloc[-1])
 
     if math.isnan(rsi) or math.isnan(price) or math.isnan(atr):
         return None
 
     tech_score = 0.0
-    if rsi <= MS_CFG["rsi_oversold"] or rsi >= MS_CFG["rsi_momentum"]:
+
+    # 1. RSI in gezonde zone: oversold-bounce OF gematigd momentum
+    #    (bewust NIET meer "of overbought" -- dat sloot juist niets uit).
+    if rsi <= MS_CFG["rsi_oversold"] or (MS_CFG["rsi_momentum_low"] <= rsi <= MS_CFG["rsi_momentum_high"]):
         tech_score += 1.0
-    macd_bullish = (macd > sig) and (not math.isnan(h_prev) and h_now > h_prev)
-    if macd_bullish:
+
+    # 2. VERSE MACD bullish crossover (binnen macd_cross_lookback dagen),
+    #    niet "staat toevallig al boven signal" -- dat is een blijvende
+    #    toestand, geen gebeurtenis, en dus veel minder onderscheidend.
+    diff = (macd_line - signal_line).tail(MS_CFG["macd_cross_lookback"] + 1)
+    diff_prev = diff.shift(1)
+    fresh_cross = bool(((diff_prev <= 0) & (diff > 0)).any())
+    if fresh_cross:
         tech_score += 1.0
-    macd_label = "Bullish" if macd_bullish else ("Bearish" if macd < sig else "Neutraal")
-    if macd > 0:
+    macd_label = "Verse crossover" if fresh_cross else ("Bullish" if macd > sig else "Bearish")
+
+    # 3. Onafhankelijke langetermijntrend: prijs boven SMA200.
+    if not math.isnan(sma) and price > sma:
         tech_score += 1.0
-    if not math.isnan(h_prev) and h_now > h_prev:
-        tech_score += 1.0
+
+    # 4. Niet overextended: prijs niet te ver boven het (traag bewegende)
+    #    SMA50 -- een SMA reageert nauwelijks op één spike-dag, dus dit
+    #    vangt parabolische/blow-off-bewegingen wel degelijk, in
+    #    tegenstelling tot een "afstand tot 252d-hoogtepunt"-criterium
+    #    (dat zichzelf als hoogtepunt meetelt en dus altijd >=0 geeft).
+    if not math.isnan(sma50) and sma50 > 0:
+        pct_above_sma50 = (price - sma50) / sma50 * 100.0
+        if pct_above_sma50 <= MS_CFG["max_pct_above_sma_short"]:
+            tech_score += 1.0
 
     sent_score, sent_n = (None, 0)
     if met_sentiment:
@@ -495,40 +524,67 @@ def run_live_engine():
         return
 
     print(f"\nTotaal: {len(all_tickers)} unieke kwaliteitstickers")
-    print("Koersdata downloaden (1 jaar)...")
-    df = download_history(all_tickers, period="1y")
+    print("Koersdata downloaden (2 jaar, nodig voor SMA200/252d-hoogtepunt)...")
+    df = download_history(all_tickers, period="2y")
     if df.empty:
         print("[ERROR] Geen koersdata.")
         return
 
     email_delen: List[str] = []
 
+    # ------------------------------------------------------------------
+    # Stap 1: technische score voor ALLE beurzen eerst bepalen (gratis,
+    # geen NewsAPI-call). We bouwen één globale kandidatenlijst met de
+    # beurs erbij, i.p.v. per beurs apart te verwerken — anders wordt het
+    # NewsAPI-dagbudget (95) al verbruikt door de eerste paar beurzen in
+    # bestandsvolgorde (041, 042, ...) en blijft er niets over voor
+    # latere beurzen zoals 057 NYSE, ook al zitten daar sterkere
+    # kandidaten tussen.
+    # ------------------------------------------------------------------
+    globale_kandidaten: List[Tuple[str, MSSignaal]] = []  # (ex_name, signaal)
     for ex_name, tlist in exchange_tickers.items():
-        print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
         df_ex = df[df["Ticker"].isin(tlist)].copy()
-
-        # Stap 1: technische score voor iedereen (gratis, geen NewsAPI-call).
-        kandidaten: List[MSSignaal] = []
         for ticker, group in df_ex.groupby("Ticker", sort=False):
             sig = analyse_ticker(ticker, group, met_sentiment=False)
             if sig is not None and sig.tech_score >= 2.0:
-                kandidaten.append(sig)
+                globale_kandidaten.append((ex_name, sig))
 
-        kandidaten.sort(key=lambda s: s.tech_score, reverse=True)
+    print(f"\nTechnische voorselectie klaar: {len(globale_kandidaten)} kandidaten over "
+          f"{len(exchange_tickers)} beurzen (tech_score >= 2.0).")
 
-        # Stap 2: sentiment alleen ophalen voor de sterkste technische
-        # kandidaten, om binnen de NewsAPI-dagquota te blijven.
-        signalen: List[MSSignaal] = []
-        for kand in kandidaten:
-            sig = analyse_ticker(kand.ticker, df_ex[df_ex["Ticker"] == kand.ticker], met_sentiment=True)
-            if sig is not None and sig.score >= MS_CFG["min_score"]:
-                signalen.append(sig)
-                print(f"  ✓ {sig.ticker}: score {sig.score:.1f} | RSI={sig.rsi_monthly:.1f} | "
-                      f"sentiment={sig.sentiment_score}")
+    # ------------------------------------------------------------------
+    # Stap 2: NewsAPI-budget gericht toewijzen. Grensgevallen
+    # (tech_score == 2.0) hebben de sentiment-bonus NODIG om de
+    # min_score-drempel van 3.0 te halen -- die krijgen voorrang op het
+    # budget. Kandidaten die al op techniek alleen kwalificeren
+    # (tech_score >= 3.0) krijgen sentiment als extra context, met wat
+    # budget overblijft.
+    # ------------------------------------------------------------------
+    grensgevallen = [t for t in globale_kandidaten if t[1].tech_score < MS_CFG["min_score"]]
+    al_gekwalificeerd = [t for t in globale_kandidaten if t[1].tech_score >= MS_CFG["min_score"]]
+    al_gekwalificeerd.sort(key=lambda t: t[1].tech_score, reverse=True)
+    verwerkingsvolgorde = grensgevallen + al_gekwalificeerd
 
+    per_beurs: Dict[str, List[MSSignaal]] = {ex: [] for ex in exchange_tickers}
+    for ex_name, kand in verwerkingsvolgorde:
+        df_ex_ticker = df[(df["Ticker"] == kand.ticker) & (df["Ticker"].isin(exchange_tickers[ex_name]))]
+        sig = analyse_ticker(kand.ticker, df_ex_ticker, met_sentiment=True)
+        if sig is not None and sig.score >= MS_CFG["min_score"]:
+            per_beurs[ex_name].append(sig)
+
+    print(f"NewsAPI-calls gebruikt: {_newsapi_calls_used}/{NEWSAPI_DAILY_BUDGET} "
+          f"({len(grensgevallen)} grensgevallen voorrang gegeven)\n")
+
+    for ex_name, tlist in exchange_tickers.items():
+        signalen = per_beurs[ex_name]
         signalen.sort(key=lambda s: s.score, reverse=True)
-        print(f"  → {len(signalen)} kandidaten (min_score {MS_CFG['min_score']}) uit "
-              f"{len(kandidaten)} technisch voorgeselecteerd, {len(df_ex['Ticker'].unique())} gescand")
+        if not signalen:
+            continue
+        print(f"Analyseren: {ex_name} ({len(tlist)} tickers)... "
+              f"→ {len(signalen)} kandidaten (min_score {MS_CFG['min_score']})")
+        for s in signalen:
+            print(f"  ✓ {s.ticker}: score {s.score:.1f} | RSI={s.rsi_monthly:.1f} | "
+                  f"sentiment={s.sentiment_score}")
 
         for s in signalen:
             log_selectie(
@@ -563,7 +619,6 @@ def run_live_engine():
     else:
         print("\nGeen kandidaten vandaag, geen berichten verstuurd.")
 
-    print(f"\nNewsAPI-calls gebruikt: {_newsapi_calls_used}/{NEWSAPI_DAILY_BUDGET}")
     print(f"{'='*60}")
     print("Klaar.")
 
@@ -615,7 +670,7 @@ def run_backtest():
             if ticker in positions or len(positions) >= MAX_POSITIONS:
                 continue
             sig = analyse_ticker(ticker, group, met_sentiment=False)
-            if not sig or sig.tech_score < 3.0:
+            if not sig or sig.tech_score < MS_CFG["min_score"]:
                 continue
             entry = sig.price * (1 + SLIPPAGE_PCT)
             risico_eur   = cash * RISICO_PCT_PER_TRADE
