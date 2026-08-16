@@ -99,8 +99,11 @@ EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 # ============================================================
 
 def bouw_bestandslijst() -> List[str]:
-    """Bouwt lijst van tickers_041a.txt t/m tickers_059a.txt (jouw formaat)."""
-    return [f"tickers_{n:03d}a.txt" for n in range(41, 60)]
+    """Bouwt lijst van tickers_041x.txt t/m tickers_059x.txt — de door de
+    Munger filter (bot_00xxxV2.py) gescreende kwaliteitslijsten, i.p.v. de
+    ruwe 'a'-lijsten. Die laatste bevatten ~93% ballast (delisted/dode
+    tickers), wat leidde tot zware rate-limiting en amper bruikbare data."""
+    return [f"tickers_{n:03d}x.txt" for n in range(41, 60)]
 
 def laad_tickers_uit_bestand(path: str) -> List[str]:
     """Leest tickers uit bestand — hergebruik logica uit jouw andere bots."""
@@ -116,25 +119,25 @@ def laad_tickers_uit_bestand(path: str) -> List[str]:
     return sorted(list(set(result)))
 
 BEURS_NAMEN = {
-    "tickers_041a.txt": "041 Benelux Ierland",
-    "tickers_042a.txt": "042 Parijs",
-    "tickers_043a.txt": "043 Frankfurt",
-    "tickers_044a.txt": "044 Spanje/Portugal",
-    "tickers_045a.txt": "045 Londen",
-    "tickers_046a.txt": "046 Milaan",
-    "tickers_047a.txt": "047 Toronto",
-    "tickers_048a.txt": "048 Nasdaq/NYSE",
-    "tickers_049a.txt": "049 Stockholm",
-    "tickers_050a.txt": "050 Zurich",
-    "tickers_051a.txt": "051 Warschau",
-    "tickers_052a.txt": "052 Oslo",
-    "tickers_053a.txt": "053 Kopenhagen",
-    "tickers_054a.txt": "054 Helsinki",
-    "tickers_055a.txt": "055 CBoe",
-    "tickers_056a.txt": "056 NYSE int",
-    "tickers_057a.txt": "057 NYSE",
-    "tickers_058a.txt": "058 TSXV",
-    "tickers_059a.txt": "059 Oostenrijk Slovenie Slovakije",
+    "tickers_041x.txt": "041 Benelux Ierland",
+    "tickers_042x.txt": "042 Parijs",
+    "tickers_043x.txt": "043 Frankfurt",
+    "tickers_044x.txt": "044 Spanje/Portugal",
+    "tickers_045x.txt": "045 Londen",
+    "tickers_046x.txt": "046 Milaan",
+    "tickers_047x.txt": "047 Toronto",
+    "tickers_048x.txt": "048 Nasdaq/NYSE",
+    "tickers_049x.txt": "049 Stockholm",
+    "tickers_050x.txt": "050 Zurich",
+    "tickers_051x.txt": "051 Warschau",
+    "tickers_052x.txt": "052 Oslo",
+    "tickers_053x.txt": "053 Kopenhagen",
+    "tickers_054x.txt": "054 Helsinki",
+    "tickers_055x.txt": "055 CBoe",
+    "tickers_056x.txt": "056 NYSE int",
+    "tickers_057x.txt": "057 NYSE",
+    "tickers_058x.txt": "058 TSXV",
+    "tickers_059x.txt": "059 Oostenrijk Slovenie Slovakije",
 }
 
 def label_voor(f_name: str) -> str:
@@ -266,8 +269,8 @@ def _normalise(df_raw, ticker: str) -> Optional[pd.DataFrame]:
 
 # Yahoo Finance rate-limit t alle grote batches af als je duizenden tickers
 # in één yf.download()-call meegeeft — vandaar chunking + pauze tussen batches.
-DOWNLOAD_BATCH_SIZE = 250
-DOWNLOAD_BATCH_PAUSE = 2.0   # seconden tussen batches
+DOWNLOAD_BATCH_SIZE = 100
+DOWNLOAD_BATCH_PAUSE = 3.0   # seconden tussen batches
 DOWNLOAD_BATCH_RETRIES = 2   # extra pogingen per batch bij rate-limit
 
 def _download_batch(batch: List[str], period: str) -> List[pd.DataFrame]:
