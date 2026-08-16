@@ -325,6 +325,28 @@ def download_history(tickers: List[str], period: str = "3y") -> pd.DataFrame:
 # ============================================================
 
 _vader = SentimentIntensityAnalyzer()
+_company_name_cache: Dict[str, str] = {}
+
+def resolve_company_name(ticker: str) -> str:
+    """
+    Zoekterm voor NewsAPI mag geen kale Yahoo-tickercode zijn (bv. 'PHIA.AS')
+    -- die string komt vrijwel nooit letterlijk in nieuwsartikelen voor.
+    Haalt de korte bedrijfsnaam op via yfinance (bv. 'Koninklijke Philips'),
+    met een in-memory cache zodat dit maar 1x per ticker per run gebeurt.
+    Valt terug op het deel vóór de beurssuffix als yfinance niets teruggeeft.
+    """
+    if ticker in _company_name_cache:
+        return _company_name_cache[ticker]
+    naam = ticker.split(".")[0]
+    try:
+        info = yf.Ticker(ticker).get_info()
+        kandidaat = info.get("shortName") or info.get("longName")
+        if kandidaat:
+            naam = kandidaat
+    except Exception as e:
+        print(f"[WARN] Kon bedrijfsnaam voor {ticker} niet ophalen ({e}), val terug op '{naam}'")
+    _company_name_cache[ticker] = naam
+    return naam
 
 def fetch_news_sentiment(ticker: str, company_hint: str = "") -> Tuple[Optional[float], int]:
     """
@@ -355,11 +377,11 @@ def fetch_news_sentiment(ticker: str, company_hint: str = "") -> Tuple[Optional[
         _newsapi_calls_used += 1
         resp = requests.get(url, params=params, timeout=10)
         if resp.status_code != 200:
-            print(f"[WARN] NewsAPI {resp.status_code} voor {ticker}: {resp.text[:150]}")
+            print(f"[WARN] NewsAPI {resp.status_code} voor {ticker} (query='{query}'): {resp.text[:150]}")
             return None, 0
         articles = resp.json().get("articles", [])
     except Exception as e:
-        print(f"[WARN] NewsAPI fout voor {ticker}: {e}")
+        print(f"[WARN] NewsAPI fout voor {ticker} (query='{query}'): {e}")
         return None, 0
 
     if len(articles) < MS_CFG["sentiment_min_articles"]:
@@ -468,7 +490,8 @@ def analyse_ticker(ticker: str, df_ticker: pd.DataFrame, met_sentiment: bool = F
 
     sent_score, sent_n = (None, 0)
     if met_sentiment:
-        sent_score, sent_n = fetch_news_sentiment(ticker)
+        naam = resolve_company_name(ticker)
+        sent_score, sent_n = fetch_news_sentiment(ticker, company_hint=naam)
 
     eind_score = tech_score + sentiment_bonus(sent_score)
     stop = price - ATR_STOP_MULT * atr
@@ -489,7 +512,7 @@ def format_bericht(ex_name: str, signalen: List[MSSignaal]) -> str:
         return ""
     regels = [f"*MARKTSENTIMENT — {ex_name}*  ({today_str()})\n"]
     for s in signalen[:15]:
-        sent_txt = f"{s.sentiment_score:+.2f} ({s.sentiment_n}art.)" if s.sentiment_score is not None else "n/a"
+        sent_txt = f"{s.sentiment_score:+.2f} ({s.sentiment_n}art.)" if s.sentiment_score is not None else f"n/a ({s.sentiment_n}art.)"
         regels.append(
             f"• *{s.ticker}* — score {s.score:.1f} | RSI {s.rsi_monthly:.0f} | "
             f"MACD {s.macd_label} | sentiment {sent_txt} | EUR{s.price:.2f}"
