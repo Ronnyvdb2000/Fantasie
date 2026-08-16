@@ -1,5 +1,5 @@
-# MASTERLIJST 058 — Lijst 058
-# Laatste update: 11/08/2026
-# Criteria: ROE>8% | Debt<120 | Marge>7% | Vol 22%-70% | Omzet>€500,000
+# MASTERLIJST 058 — TSXV
+# Laatste update: 16/08/2026
+# Nitro Criteria: ROE>4% | Debt<140 | Marge>3% | Vol 35%-95% | Omzet>€2,500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
