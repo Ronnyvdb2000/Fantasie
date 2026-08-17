@@ -1,4 +1,4 @@
-name: "Bot 01: Marktsentiment (technisch + nieuwssentiment)"
+name: "Bot 01: FULL scanner (041-059) Marktsentiment (technisch + nieuwssentiment)"
 
 on:
   schedule:
