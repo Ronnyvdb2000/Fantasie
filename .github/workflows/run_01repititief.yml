@@ -1,4 +1,4 @@
-name: run_01repititief
+name: "Bot 01: FULL scanner (041-059) repetitief patroon"
 
 on:
   schedule:
