@@ -1,14 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01repititief.py  —  SEIZOENSEFFECTEN ENGINE v1.0
+bot_01repititief.py  —  SEIZOENSEFFECTEN ENGINE v1.1
 Combineert weekdag-, maand- en kwartaaleffecten per ticker tot één
 seizoensscore, met live signalen (Telegram/mail) én de onderliggende
 historische statistiek (gemiddelde, win rate, p-waarde) mee in het bericht.
 
-Opgebouwd 1-op-1 naar het patroon van bot_00kr.py: zelfde bestandslijst-
-opbouw, zelfde download_history/telegram/email-hulpfuncties, zelfde
-db_logger-integratie, zelfde live/backtest CLI.
+v1.1 t.o.v. v1.0:
+  - Benjamini-Hochberg FDR-correctie (zelfde aanpak als bot_01cointegr.py)
+    i.p.v. een vaste p<0.10 per individuele test. Elk buckettype (weekdag/
+    maand/kwartaal) is een eigen "test-familie": de p-waarden van bv. alle
+    weekdag-tests binnen één beurs worden samen gecorrigeerd, zo ook voor
+    maand en kwartaal apart. Zonder deze correctie komt bij honderden
+    tickers x 3 tests puur toeval al als "significant" naar boven.
+  - Telegram-verzending met status-check + retry/backoff bij 429 (rate
+    limit) en een korte throttle tussen berichten — voorheen faalden
+    verzendingen naar dezelfde chat soms stil zonder foutmelding.
+  - Backtest (maand-effect) past dezelfde BH-correctie toe: per testjaar
+    worden de getrainde p-waarden per maand over alle tickers gepoold en
+    gecorrigeerd, in plaats van een vaste p<0.10 per ticker/maand.
+
+Opgebouwd op het patroon van bot_00kr.py: zelfde bestandslijst-opbouw,
+zelfde download_history-hulpfunctie, zelfde db_logger-integratie, zelfde
+live/backtest CLI.
 
 Gebruik:
   python bot_01repititief.py live      # live rapport
@@ -23,7 +37,7 @@ import datetime as dt
 import time
 import smtplib
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set, Tuple
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -58,6 +72,9 @@ EMAIL_USER       = os.getenv("EMAIL_USER", "")
 EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
 EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 
+TELEGRAM_THROTTLE_SEC = 1.2   # min. tijd tussen 2 berichten naar dezelfde chat
+TELEGRAM_MAX_POGINGEN = 4
+
 # Zelfde namenlijst/bestandsopbouw als bot_00kr.py
 BEURS_NAMEN = {
     "tickers_041x.txt": "041 Benelux Ierland",
@@ -90,10 +107,11 @@ def label_voor(f_name: str) -> str:
 SZ_CFG = {
     "lookback_years": 15,   # hoeveel historiek max wordt opgehaald
     "min_jaren":      5,    # minimum aantal jaar data om een ticker mee te nemen
-    "p_drempel":      0.10, # significantiedrempel (tweezijdige t-test tegen 0)
+    "fdr_alpha":      0.10, # gewenste FDR (Benjamini-Hochberg) per buckettype/beurs
     "top_n":          8,    # aantal tickers per beurs in het Telegram-bericht
 }
 
+BUCKET_TYPES = ("weekdag", "maand", "kwartaal")
 WEEKDAGEN = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag"]
 MAANDEN   = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
 
@@ -131,19 +149,49 @@ def load_tickers_from_file(path: str) -> List[str]:
             result.append(t)
     return sorted(list(set(result)))
 
-def send_telegram_message(text: str) -> None:
+def send_telegram_message(text: str) -> bool:
+    """
+    Stuurt één Telegram-bericht. Controleert de statuscode (voorheen werd
+    een 429/ander foutantwoord stil genegeerd) en retryt met backoff bij
+    rate-limiting. Geeft True/False terug zodat de caller weet of het
+    bericht écht is aangekomen.
+    """
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print(text)
-        return
+        return True
+
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    try:
-        requests.post(
-            url,
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"},
-            timeout=10,
-        )
-    except Exception as e:
-        print(f"Telegram fout: {e}")
+    for poging in range(1, TELEGRAM_MAX_POGINGEN + 1):
+        try:
+            resp = requests.post(
+                url,
+                json={"chat_id": TELEGRAM_CHAT_ID, "text": text,
+                      "parse_mode": "Markdown", "disable_web_page_preview": True},
+                timeout=15,
+            )
+        except Exception as e:
+            print(f"Telegram fout (poging {poging}): {e}")
+            time.sleep(2 * poging)
+            continue
+
+        if resp.status_code == 200:
+            return True
+
+        if resp.status_code == 429:
+            retry_after = 3
+            try:
+                retry_after = resp.json().get("parameters", {}).get("retry_after", 3)
+            except Exception:
+                pass
+            print(f"Telegram 429 (rate limit), wacht {retry_after}s en probeer opnieuw...")
+            time.sleep(retry_after + 0.5)
+            continue
+
+        print(f"Telegram fout {resp.status_code}: {resp.text[:300]}")
+        return False
+
+    print("Telegram: alle pogingen mislukt, bericht NIET verstuurd.")
+    return False
 
 def send_email(subject: str, body: str) -> None:
     if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
@@ -251,19 +299,58 @@ def download_history(tickers: List[str], period: str = "15y") -> pd.DataFrame:
 
 
 # ============================================================
+# BENJAMINI-HOCHBERG FDR-CORRECTIE
+# ============================================================
+
+def bh_correctie(p_waarden: List[float], alpha: float) -> List[bool]:
+    """
+    Standaard Benjamini-Hochberg procedure. Geeft per index terug of die
+    test significant is NA correctie voor multiple testing.
+    p_(rang) <= (rang/m) * alpha  ->  grootste rang die hieraan voldoet
+    bepaalt de afkap; alle testen met een kleinere of gelijke rang worden
+    significant verklaard.
+    """
+    m = len(p_waarden)
+    if m == 0:
+        return []
+    volgorde = sorted(range(m), key=lambda i: p_waarden[i])
+    laatste_significante_rank = -1
+    for rang, idx in enumerate(volgorde, start=1):
+        if p_waarden[idx] <= (rang / m) * alpha:
+            laatste_significante_rank = rang
+    mask = [False] * m
+    if laatste_significante_rank >= 0:
+        for rang, idx in enumerate(volgorde, start=1):
+            if rang <= laatste_significante_rank:
+                mask[idx] = True
+    return mask
+
+
+# ============================================================
 # SEIZOENSANALYSE
 # ============================================================
 
 @dataclass
+class SeizoenKandidaat:
+    """Ruwe, ongecorrigeerde bucket-statistieken — vóór BH-correctie."""
+    ticker:     str
+    price:      float
+    weekdag:    Optional[dict]
+    maand:      Optional[dict]
+    kwartaal:   Optional[dict]
+    jaren_data: float
+
+@dataclass
 class SeizoenSignaal:
-    ticker:             str
-    price:              float
-    score:              float   # gewogen som van significante gemiddelde rendementen
-    weekdag:            Optional[dict]
-    maand:              Optional[dict]
-    kwartaal:           Optional[dict]
-    jaren_data:         float
-    aantal_significant: int
+    """Eindresultaat na BH-correctie: enkel de significante buckets tellen mee."""
+    ticker:               str
+    price:                float
+    score:                float
+    weekdag:              Optional[dict]     # ruwe stats, altijd bewaard voor logging
+    maand:                Optional[dict]
+    kwartaal:             Optional[dict]
+    significante_buckets: Set[str]            # subset van BUCKET_TYPES die BH doorstond
+    jaren_data:           float
 
 def bereken_bucket_stats(rendementen: np.ndarray) -> Optional[dict]:
     """(gemiddelde, win_rate, p_waarde, n) voor een reeks dagrendementen."""
@@ -275,7 +362,9 @@ def bereken_bucket_stats(rendementen: np.ndarray) -> Optional[dict]:
     _, p_waarde = stats.ttest_1samp(rendementen, 0.0)
     return {"gemiddelde": gemiddelde, "win_rate": win_rate, "p_waarde": float(p_waarde), "n": n}
 
-def analyseer_ticker(ticker: str, df_ticker: pd.DataFrame) -> Optional[SeizoenSignaal]:
+def analyseer_ticker(ticker: str, df_ticker: pd.DataFrame) -> Optional[SeizoenKandidaat]:
+    """Berekent de ruwe bucket-stats. Geen significantie-filtering hier —
+    dat gebeurt achteraf, gepoold over alle tickers van de beurs (BH)."""
     try:
         g = df_ticker.sort_values("Date").copy()
         if len(g) < 250 * SZ_CFG["min_jaren"]:
@@ -300,30 +389,60 @@ def analyseer_ticker(ticker: str, df_ticker: pd.DataFrame) -> Optional[SeizoenSi
         maand_stats    = bereken_bucket_stats(rendement[rendement.index.month == huidige_maand].values)
         kwartaal_stats = bereken_bucket_stats(rendement[rendement.index.quarter == huidig_kwartaal].values)
 
-        onderdelen  = {"weekdag": weekdag_stats, "maand": maand_stats, "kwartaal": kwartaal_stats}
-        significant = {k: v for k, v in onderdelen.items() if v and v["p_waarde"] < SZ_CFG["p_drempel"]}
+        if not (weekdag_stats or maand_stats or kwartaal_stats):
+            return None
 
-        if not significant:
-            return None  # geen enkel significant seizoenspatroon -> niet meenemen
-
-        score = sum(v["gemiddelde"] * (1 - v["p_waarde"]) for v in significant.values())
-
-        return SeizoenSignaal(
-            ticker=ticker, price=round(current_price, 2), score=score,
+        return SeizoenKandidaat(
+            ticker=ticker, price=round(current_price, 2),
             weekdag=weekdag_stats, maand=maand_stats, kwartaal=kwartaal_stats,
-            jaren_data=round(aantal_jaren, 1), aantal_significant=len(significant),
+            jaren_data=round(aantal_jaren, 1),
         )
     except Exception as e:
         print(f"[WARN] {ticker}: fout — {e}")
         return None
+
+def pas_bh_toe_op_beurs(kandidaten: List[SeizoenKandidaat], alpha: float) -> List[SeizoenSignaal]:
+    """
+    Voert per buckettype (weekdag/maand/kwartaal) een eigen BH-correctie uit,
+    gepoold over alle kandidaten van deze beurs — dat zijn de drie
+    test-families. Enkel kandidaten met minstens 1 buckettype dat de
+    correctie doorstaat, komen terug als SeizoenSignaal.
+    """
+    significant_per_kandidaat: Dict[int, Set[str]] = {}
+
+    for bucket_key in BUCKET_TYPES:
+        indices = [i for i, k in enumerate(kandidaten) if getattr(k, bucket_key) is not None]
+        if not indices:
+            continue
+        p_waarden = [getattr(kandidaten[i], bucket_key)["p_waarde"] for i in indices]
+        mask = bh_correctie(p_waarden, alpha)
+        for pos, kandidaat_idx in enumerate(indices):
+            if mask[pos]:
+                significant_per_kandidaat.setdefault(kandidaat_idx, set()).add(bucket_key)
+
+    resultaten: List[SeizoenSignaal] = []
+    for i, k in enumerate(kandidaten):
+        sig_keys = significant_per_kandidaat.get(i)
+        if not sig_keys:
+            continue
+        score = sum(
+            getattr(k, key)["gemiddelde"] * (1 - getattr(k, key)["p_waarde"])
+            for key in sig_keys
+        )
+        resultaten.append(SeizoenSignaal(
+            ticker=k.ticker, price=k.price, score=score,
+            weekdag=k.weekdag, maand=k.maand, kwartaal=k.kwartaal,
+            significante_buckets=sig_keys, jaren_data=k.jaren_data,
+        ))
+    return resultaten
 
 
 # ============================================================
 # TELEGRAM + EMAIL OUTPUT — één bericht per exchange
 # ============================================================
 
-def _bucket_regel(key: str, stat: Optional[dict]) -> Optional[str]:
-    if not stat or stat["p_waarde"] >= SZ_CFG["p_drempel"]:
+def _bucket_regel(key: str, stat: Optional[dict], significante_buckets: Set[str]) -> Optional[str]:
+    if key not in significante_buckets or not stat:
         return None
     vandaag = dt.datetime.now(dt.timezone.utc)
     if key == "weekdag":
@@ -337,9 +456,9 @@ def _bucket_regel(key: str, stat: Optional[dict]) -> Optional[str]:
 
 def sig_regel(s: SeizoenSignaal) -> str:
     onderbouwing = [r for r in (
-        _bucket_regel("weekdag", s.weekdag),
-        _bucket_regel("maand", s.maand),
-        _bucket_regel("kwartaal", s.kwartaal),
+        _bucket_regel("weekdag", s.weekdag, s.significante_buckets),
+        _bucket_regel("maand", s.maand, s.significante_buckets),
+        _bucket_regel("kwartaal", s.kwartaal, s.significante_buckets),
     ) if r]
     return (
         f"• `{s.ticker}` score {s.score*100:+.2f}% | EUR{s.price:.2f} | "
@@ -347,19 +466,20 @@ def sig_regel(s: SeizoenSignaal) -> str:
         f"  {' | '.join(onderbouwing)}"
     )
 
-def format_bericht(exchange_name: str, top: List[SeizoenSignaal], alle: List[SeizoenSignaal]) -> Optional[str]:
+def format_bericht(exchange_name: str, top: List[SeizoenSignaal], alle: List[SeizoenKandidaat]) -> Optional[str]:
     """Eén bericht per exchange. Lege exchanges -> None."""
     if not alle:
         return None
     nu = today_str()
     delen = [
         f"📅 *SEIZOENSEFFECTEN — {exchange_name}*",
-        f"_{nu} | {len(alle)} geanalyseerd | {len(top)} met significant seizoenspatroon_",
+        f"_{nu} | {len(alle)} geanalyseerd | {len(top)} met FDR-significant seizoenspatroon_",
         "─────────────────────────────",
         "\n\n".join(sig_regel(s) for s in top),
         "─────────────────────────────",
         f"⚙️ _Weekdag/maand/kwartaal t.o.v. eigen historiek (max {SZ_CFG['lookback_years']}j) | "
-        f"p<{SZ_CFG['p_drempel']:.2f} | score = gewogen som significante gemiddeldes_",
+        f"Benjamini-Hochberg FDR={SZ_CFG['fdr_alpha']:.2f} per buckettype | "
+        f"score = gewogen som significante gemiddeldes_",
     ]
     return "\n\n".join(delen)
 
@@ -405,20 +525,27 @@ def run_live_engine():
         print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
         df_ex = df[df["Ticker"].isin(tlist)].copy()
 
-        alle: List[SeizoenSignaal] = []
+        kandidaten: List[SeizoenKandidaat] = []
         for ticker, group in df_ex.groupby("Ticker", sort=False):
-            sig = analyseer_ticker(ticker, group)
-            if sig is not None:
-                alle.append(sig)
-                print(f"  ✓ {ticker}: score {sig.score*100:+.2f}% | "
-                      f"{sig.aantal_significant} significante bucket(s)")
+            k = analyseer_ticker(ticker, group)
+            if k is not None:
+                kandidaten.append(k)
 
-        if not alle:
-            print(f"  → Overgeslagen: {ex_name} (geen significante patronen)")
+        if not kandidaten:
+            print(f"  → Overgeslagen: {ex_name} (te weinig data)")
             continue
 
-        alle.sort(key=lambda s: s.score, reverse=True)
-        top = alle[:SZ_CFG["top_n"]]
+        top_alles = pas_bh_toe_op_beurs(kandidaten, SZ_CFG["fdr_alpha"])
+        print(f"  {len(kandidaten)} geanalyseerd, {len(top_alles)} FDR-significant")
+        for s in top_alles:
+            print(f"  ✓ {s.ticker}: score {s.score*100:+.2f}% | buckets: {', '.join(sorted(s.significante_buckets))}")
+
+        if not top_alles:
+            print(f"  → Overgeslagen: {ex_name} (niets overleeft de FDR-correctie)")
+            continue
+
+        top_alles.sort(key=lambda s: s.score, reverse=True)
+        top = top_alles[:SZ_CFG["top_n"]]
 
         for s in top:
             log_selectie(
@@ -431,6 +558,7 @@ def run_live_engine():
                     "score": s.score,
                     "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                     "jaren_data": s.jaren_data,
+                    "significante_buckets": sorted(s.significante_buckets),
                     "weekdag_gemiddelde": s.weekdag["gemiddelde"] if s.weekdag else None,
                     "weekdag_winrate":    s.weekdag["win_rate"] if s.weekdag else None,
                     "weekdag_p":          s.weekdag["p_waarde"] if s.weekdag else None,
@@ -443,11 +571,12 @@ def run_live_engine():
                 },
             )
 
-        bericht = format_bericht(ex_name, top, alle)
+        bericht = format_bericht(ex_name, top, kandidaten)
         if bericht:
-            send_telegram_message(bericht)
+            ok = send_telegram_message(bericht)
+            print(f"  → Telegram {'verstuurd' if ok else 'MISLUKT'}")
             email_delen.append(bericht)
-            print(f"  → Telegram verstuurd")
+            time.sleep(TELEGRAM_THROTTLE_SEC)  # voorkom rate-limit bij volgende beurs
 
     if email_delen:
         send_email(
@@ -460,19 +589,20 @@ def run_live_engine():
 
 
 # ============================================================
-# BACKTEST ENGINE — walk-forward op het maand-effect
+# BACKTEST ENGINE — walk-forward op het maand-effect (met BH)
 # ============================================================
 # Enkel het maand-effect wordt hier effectief "verhandeld": voor elk testjaar
 # wordt de maand-bucket-statistiek herberekend op basis van UITSLUITEND de
 # jaren die vóór dat testjaar liggen (expanding window, geen look-ahead).
-# Is de maand voor een ticker significant positief op basis van die
-# trainingsdata, dan wordt een positie geopend op de eerste handelsdag van
-# de maand en gesloten op de laatste, inclusief slippage/kosten/taks.
-# Weekdag- en kwartaaleffect worden in live-mode wél getoond als extra
-# onderbouwing, maar hier niet apart backtest — laat het weten als je die
-# ook wil, dat vergt een vergelijkbare tweede walk-forward-loop.
+# Per testjaar en per kalendermaand worden de getrainde p-waarden over ALLE
+# tickers gepoold en BH-gecorrigeerd (zelfde principe als in de live-engine);
+# enkel wie na correctie significant én positief is, wordt verhandeld.
+# Weekdag- en kwartaaleffect staan in live-mode als extra onderbouwing, maar
+# worden hier niet apart backtest — dat is een vergelijkbare tweede loop,
+# laat het weten als je die ook wil.
 
-def _train_maand_stats(rendement: pd.Series, test_jaar: int) -> Dict[int, dict]:
+def _train_maand_stats_per_ticker(rendement: pd.Series, test_jaar: int) -> Dict[int, dict]:
+    """Ruwe (ongecorrigeerde) maand-bucket-stats op basis van de trainingsjaren."""
     train = rendement[rendement.index.year < test_jaar]
     if train.empty:
         return {}
@@ -482,13 +612,13 @@ def _train_maand_stats(rendement: pd.Series, test_jaar: int) -> Dict[int, dict]:
     resultaat = {}
     for maand in range(1, 13):
         stat = bereken_bucket_stats(train[train.index.month == maand].values)
-        if stat and stat["p_waarde"] < SZ_CFG["p_drempel"] and stat["gemiddelde"] > 0:
+        if stat:
             resultaat[maand] = stat
     return resultaat
 
 def run_backtest():
     print(f"{'='*60}")
-    print(f"SEIZOENSEFFECTEN BACKTEST (maand-effect)  {BACKTEST_START} -> {BACKTEST_END}")
+    print(f"SEIZOENSEFFECTEN BACKTEST (maand-effect, BH-gecorrigeerd)  {BACKTEST_START} -> {BACKTEST_END}")
     print(f"{'='*60}")
 
     all_tickers: List[str] = []
@@ -506,22 +636,45 @@ def run_backtest():
         print("[ERROR] Geen data.")
         return
 
+    # Per ticker de rendementenreeks + geïndexeerde koersen klaarzetten
+    reeksen: Dict[str, Tuple[pd.Series, pd.DataFrame]] = {}
+    for ticker, group in df.groupby("Ticker", sort=False):
+        g = group.sort_values("Date").set_index("Date")
+        rendement = g["Close"].pct_change().dropna()
+        if not rendement.empty:
+            reeksen[ticker] = (rendement, g)
+
     cash = START_CAPITAL
     trades: List[Dict] = []
     testjaren = range(pd.Timestamp(BACKTEST_START).year, pd.Timestamp(BACKTEST_END).year + 1)
 
-    for ticker, group in df.groupby("Ticker", sort=False):
-        g = group.sort_values("Date").set_index("Date")
-        rendement = g["Close"].pct_change().dropna()
-        if rendement.empty:
+    for test_jaar in testjaren:
+        # 1) per ticker de ruwe getrainde maand-stats ophalen (geen look-ahead)
+        getraind: Dict[str, Dict[int, dict]] = {}
+        for ticker, (rendement, _g) in reeksen.items():
+            stats_per_maand = _train_maand_stats_per_ticker(rendement, test_jaar)
+            if stats_per_maand:
+                getraind[ticker] = stats_per_maand
+
+        if not getraind:
             continue
 
-        for test_jaar in testjaren:
-            kansrijke_maanden = _train_maand_stats(rendement, test_jaar)
-            if not kansrijke_maanden:
+        # 2) BH-correctie per kalendermaand, gepoold over alle tickers dit testjaar
+        significant_dit_jaar: Dict[str, Set[int]] = {}
+        for maand in range(1, 13):
+            tickers_met_maand = [t for t, sm in getraind.items() if maand in sm]
+            if not tickers_met_maand:
                 continue
+            p_waarden = [getraind[t][maand]["p_waarde"] for t in tickers_met_maand]
+            mask = bh_correctie(p_waarden, SZ_CFG["fdr_alpha"])
+            for t, sig in zip(tickers_met_maand, mask):
+                if sig and getraind[t][maand]["gemiddelde"] > 0:
+                    significant_dit_jaar.setdefault(t, set()).add(maand)
 
-            for maand, stat in kansrijke_maanden.items():
+        # 3) enkel de significante ticker/maand-combinaties effectief verhandelen
+        for ticker, maanden in significant_dit_jaar.items():
+            _rendement, g = reeksen[ticker]
+            for maand in maanden:
                 maand_data = g[(g.index.year == test_jaar) & (g.index.month == maand)]
                 if len(maand_data) < 5:
                     continue
@@ -543,7 +696,8 @@ def run_backtest():
 
                 trades.append({
                     "ticker": ticker, "jaar": test_jaar, "maand": maand,
-                    "train_gemiddelde": stat["gemiddelde"], "train_p": stat["p_waarde"],
+                    "train_gemiddelde": getraind[ticker][maand]["gemiddelde"],
+                    "train_p": getraind[ticker][maand]["p_waarde"],
                     "entry_price": round(entry_price, 4), "exit_price": round(exit_price, 4),
                     "size": aandelen, "pnl": round(pnl, 2), "tax": round(tax, 2),
                     "net": round(net, 2),
@@ -558,15 +712,15 @@ def run_backtest():
                abs(tdf.loc[tdf["net"] <= 0, "net"].sum()), 1e-9)
         totaal_net = tdf["net"].sum()
         print(f"\n{'='*60}")
-        print(f"Trades (maand-effect) : {n}")
-        print(f"Winnaars              : {nwin} ({nwin/n*100:.1f}%)")
-        print(f"Profit Factor         : {pf:.2f}")
-        print(f"Netto resultaat       : EUR{totaal_net:,.2f} (som over alle posities, geen samengesteld kapitaal)")
-        print(f"Belasting             : EUR{tdf['tax'].sum():,.2f}")
+        print(f"Trades (maand-effect, BH) : {n}")
+        print(f"Winnaars                  : {nwin} ({nwin/n*100:.1f}%)")
+        print(f"Profit Factor              : {pf:.2f}")
+        print(f"Netto resultaat            : EUR{totaal_net:,.2f} (som over alle posities, geen samengesteld kapitaal)")
+        print(f"Belasting                  : EUR{tdf['tax'].sum():,.2f}")
         print(f"{'='*60}")
         print("Opgeslagen: seizoen_backtest_trades.csv")
     else:
-        print("Geen trades gegenereerd (geen enkele ticker/maand-combinatie was significant én out-of-sample bruikbaar).")
+        print("Geen trades gegenereerd (na BH-correctie bleef geen enkele ticker/maand-combinatie over).")
 
 
 # ============================================================
