@@ -1,4 +1,4 @@
-name: "Boy 01: FULL scan (041-059) repetitieve patroon"
+name: run_01repititief
 
 on:
   schedule:
