@@ -128,7 +128,13 @@ MS_CFG = {
     "sentiment_lookback_days": 7,
     "sentiment_min_articles":  2,
     # eindscore = technische score (0-4) + sentiment-bonus (-1..+1)
-    "min_score":        3.0,
+    # min_score=4.0 -> vereist ALLE vier technische criteria (RSI-zone,
+    # verse MACD-crossover, boven SMA200, niet overextended t.o.v. SMA50).
+    # Bij 3.0 kwalificeerde bijna elk aandeel in een brede uptrend al
+    # (bv. 140 van de 368 Nasdaq/NYSE-tickers in één run) -- te weinig
+    # onderscheidend. Sentiment kan een 3.0-kandidaat nog over de drempel
+    # tillen (bonus tot +1.0), dus die blijft een geldige route naar 4.0.
+    "min_score":        4.0,
 }
 
 BACKTEST_START = "2021-01-01"
