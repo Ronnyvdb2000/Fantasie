@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01repititief.py  —  SEIZOENSEFFECTEN ENGINE v1.1
+bot_01repititief.py  —  SEIZOENSEFFECTEN ENGINE v1.2
 Combineert weekdag-, maand- en kwartaaleffecten per ticker tot één
 seizoensscore, met live signalen (Telegram/mail) én de onderliggende
 historische statistiek (gemiddelde, win rate, p-waarde) mee in het bericht.
 
+v1.2 t.o.v. v1.1:
+  - De backtest test nu alle drie de buckettypes walk-forward, niet enkel
+    maand: ook weekdag en kwartaal worden nu effectief "verhandeld" en
+    los per type gerapporteerd. Weekdag-trades zijn 1-dagstrades (koop
+    vorige close, verkoop op de close van de doelweekdag, enkel op
+    voorkomens binnen het testjaar); maand/kwartaal blijven hold-de-hele-
+    periode-trades zoals voorheen. Zelfde BH-correctie en walk-forward
+    (expanding window, geen look-ahead) voor alle drie.
+
 v1.1 t.o.v. v1.0:
-  - Benjamini-Hochberg FDR-correctie (zelfde aanpak als bot_01cointegr.py)
-    i.p.v. een vaste p<0.10 per individuele test. Elk buckettype (weekdag/
-    maand/kwartaal) is een eigen "test-familie": de p-waarden van bv. alle
-    weekdag-tests binnen één beurs worden samen gecorrigeerd, zo ook voor
-    maand en kwartaal apart. Zonder deze correctie komt bij honderden
-    tickers x 3 tests puur toeval al als "significant" naar boven.
+  - Benjamini-Hochberg FDR-correctie i.p.v. een vaste p<0.10 per
+    individuele test. Elk buckettype (weekdag/maand/kwartaal) is een eigen
+    test-familie: de p-waarden van bv. alle weekdag-tests binnen één beurs
+    worden samen gecorrigeerd, zo ook voor maand en kwartaal apart. Zonder
+    deze correctie komt bij honderden tickers x 3 tests puur toeval al als
+    "significant" naar boven.
   - Telegram-verzending met status-check + retry/backoff bij 429 (rate
-    limit) en een korte throttle tussen berichten — voorheen faalden
-    verzendingen naar dezelfde chat soms stil zonder foutmelding.
-  - Backtest (maand-effect) past dezelfde BH-correctie toe: per testjaar
-    worden de getrainde p-waarden per maand over alle tickers gepoold en
-    gecorrigeerd, in plaats van een vaste p<0.10 per ticker/maand.
+    limit) en een korte throttle tussen berichten.
 
 Opgebouwd op het patroon van bot_00kr.py: zelfde bestandslijst-opbouw,
 zelfde download_history-hulpfunctie, zelfde db_logger-integratie, zelfde
@@ -26,7 +31,7 @@ live/backtest CLI.
 
 Gebruik:
   python bot_01repititief.py live      # live rapport
-  python bot_01repititief.py backtest  # walk-forward backtest (maand-effect)
+  python bot_01repititief.py backtest  # walk-forward backtest (alle 3 buckettypes)
 """
 
 import os
@@ -107,7 +112,7 @@ def label_voor(f_name: str) -> str:
 SZ_CFG = {
     "lookback_years": 15,   # hoeveel historiek max wordt opgehaald
     "min_jaren":      5,    # minimum aantal jaar data om een ticker mee te nemen
-    "fdr_alpha":      0.10, # gewenste FDR (Benjamini-Hochberg) per buckettype/beurs
+    "fdr_alpha":      0.05, # gewenste FDR (Benjamini-Hochberg) per buckettype/beurs — verstrengd op vraag
     "top_n":          8,    # aantal tickers per beurs in het Telegram-bericht
 }
 
@@ -327,7 +332,7 @@ def bh_correctie(p_waarden: List[float], alpha: float) -> List[bool]:
 
 
 # ============================================================
-# SEIZOENSANALYSE
+# SEIZOENSANALYSE (live)
 # ============================================================
 
 @dataclass
@@ -589,36 +594,99 @@ def run_live_engine():
 
 
 # ============================================================
-# BACKTEST ENGINE — walk-forward op het maand-effect (met BH)
+# BACKTEST ENGINE — walk-forward op alle 3 buckettypes (met BH)
 # ============================================================
-# Enkel het maand-effect wordt hier effectief "verhandeld": voor elk testjaar
-# wordt de maand-bucket-statistiek herberekend op basis van UITSLUITEND de
-# jaren die vóór dat testjaar liggen (expanding window, geen look-ahead).
-# Per testjaar en per kalendermaand worden de getrainde p-waarden over ALLE
-# tickers gepoold en BH-gecorrigeerd (zelfde principe als in de live-engine);
-# enkel wie na correctie significant én positief is, wordt verhandeld.
-# Weekdag- en kwartaaleffect staan in live-mode als extra onderbouwing, maar
-# worden hier niet apart backtest — dat is een vergelijkbare tweede loop,
-# laat het weten als je die ook wil.
+# Voor elk buckettype (weekdag/maand/kwartaal) en elk testjaar wordt de
+# bucket-statistiek herberekend op basis van UITSLUITEND de jaren die vóór
+# dat testjaar liggen (expanding window, geen look-ahead). Per testjaar en
+# per buckettype worden de getrainde p-waarden over ALLE tickers gepoold en
+# BH-gecorrigeerd (zelfde principe als in de live-engine); enkel wie na
+# correctie significant én positief is, wordt verhandeld.
+#
+# Maand/kwartaal: één positie, aangehouden van de eerste tot de laatste
+# handelsdag van die maand/dat kwartaal in het testjaar.
+# Weekdag: geen "houd de hele periode aan" mogelijk (een weekdag is geen
+# aaneengesloten periode) — hier wordt elk voorkomen van de doelweekdag in
+# het testjaar apart verhandeld: kopen op de vorige handelsdag-close,
+# verkopen op de close van de doelweekdag zelf (1-dagstrade, telkens met
+# volledige kosten/slippage/taks).
 
-def _train_maand_stats_per_ticker(rendement: pd.Series, test_jaar: int) -> Dict[int, dict]:
-    """Ruwe (ongecorrigeerde) maand-bucket-stats op basis van de trainingsjaren."""
+def _train_bucket_stats_per_ticker(rendement: pd.Series, test_jaar: int, bucket_key: str) -> Dict[int, dict]:
+    """Ruwe (ongecorrigeerde) bucket-stats op basis van de trainingsjaren."""
     train = rendement[rendement.index.year < test_jaar]
     if train.empty:
         return {}
     jaren_train = (train.index[-1] - train.index[0]).days / 365.25
     if jaren_train < BACKTEST_MIN_TRAIN:
         return {}
+
+    if bucket_key == "maand":
+        waarden, index_reeks = range(1, 13), train.index.month
+    elif bucket_key == "kwartaal":
+        waarden, index_reeks = range(1, 5), train.index.quarter
+    else:  # weekdag
+        waarden, index_reeks = range(0, 5), train.index.weekday
+
     resultaat = {}
-    for maand in range(1, 13):
-        stat = bereken_bucket_stats(train[train.index.month == maand].values)
+    for waarde in waarden:
+        stat = bereken_bucket_stats(train[index_reeks == waarde].values)
         if stat:
-            resultaat[maand] = stat
+            resultaat[waarde] = stat
     return resultaat
+
+def _trades_voor_bucket(bucket_key: str, waarde: int, g: pd.DataFrame, test_jaar: int) -> List[Tuple[float, float]]:
+    """Geeft (entry_price, exit_price)-paren terug voor deze ticker/waarde/jaar."""
+    if bucket_key == "maand":
+        data = g[(g.index.year == test_jaar) & (g.index.month == waarde)]
+        if len(data) < 5:
+            return []
+        entry = safe_float(data["Close"].iloc[0]) * (1 + SLIPPAGE_PCT)
+        exit_ = safe_float(data["Close"].iloc[-1]) * (1 - SLIPPAGE_PCT)
+        return [(entry, exit_)] if entry > 0 and not math.isnan(entry) and not math.isnan(exit_) else []
+
+    if bucket_key == "kwartaal":
+        data = g[(g.index.year == test_jaar) & (g.index.quarter == waarde)]
+        if len(data) < 10:
+            return []
+        entry = safe_float(data["Close"].iloc[0]) * (1 + SLIPPAGE_PCT)
+        exit_ = safe_float(data["Close"].iloc[-1]) * (1 - SLIPPAGE_PCT)
+        return [(entry, exit_)] if entry > 0 and not math.isnan(entry) and not math.isnan(exit_) else []
+
+    # weekdag: elk voorkomen apart, 1-dagstrade (vorige close -> close van de doeldag)
+    jaar_data = g[g.index.year == test_jaar]
+    if jaar_data.empty:
+        return []
+    posities = np.where(jaar_data.index.weekday == waarde)[0]
+    trades = []
+    for pos in posities:
+        if pos == 0:
+            continue  # geen vorige handelsdag binnen dit testjaar beschikbaar
+        entry = safe_float(jaar_data["Close"].iloc[pos - 1]) * (1 + SLIPPAGE_PCT)
+        exit_ = safe_float(jaar_data["Close"].iloc[pos]) * (1 - SLIPPAGE_PCT)
+        if entry > 0 and not math.isnan(entry) and not math.isnan(exit_):
+            trades.append((entry, exit_))
+    return trades
+
+def _boek_trade(trades_list: List[Dict], ticker: str, jaar: int, bucket_key: str,
+                 waarde: int, entry_price: float, exit_price: float, train_stat: dict) -> None:
+    risico_bedrag = START_CAPITAL * 0.05
+    aandelen = max(1, int(risico_bedrag / entry_price))
+    investering = entry_price * aandelen + trade_cost(entry_price * aandelen)
+    gross = exit_price * aandelen
+    cost  = trade_cost(gross)
+    pnl   = gross - cost - investering
+    tax   = pnl * TAX_RATE if pnl > 0 else 0.0
+    net   = pnl - tax
+    trades_list.append({
+        "ticker": ticker, "jaar": jaar, "bucket_type": bucket_key, "bucket_waarde": waarde,
+        "train_gemiddelde": train_stat["gemiddelde"], "train_p": train_stat["p_waarde"],
+        "entry_price": round(entry_price, 4), "exit_price": round(exit_price, 4),
+        "size": aandelen, "pnl": round(pnl, 2), "tax": round(tax, 2), "net": round(net, 2),
+    })
 
 def run_backtest():
     print(f"{'='*60}")
-    print(f"SEIZOENSEFFECTEN BACKTEST (maand-effect, BH-gecorrigeerd)  {BACKTEST_START} -> {BACKTEST_END}")
+    print(f"SEIZOENSEFFECTEN BACKTEST (weekdag+maand+kwartaal, BH-gecorrigeerd)  {BACKTEST_START} -> {BACKTEST_END}")
     print(f"{'='*60}")
 
     all_tickers: List[str] = []
@@ -644,83 +712,73 @@ def run_backtest():
         if not rendement.empty:
             reeksen[ticker] = (rendement, g)
 
-    cash = START_CAPITAL
     trades: List[Dict] = []
-    testjaren = range(pd.Timestamp(BACKTEST_START).year, pd.Timestamp(BACKTEST_END).year + 1)
+    testjaren = list(range(pd.Timestamp(BACKTEST_START).year, pd.Timestamp(BACKTEST_END).year + 1))
 
-    for test_jaar in testjaren:
-        # 1) per ticker de ruwe getrainde maand-stats ophalen (geen look-ahead)
-        getraind: Dict[str, Dict[int, dict]] = {}
-        for ticker, (rendement, _g) in reeksen.items():
-            stats_per_maand = _train_maand_stats_per_ticker(rendement, test_jaar)
-            if stats_per_maand:
-                getraind[ticker] = stats_per_maand
+    for bucket_key in BUCKET_TYPES:
+        mogelijke_waarden = {
+            "maand":    range(1, 13),
+            "kwartaal": range(1, 5),
+            "weekdag":  range(0, 5),
+        }[bucket_key]
 
-        if not getraind:
-            continue
-
-        # 2) BH-correctie per kalendermaand, gepoold over alle tickers dit testjaar
-        significant_dit_jaar: Dict[str, Set[int]] = {}
-        for maand in range(1, 13):
-            tickers_met_maand = [t for t, sm in getraind.items() if maand in sm]
-            if not tickers_met_maand:
+        for test_jaar in testjaren:
+            # 1) per ticker de ruwe getrainde bucket-stats ophalen (geen look-ahead)
+            getraind: Dict[str, Dict[int, dict]] = {}
+            for ticker, (rendement, _g) in reeksen.items():
+                stats_per_waarde = _train_bucket_stats_per_ticker(rendement, test_jaar, bucket_key)
+                if stats_per_waarde:
+                    getraind[ticker] = stats_per_waarde
+            if not getraind:
                 continue
-            p_waarden = [getraind[t][maand]["p_waarde"] for t in tickers_met_maand]
-            mask = bh_correctie(p_waarden, SZ_CFG["fdr_alpha"])
-            for t, sig in zip(tickers_met_maand, mask):
-                if sig and getraind[t][maand]["gemiddelde"] > 0:
-                    significant_dit_jaar.setdefault(t, set()).add(maand)
 
-        # 3) enkel de significante ticker/maand-combinaties effectief verhandelen
-        for ticker, maanden in significant_dit_jaar.items():
-            _rendement, g = reeksen[ticker]
-            for maand in maanden:
-                maand_data = g[(g.index.year == test_jaar) & (g.index.month == maand)]
-                if len(maand_data) < 5:
+            # 2) BH-correctie per bucketwaarde, gepoold over alle tickers dit testjaar
+            significant_dit_jaar: Dict[str, Set[int]] = {}
+            for waarde in mogelijke_waarden:
+                tickers_met_waarde = [t for t, sm in getraind.items() if waarde in sm]
+                if not tickers_met_waarde:
                     continue
+                p_waarden = [getraind[t][waarde]["p_waarde"] for t in tickers_met_waarde]
+                mask = bh_correctie(p_waarden, SZ_CFG["fdr_alpha"])
+                for t, sig in zip(tickers_met_waarde, mask):
+                    if sig and getraind[t][waarde]["gemiddelde"] > 0:
+                        significant_dit_jaar.setdefault(t, set()).add(waarde)
 
-                entry_price = safe_float(maand_data["Close"].iloc[0]) * (1 + SLIPPAGE_PCT)
-                exit_price  = safe_float(maand_data["Close"].iloc[-1]) * (1 - SLIPPAGE_PCT)
-                if math.isnan(entry_price) or math.isnan(exit_price) or entry_price <= 0:
-                    continue
+            # 3) enkel de significante ticker/waarde-combinaties effectief verhandelen
+            for ticker, waarden in significant_dit_jaar.items():
+                _rendement, g = reeksen[ticker]
+                for waarde in waarden:
+                    for entry_price, exit_price in _trades_voor_bucket(bucket_key, waarde, g, test_jaar):
+                        _boek_trade(trades, ticker, test_jaar, bucket_key, waarde,
+                                    entry_price, exit_price, getraind[ticker][waarde])
 
-                risico_bedrag = cash * 0.05
-                aandelen = max(1, int(risico_bedrag / entry_price))
+    if not trades:
+        print("Geen trades gegenereerd (na BH-correctie bleef geen enkele combinatie over).")
+        return
 
-                investering = entry_price * aandelen + trade_cost(entry_price * aandelen)
-                gross = exit_price * aandelen
-                cost  = trade_cost(gross)
-                pnl   = gross - cost - investering
-                tax   = pnl * TAX_RATE if pnl > 0 else 0.0
-                net   = pnl - tax
+    tdf = pd.DataFrame(trades)
+    tdf.to_csv("seizoen_backtest_trades.csv", index=False)
 
-                trades.append({
-                    "ticker": ticker, "jaar": test_jaar, "maand": maand,
-                    "train_gemiddelde": getraind[ticker][maand]["gemiddelde"],
-                    "train_p": getraind[ticker][maand]["p_waarde"],
-                    "entry_price": round(entry_price, 4), "exit_price": round(exit_price, 4),
-                    "size": aandelen, "pnl": round(pnl, 2), "tax": round(tax, 2),
-                    "net": round(net, 2),
-                })
+    def _print_samenvatting(naam: str, sub: pd.DataFrame) -> None:
+        if sub.empty:
+            print(f"{naam:>10}: geen trades")
+            return
+        n    = len(sub)
+        nwin = (sub["net"] > 0).sum()
+        pf   = abs(sub.loc[sub["net"] > 0, "net"].sum()) / max(
+               abs(sub.loc[sub["net"] <= 0, "net"].sum()), 1e-9)
+        print(f"{naam:>10}: {n:>5} trades | winrate {nwin/n*100:5.1f}% | "
+              f"PF {pf:5.2f} | netto EUR{sub['net'].sum():>12,.2f} | belasting EUR{sub['tax'].sum():>10,.2f}")
 
-    if trades:
-        tdf = pd.DataFrame(trades)
-        tdf.to_csv("seizoen_backtest_trades.csv", index=False)
-        n    = len(tdf)
-        nwin = (tdf["net"] > 0).sum()
-        pf   = abs(tdf.loc[tdf["net"] > 0, "net"].sum()) / max(
-               abs(tdf.loc[tdf["net"] <= 0, "net"].sum()), 1e-9)
-        totaal_net = tdf["net"].sum()
-        print(f"\n{'='*60}")
-        print(f"Trades (maand-effect, BH) : {n}")
-        print(f"Winnaars                  : {nwin} ({nwin/n*100:.1f}%)")
-        print(f"Profit Factor              : {pf:.2f}")
-        print(f"Netto resultaat            : EUR{totaal_net:,.2f} (som over alle posities, geen samengesteld kapitaal)")
-        print(f"Belasting                  : EUR{tdf['tax'].sum():,.2f}")
-        print(f"{'='*60}")
-        print("Opgeslagen: seizoen_backtest_trades.csv")
-    else:
-        print("Geen trades gegenereerd (na BH-correctie bleef geen enkele ticker/maand-combinatie over).")
+    print(f"\n{'='*60}")
+    for bucket_key in BUCKET_TYPES:
+        _print_samenvatting(bucket_key, tdf[tdf["bucket_type"] == bucket_key])
+    print("-" * 60)
+    _print_samenvatting("TOTAAL", tdf)
+    print(f"{'='*60}")
+    print("Opgeslagen: seizoen_backtest_trades.csv (kolom bucket_type onderscheidt weekdag/maand/kwartaal)")
+    print("Let op: 'netto' is de som over alle posities t.o.v. eenzelfde vast risicobudget per trade,")
+    print("geen samengesteld kapitaal — vergelijk de PF/winrate per buckettype, niet de absolute EUR-bedragen 1-op-1.")
 
 
 # ============================================================
