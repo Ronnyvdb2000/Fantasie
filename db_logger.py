@@ -33,6 +33,11 @@ Gedrag bij fouten:
   dezelfde fout in de Actions-log.
 - Andere fouten (bv. een tijdelijke netwerkhik) worden wel per insert
   gelogd, want die kunnen de volgende keer wel slagen.
+
+2026-08-17: _KOLOM_WHITELIST uitgebreid met de weekdag/maand/kwartaal-
+kolommen van bot_01repititief.py (seizoenseffecten-bot). Vereist dat de
+bijhorende ALTER TABLE-migratie is uitgevoerd op Supabase, zie
+migratie_seizoenskolommen.sql.
 """
 
 import os
@@ -52,10 +57,11 @@ _DB_URL_ENV = "SUPABASE_DB_URL"
 _dsn_invalid = False
 
 # Kolommen die daadwerkelijk als aparte kolom in `selecties` bestaan
-# (ALTER TABLE al uitgevoerd op 2026-08-08). Enkel keys uit `parameters`
-# die hierin voorkomen worden als losse kolom meegeschreven; de rest
-# blijft (ook) gewoon in de `parameters`-JSON-kolom staan. Zo faalt een
-# insert nooit doordat een bot een key gebruikt die nog geen kolom heeft.
+# (ALTER TABLE al uitgevoerd op 2026-08-08, uitgebreid op 2026-08-17). Enkel
+# keys uit `parameters` die hierin voorkomen worden als losse kolom
+# meegeschreven; de rest blijft (ook) gewoon in de `parameters`-JSON-kolom
+# staan. Zo faalt een insert nooit doordat een bot een key gebruikt die nog
+# geen kolom heeft.
 _KOLOM_WHITELIST = {
     "score", "total_score", "grafiek",
     # bot_00kr
@@ -68,6 +74,11 @@ _KOLOM_WHITELIST = {
     "n_contracties", "laatste_pct", "breakout", "breakout_vol", "stage2",
     # bot_00cs
     "eps_q_growth_pct", "eps_annual_cagr_pct", "inst_pct", "ma200", "high52w",
+    # bot_01repititief (seizoenseffecten) -- toegevoegd 2026-08-17
+    "jaren_data",
+    "weekdag_gemiddelde", "weekdag_winrate", "weekdag_p",
+    "maand_gemiddelde", "maand_winrate", "maand_p",
+    "kwartaal_gemiddelde", "kwartaal_winrate", "kwartaal_p",
 }
 
 
