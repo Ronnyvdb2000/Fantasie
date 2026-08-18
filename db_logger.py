@@ -38,6 +38,10 @@ Gedrag bij fouten:
 kolommen van bot_01repititief.py (seizoenseffecten-bot). Vereist dat de
 bijhorende ALTER TABLE-migratie is uitgevoerd op Supabase, zie
 migratie_seizoenskolommen.sql.
+
+2026-08-18: _KOLOM_WHITELIST uitgebreid met de kolommen van bot_01kasstr.py
+(kasstroom onderwaardering). Vereist de bijhorende ALTER TABLE-migratie,
+zie migratie_kasstr_kolommen.sql.
 """
 
 import os
@@ -79,6 +83,10 @@ _KOLOM_WHITELIST = {
     "weekdag_gemiddelde", "weekdag_winrate", "weekdag_p",
     "maand_gemiddelde", "maand_winrate", "maand_p",
     "kwartaal_gemiddelde", "kwartaal_winrate", "kwartaal_p",
+    # bot_01kasstr (kasstroom onderwaardering) -- toegevoegd 2026-08-18
+    "rank",
+    "fcf_yield", "fcf_years", "fcf_growing", "fcf_consistent",
+    "rev_growth_pct", "net_debt_ebitda", "payout_pct",
 }
 
 
