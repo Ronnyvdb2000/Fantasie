@@ -250,6 +250,16 @@ def analyse_ticker(ticker: str) -> Optional[FCFSignaal]:
             return None
         fcf_now = fcf_series[-1]
 
+        # Data-kwaliteitscheck: een FCF yield buiten [-100%, +100%] wijst vrijwel
+        # altijd op een valuta- of eenheid-mismatch tussen marktkap en cashflow
+        # in de yfinance-data (vaak bij cross-listed aandelen/ADR's), niet op
+        # een echte onderwaardering. Ticker volledig overslaan i.p.v. met een
+        # vervuild signaal laten meetellen.
+        _fcf_yield_raw = (fcf_now / market_cap) * 100 if market_cap > 0 else float("nan")
+        if not math.isnan(_fcf_yield_raw) and abs(_fcf_yield_raw) > 100:
+            print(f"[WARN] {ticker}: FCF yield implausibel ({_fcf_yield_raw:.0f}%) — data-mismatch, overgeslagen")
+            return None
+
         score = 0
 
         # 1. FCF yield
