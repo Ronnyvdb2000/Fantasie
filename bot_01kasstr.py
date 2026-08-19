@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 bot_01kasstr.py  —  KASSTROOM ONDERWAARDERING SELECTIE ENGINE v1.1
