@@ -1,0 +1,112 @@
+name: "Bot 01: XGBoost richtingsvoorspelling"
+
+on:
+  schedule:
+    # Live scan: weekdagen 19:50 UTC, zelfde tijdstip als bot_01cointegr/bot_01marktsent
+    - cron: "50 19 * * 1-5"
+    # Hertraining: elke zondag 06:00 UTC (voor de MRA Nitro filter-run om 07:00 UTC),
+    # zodat het model wekelijks bijblijft met de meest recente marktdata.
+    - cron: "0 6 * * 0"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modus (enkel voor handmatige run): live, train of backtest"
+        required: false
+        default: "live"
+        type: choice
+        options:
+          - live
+          - train
+          - backtest
+
+jobs:
+  bepaal-modus:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.kies.outputs.mode }}
+    steps:
+      - id: kies
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 6 * * 0" ]; then
+            echo "mode=train" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=live" >> "$GITHUB_OUTPUT"
+          fi
+
+  bot-01xgboost-live:
+    needs: bepaal-modus
+    if: needs.bepaal-modus.outputs.mode == 'live'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installeer packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy requests psycopg2-binary xgboost scikit-learn
+      - name: Run bot_01xgboost (live)
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
+          SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
+        run: python bot_01xgboost.py live
+
+  bot-01xgboost-train:
+    needs: bepaal-modus
+    if: needs.bepaal-modus.outputs.mode == 'train'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installeer packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy requests psycopg2-binary xgboost scikit-learn
+      - name: Run bot_01xgboost (train)
+        run: python bot_01xgboost.py train
+      - name: Model committen
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add model_xgboost.json model_xgboost_meta.json
+          if git diff --staged --quiet; then
+            echo "Geen wijzigingen aan het model."
+          else
+            git commit -m "Hertraining bot_01xgboost $(date +%Y-%m-%d)"
+            git pull --rebase=false -X ours origin main
+            git push
+          fi
+
+  # Handmatige backtest-run (workflow_dispatch met mode=backtest) — resultaten
+  # verschijnen enkel in de Actions-log, er wordt niets gecommit of verstuurd.
+  bot-01xgboost-backtest:
+    needs: bepaal-modus
+    if: needs.bepaal-modus.outputs.mode == 'backtest'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installeer packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy requests psycopg2-binary xgboost scikit-learn
+      - name: Run bot_01xgboost (backtest)
+        run: python bot_01xgboost.py backtest
