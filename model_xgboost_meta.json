@@ -1,0 +1,48 @@
+{
+  "trained_at": "2026-08-19",
+  "trained_until": "2026-08-05",
+  "n_rows": 1529979,
+  "feature_columns": [
+    "rsi",
+    "macd_hist",
+    "macd_hist_slope",
+    "dist_sma50_pct",
+    "dist_sma200_pct",
+    "atr_pct",
+    "vol_ratio_20d",
+    "ret_5d",
+    "ret_20d",
+    "ret_60d"
+  ],
+  "config": {
+    "rsi_period": 14,
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "atr_period": 14,
+    "sma_short_period": 50,
+    "sma_trend_period": 200,
+    "vol_avg_period": 20,
+    "horizon_days": 10,
+    "label_threshold_pct": 3.0,
+    "n_estimators": 400,
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "min_child_weight": 5,
+    "early_stopping_rounds": 30,
+    "is_window": 504,
+    "rescan_days": 63,
+    "min_train_rows": 500,
+    "min_proba": 0.62,
+    "top_n_per_beurs": 5
+  },
+  "val_metrics": {
+    "auc": 0.5146574745358082,
+    "accuracy_at_threshold": 0.4135684986268989,
+    "precision_at_threshold": 0.6589891234804862,
+    "n_signals_at_threshold": 1563,
+    "n_val_rows": 230136
+  }
+}
