@@ -42,6 +42,10 @@ migratie_seizoenskolommen.sql.
 2026-08-18: _KOLOM_WHITELIST uitgebreid met de kolommen van bot_01kasstr.py
 (kasstroom onderwaardering). Vereist de bijhorende ALTER TABLE-migratie,
 zie migratie_kasstr_kolommen.sql.
+
+2026-08-19: _KOLOM_WHITELIST uitgebreid met de kolommen van bot_01xgboost.py
+(XGBoost richtingsvoorspelling). Vereist de bijhorende ALTER TABLE-migratie,
+zie migratie_xgboost_kolommen.sql.
 """
 
 import os
@@ -87,6 +91,11 @@ _KOLOM_WHITELIST = {
     "rank",
     "fcf_yield", "fcf_years", "fcf_growing", "fcf_consistent",
     "rev_growth_pct", "net_debt_ebitda", "payout_pct",
+    # bot_01xgboost (XGBoost richtingsvoorspelling) -- toegevoegd 2026-08-19
+    "proba", "rsi", "macd_hist", "macd_hist_slope",
+    "dist_sma50_pct", "dist_sma200_pct",
+    "atr_pct", "vol_ratio_20d", "ret_5d", "ret_20d", "ret_60d",
+    "horizon_days",
 }
 
 
