@@ -1,7 +1,7 @@
 {
   "trained_at": "2026-08-20",
   "trained_until": "2026-08-06",
-  "n_rows": 1528917,
+  "n_rows": 1528168,
   "feature_columns": [
     "rsi",
     "macd_hist",
@@ -40,10 +40,10 @@
     "top_n_per_beurs": 5
   },
   "val_metrics": {
-    "auc": 0.498699932036798,
-    "accuracy_at_threshold": 0.41262061838588293,
-    "precision_at_threshold": 0.6595744680851063,
-    "n_signals_at_threshold": 94,
-    "n_val_rows": 229339
+    "auc": 0.5109075448799034,
+    "accuracy_at_threshold": null,
+    "precision_at_threshold": 0.0,
+    "n_signals_at_threshold": 0,
+    "n_val_rows": 229324
   }
 }
