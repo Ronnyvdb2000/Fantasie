@@ -172,6 +172,7 @@ FEATURE_COLUMNS = [
     "dist_sma50_pct", "dist_sma200_pct",
     "atr_pct", "vol_ratio_20d",
     "ret_5d", "ret_20d", "ret_60d",
+    "markt_ret_5d",  # cross-sectionele context, zie add_market_context()
 ]
 
 MODEL_PATH      = "model_xgboost.json"
@@ -421,6 +422,35 @@ def build_features(df_ticker: pd.DataFrame) -> pd.DataFrame:
     feat["Close"] = close
     return feat
 
+def add_market_context(dataset: pd.DataFrame) -> pd.DataFrame:
+    """
+    Voegt 'markt_ret_5d' toe: het cross-sectionele gemiddelde 5-daagse
+    rendement over alle tickers in de meegegeven dataset, per datum.
+
+    Waarom: de per-ticker features (RSI/MACD/SMA-afstand/...) zeggen niets
+    over het bredere marktregime op dat moment. Een RSI van 65 betekent iets
+    anders tijdens een brede rally dan tijdens een correctie. Zonder deze
+    context moet het model marktbewegingen impliciet raden uit enkel
+    single-ticker-data -- wat het waarschijnlijk (mede) te zwak maakt
+    (validatie-AUC ~0,52 zonder deze feature).
+
+    Belangrijke beperking, bewust als eerste eenvoudige stap: de populatie
+    waarover het gemiddelde berekend wordt is exact de dataset die wordt
+    meegegeven aan deze functie. Bij train/backtest is dat het volledige
+    universum (041-059 samen); bij live scan (run_live_engine) is dat enkel
+    de tickers van de beurs die op dat moment gescand wordt -- dus daar is
+    het al impliciet een beurs-niveau in plaats van universum-niveau
+    context. Een striktere, bewust gekozen sector- of beurs-segmentatie
+    (i.p.v. deze toevallige asymmetrie) is de logische vervolgstap.
+    """
+    if dataset.empty or "ret_5d" not in dataset.columns:
+        dataset["markt_ret_5d"] = np.nan
+        return dataset
+    daggemiddelden = dataset.groupby("Date")["ret_5d"].transform("mean")
+    dataset = dataset.copy()
+    dataset["markt_ret_5d"] = daggemiddelden
+    return dataset
+
 def build_dataset(hist: pd.DataFrame) -> pd.DataFrame:
     """hist = output van download_history() over meerdere tickers.
     Geeft één lange DataFrame terug met kolommen Ticker/Date/FEATURE_COLUMNS/
@@ -437,6 +467,7 @@ def build_dataset(hist: pd.DataFrame) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
+    out = add_market_context(out)
     return out
 
 
@@ -789,6 +820,7 @@ class LiveSignaal:
     ret_5d: float
     ret_20d: float
     ret_60d: float
+    markt_ret_5d: float
 
 def format_bericht(exchange_name: str, signalen: List[LiveSignaal], n_geanalyseerd: int) -> Optional[str]:
     if not signalen:
@@ -857,27 +889,31 @@ def run_live_engine():
 
         signalen: List[LiveSignaal] = []
         n_geanalyseerd = 0
-        for ticker, g in hist.groupby("Ticker"):
-            g = g.sort_values("Date")
-            if len(g) < XGB_CFG["sma_trend_period"] + 5:
-                continue
-            feat = build_features(g)
-            laatste = feat.iloc[-1:].dropna(subset=FEATURE_COLUMNS)
-            if laatste.empty:
-                continue
-            n_geanalyseerd += 1
-            proba = float(model.predict_proba(laatste[FEATURE_COLUMNS])[:, 1][0])
-            if proba >= XGB_CFG["min_proba"]:
-                row = laatste.iloc[0]
-                signalen.append(LiveSignaal(
-                    ticker=ticker, price=safe_float(row["Close"]), proba=proba,
-                    rsi=safe_float(row["rsi"]), macd_hist=safe_float(row["macd_hist"]),
-                    dist_sma50_pct=safe_float(row["dist_sma50_pct"]),
-                    dist_sma200_pct=safe_float(row["dist_sma200_pct"]),
-                    atr_pct=safe_float(row["atr_pct"]), vol_ratio_20d=safe_float(row["vol_ratio_20d"]),
-                    ret_5d=safe_float(row["ret_5d"]), ret_20d=safe_float(row["ret_20d"]),
-                    ret_60d=safe_float(row["ret_60d"]),
-                ))
+        ds = build_dataset(hist)  # incl. markt_ret_5d, cross-sectioneel over déze beurs
+        if not ds.empty:
+            # laatste beschikbare dag per ticker afzonderlijk (niet één gedeelde
+            # datum voor de hele beurs) -- market-contextkolom is per rij al
+            # correct berekend over de tickers die op precies díé datum in de
+            # dataset zaten, dus dit blijft correct ook als niet elke ticker
+            # exact dezelfde laatste handelsdag heeft.
+            laatste_per_ticker = ds.sort_values("Date").groupby("Ticker").tail(1)
+            laatste_per_ticker = laatste_per_ticker.dropna(subset=FEATURE_COLUMNS)
+            n_geanalyseerd = len(laatste_per_ticker)
+            if not laatste_per_ticker.empty:
+                proba_arr = model.predict_proba(laatste_per_ticker[FEATURE_COLUMNS])[:, 1]
+                laatste_per_ticker = laatste_per_ticker.assign(proba=proba_arr)
+                for _, row in laatste_per_ticker.iterrows():
+                    proba = float(row["proba"])
+                    if proba >= XGB_CFG["min_proba"]:
+                        signalen.append(LiveSignaal(
+                            ticker=row["Ticker"], price=safe_float(row["Close"]), proba=proba,
+                            rsi=safe_float(row["rsi"]), macd_hist=safe_float(row["macd_hist"]),
+                            dist_sma50_pct=safe_float(row["dist_sma50_pct"]),
+                            dist_sma200_pct=safe_float(row["dist_sma200_pct"]),
+                            atr_pct=safe_float(row["atr_pct"]), vol_ratio_20d=safe_float(row["vol_ratio_20d"]),
+                            ret_5d=safe_float(row["ret_5d"]), ret_20d=safe_float(row["ret_20d"]),
+                            ret_60d=safe_float(row["ret_60d"]), markt_ret_5d=safe_float(row["markt_ret_5d"]),
+                        ))
 
         signalen.sort(key=lambda s: s.proba, reverse=True)
         top = signalen[:XGB_CFG["top_n_per_beurs"]]
@@ -903,6 +939,7 @@ def run_live_engine():
                     "ret_5d": round(s.ret_5d, 2) if not math.isnan(s.ret_5d) else None,
                     "ret_20d": round(s.ret_20d, 2) if not math.isnan(s.ret_20d) else None,
                     "ret_60d": round(s.ret_60d, 2) if not math.isnan(s.ret_60d) else None,
+                    "markt_ret_5d": round(s.markt_ret_5d, 2) if not math.isnan(s.markt_ret_5d) else None,
                     "horizon_days": XGB_CFG["horizon_days"],
                     "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                 },
