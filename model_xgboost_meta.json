@@ -1,7 +1,7 @@
 {
-  "trained_at": "2026-08-19",
-  "trained_until": "2026-08-05",
-  "n_rows": 1529979,
+  "trained_at": "2026-08-20",
+  "trained_until": "2026-08-06",
+  "n_rows": 1528917,
   "feature_columns": [
     "rsi",
     "macd_hist",
@@ -12,7 +12,8 @@
     "vol_ratio_20d",
     "ret_5d",
     "ret_20d",
-    "ret_60d"
+    "ret_60d",
+    "markt_ret_5d"
   ],
   "config": {
     "rsi_period": 14,
@@ -39,10 +40,10 @@
     "top_n_per_beurs": 5
   },
   "val_metrics": {
-    "auc": 0.5146574745358082,
-    "accuracy_at_threshold": 0.4135684986268989,
-    "precision_at_threshold": 0.6589891234804862,
-    "n_signals_at_threshold": 1563,
-    "n_val_rows": 230136
+    "auc": 0.498699932036798,
+    "accuracy_at_threshold": 0.41262061838588293,
+    "precision_at_threshold": 0.6595744680851063,
+    "n_signals_at_threshold": 94,
+    "n_val_rows": 229339
   }
 }
