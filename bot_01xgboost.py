@@ -657,35 +657,41 @@ def run_backtest():
         # (of slaan de periode over als er nog geen enkel model getraind is)
 
         test_end_idx = min(idx + rescan_days, len(alle_datums) - horizon - 1)
-        test_dates = alle_datums[idx:test_end_idx]
 
-        if model is not None:
-            for periode_datum in test_dates:
-                dagrijen = dataset[(dataset["Date"] == periode_datum)].dropna(subset=FEATURE_COLUMNS)
-                if dagrijen.empty:
-                    continue
+        # ---- Instappen: ÉÉN keer per rescan-periode, niet elke dag erin ----
+        # rescan_days (63) >> horizon_days (10), dus posities die hier geopend
+        # worden zijn altijd al gesloten voor de volgende periode begint -- er
+        # is dus geen overlap tussen periodes en kapitaal hoeft niet per open
+        # positie apart gereserveerd te worden. (Eerdere versie opende elke
+        # dag binnen de periode een nieuwe ronde posities op het dan-actuele
+        # kapitaal, wat tot 60+ overlappende, deels ongereserveerde posities
+        # tegelijk leidde en het kapitaal ongecontroleerd negatief liet gaan.)
+        if model is not None and kapitaal > 0:
+            periode_datum = alle_datums[idx]
+            dagrijen = dataset[(dataset["Date"] == periode_datum)].dropna(subset=FEATURE_COLUMNS)
+            if not dagrijen.empty:
                 proba = model.predict_proba(dagrijen[FEATURE_COLUMNS])[:, 1]
                 dagrijen = dagrijen.assign(proba=proba)
                 kandidaten = dagrijen[dagrijen["proba"] >= XGB_CFG["min_proba"]].sort_values("proba", ascending=False)
-                # simpele portefeuille-regel voor de backtest: elke rescan-dag
-                # de top selectie, equal-weight, positie loopt exact horizon_days
                 top = kandidaten.head(XGB_CFG["top_n_per_beurs"])
-                if top.empty:
-                    continue
-                bedrag_per_positie = kapitaal / max(len(top), 1) * 0.2  # spreiding, niet alles op 1 dag
-                for _, row in top.iterrows():
-                    exit_rij = dataset[(dataset["Ticker"] == row["Ticker"]) &
-                                        (dataset["Date"] > periode_datum)].sort_values("Date")
-                    if len(exit_rij) < horizon:
-                        continue
-                    exit_row = exit_rij.iloc[horizon - 1]
-                    pnl = _simuleer_kosten_pnl(row["Close"], exit_row["Close"], bedrag_per_positie)
-                    kapitaal += pnl
-                    alle_trades.append(Trade(
-                        ticker=row["Ticker"], entry_date=periode_datum, exit_date=exit_row["Date"],
-                        entry_price=row["Close"], exit_price=exit_row["Close"],
-                        proba=float(row["proba"]), pnl=pnl,
-                    ))
+                if not top.empty:
+                    # equal-weight over het volledige beschikbare kapitaal -- veilig
+                    # omdat er geen overlappende posities van vorige periodes meer
+                    # open staan op dit punt.
+                    bedrag_per_positie = kapitaal / len(top)
+                    for _, row in top.iterrows():
+                        exit_rij = dataset[(dataset["Ticker"] == row["Ticker"]) &
+                                            (dataset["Date"] > periode_datum)].sort_values("Date")
+                        if len(exit_rij) < horizon:
+                            continue
+                        exit_row = exit_rij.iloc[horizon - 1]
+                        pnl = _simuleer_kosten_pnl(row["Close"], exit_row["Close"], bedrag_per_positie)
+                        kapitaal += pnl
+                        alle_trades.append(Trade(
+                            ticker=row["Ticker"], entry_date=periode_datum, exit_date=exit_row["Date"],
+                            entry_price=row["Close"], exit_price=exit_row["Close"],
+                            proba=float(row["proba"]), pnl=pnl,
+                        ))
 
         # baselines over dezelfde periode, voor context
         periode_data = dataset[(dataset["Date"] >= alle_datums[idx]) & (dataset["Date"] < alle_datums[test_end_idx])]
@@ -703,6 +709,11 @@ def run_backtest():
                                   "n_train": len(train_fold)})
 
         equity_curve.append((alle_datums[test_end_idx - 1] if test_end_idx > 0 else alle_datums[idx], kapitaal))
+
+        if kapitaal <= 0:
+            print(f"[STOP] Kapitaal uitgeput op {alle_datums[idx].date()} (EUR {kapitaal:,.2f}) — backtest gestopt.")
+            break
+
         idx = test_end_idx if test_end_idx > idx else idx + rescan_days
 
     # ---------------------------------------------------------------
