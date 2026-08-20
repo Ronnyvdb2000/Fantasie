@@ -96,6 +96,8 @@ _KOLOM_WHITELIST = {
     "dist_sma50_pct", "dist_sma200_pct",
     "atr_pct", "vol_ratio_20d", "ret_5d", "ret_20d", "ret_60d",
     "horizon_days",
+    # bot_01xgboost -- markt_ret_5d toegevoegd 2026-08-20 (marktcontext-feature)
+    "markt_ret_5d",
 }
 
 
