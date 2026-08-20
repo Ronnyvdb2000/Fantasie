@@ -422,39 +422,48 @@ def build_features(df_ticker: pd.DataFrame) -> pd.DataFrame:
     feat["Close"] = close
     return feat
 
-def add_market_context(dataset: pd.DataFrame) -> pd.DataFrame:
+def add_market_context(dataset: pd.DataFrame, ticker_to_beurs: Optional[Dict[str, str]] = None) -> pd.DataFrame:
     """
     Voegt 'markt_ret_5d' toe: het cross-sectionele gemiddelde 5-daagse
-    rendement over alle tickers in de meegegeven dataset, per datum.
+    rendement, per datum, berekend BINNEN DEZELFDE BEURS als de ticker zelf
+    -- niet universum-breed. Een universum-brede versie (eerste poging)
+    mengde 59 beurzen met verschillende tijdzones/handelskalenders door
+    elkaar, wat vooral ruis toevoegde (validatie-AUC zakte van ~0,52 naar
+    0,499 en de walk-forward backtest werd duidelijk negatiever). Per-beurs
+    voorkomt die vermenging en is bovendien consistent met hoe live-scans
+    al werken (die verwerken toch al één beurs per keer).
 
-    Waarom: de per-ticker features (RSI/MACD/SMA-afstand/...) zeggen niets
-    over het bredere marktregime op dat moment. Een RSI van 65 betekent iets
-    anders tijdens een brede rally dan tijdens een correctie. Zonder deze
-    context moet het model marktbewegingen impliciet raden uit enkel
-    single-ticker-data -- wat het waarschijnlijk (mede) te zwak maakt
-    (validatie-AUC ~0,52 zonder deze feature).
+    Werking: als ticker_to_beurs wordt meegegeven, wordt elke rij eerst
+    gelabeld met zijn beurs (via de ticker), en wordt het gemiddelde per
+    (Beurs, Date) berekend -- dit is het pad voor train/backtest, waar hist
+    de volledige combinatie van 041-059 bevat. Wordt geen mapping
+    meegegeven (of bevat hist sowieso maar tickers van één beurs, zoals in
+    run_live_engine), dan wordt gewoon per Date gegroepeerd -- correct
+    omdat in dat geval alle tickers al tot dezelfde beurs behoren.
 
-    Belangrijke beperking, bewust als eerste eenvoudige stap: de populatie
-    waarover het gemiddelde berekend wordt is exact de dataset die wordt
-    meegegeven aan deze functie. Bij train/backtest is dat het volledige
-    universum (041-059 samen); bij live scan (run_live_engine) is dat enkel
-    de tickers van de beurs die op dat moment gescand wordt -- dus daar is
-    het al impliciet een beurs-niveau in plaats van universum-niveau
-    context. Een striktere, bewust gekozen sector- of beurs-segmentatie
-    (i.p.v. deze toevallige asymmetrie) is de logische vervolgstap.
+    Zo blijft de feature identiek gedefinieerd (en dus vergelijkbaar) tussen
+    trainingstijd en live-inferentietijd -- een verschil daarin zou het
+    model onbedoeld op iets anders laten scoren dan waarop het getraind is.
     """
     if dataset.empty or "ret_5d" not in dataset.columns:
         dataset["markt_ret_5d"] = np.nan
         return dataset
-    daggemiddelden = dataset.groupby("Date")["ret_5d"].transform("mean")
     dataset = dataset.copy()
-    dataset["markt_ret_5d"] = daggemiddelden
+    if ticker_to_beurs:
+        dataset["Beurs"] = dataset["Ticker"].map(ticker_to_beurs).fillna("ONBEKEND")
+        dataset["markt_ret_5d"] = dataset.groupby(["Beurs", "Date"])["ret_5d"].transform("mean")
+        dataset.drop(columns=["Beurs"], inplace=True)
+    else:
+        dataset["markt_ret_5d"] = dataset.groupby("Date")["ret_5d"].transform("mean")
     return dataset
 
-def build_dataset(hist: pd.DataFrame) -> pd.DataFrame:
+def build_dataset(hist: pd.DataFrame, ticker_to_beurs: Optional[Dict[str, str]] = None) -> pd.DataFrame:
     """hist = output van download_history() over meerdere tickers.
     Geeft één lange DataFrame terug met kolommen Ticker/Date/FEATURE_COLUMNS/
-    label/fwd_return_pct/Close, één rij per (ticker, datum)."""
+    label/fwd_return_pct/Close, één rij per (ticker, datum).
+    ticker_to_beurs (optioneel): zie add_market_context() -- vereist voor
+    train/backtest (universum-breed universum), niet nodig voor live (al
+    per-beurs)."""
     frames = []
     for ticker, g in hist.groupby("Ticker"):
         g = g.sort_values("Date")
@@ -467,7 +476,7 @@ def build_dataset(hist: pd.DataFrame) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
-    out = add_market_context(out)
+    out = add_market_context(out, ticker_to_beurs=ticker_to_beurs)
     return out
 
 
@@ -539,8 +548,13 @@ def run_train():
     print(f"{'='*60}")
 
     universum = set()
+    ticker_to_beurs: Dict[str, str] = {}
     for f_name in bouw_bestandslijst():
-        universum.update(load_tickers_from_file(f_name))
+        tickers_hier = load_tickers_from_file(f_name)
+        universum.update(tickers_hier)
+        beurs_naam = label_voor(f_name)
+        for t in tickers_hier:
+            ticker_to_beurs[t] = beurs_naam
     universum = sorted(universum)
     if not universum:
         print("[ERROR] Geen ticker bestanden gevonden.")
@@ -553,7 +567,7 @@ def run_train():
         return
     print(f"Historische data: {len(hist)} rijen over {hist['Ticker'].nunique()} tickers")
 
-    dataset = build_dataset(hist)
+    dataset = build_dataset(hist, ticker_to_beurs=ticker_to_beurs)
     dataset = dataset.dropna(subset=FEATURE_COLUMNS + ["label"])
     if len(dataset) < XGB_CFG["min_train_rows"]:
         print(f"[ERROR] Te weinig trainingsrijen ({len(dataset)}), stop.")
@@ -628,8 +642,13 @@ def run_backtest():
     )
 
     universum = set()
+    ticker_to_beurs: Dict[str, str] = {}
     for f_name in bouw_bestandslijst():
-        universum.update(load_tickers_from_file(f_name))
+        tickers_hier = load_tickers_from_file(f_name)
+        universum.update(tickers_hier)
+        beurs_naam = label_voor(f_name)
+        for t in tickers_hier:
+            ticker_to_beurs[t] = beurs_naam
     universum = sorted(universum)
     if not universum:
         print("[ERROR] Geen ticker bestanden gevonden.")
@@ -640,7 +659,7 @@ def run_backtest():
         print("[ERROR] Geen historische data opgehaald.")
         return
 
-    dataset = build_dataset(hist)
+    dataset = build_dataset(hist, ticker_to_beurs=ticker_to_beurs)
     dataset = dataset[dataset["Date"] >= pd.Timestamp(BACKTEST_START) - pd.Timedelta(days=XGB_CFG["is_window"] * 2)]
     if dataset.empty:
         print("[ERROR] Onvoldoende data voor backtestvenster.")
