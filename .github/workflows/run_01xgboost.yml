@@ -1,18 +1,46 @@
-name: "Bot 01: XGBoost richtingsvoorspelling"
+name: "Bot 01: XGBoost richtingsvoorspelling non actief"
+
+# ============================================================
+# STATUS (2026-08-20): GEPAUZEERD â€” NIET automatisch actief
+# ============================================================
+# De geplande triggers hieronder staan bewust UITGESCHAKELD (zie de
+# uitgecommentarieerde 'schedule:'-sectie). Reden: na uitgebreide
+# walk-forward-validatie (10 features, universum-brede marktcontext,
+# per-beurs marktcontext) bleef de out-of-sample AUC steeds zwak
+# (~0,51-0,53) en versloeg geen enkele variant consistent en overtuigend
+# de eenvoudige "koop alles binnen het universum"-baseline
+# (~+1,2% per periode). Het beste resultaat tot nu toe (10 features,
+# zonder marktcontext) haalde +10,2% over de backtestperiode 2019-2026,
+# maar met slechts 33 walk-forward-folds is dat te weinig om betrouwbaar
+# te onderscheiden van toeval, en twee latere varianten kwamen juist
+# duidelijk negatief uit. Conclusie: geen bewezen edge, dus niet
+# geschikt om als volwaardige 8e strategie live te laten meedraaien.
+#
+# De code en het laatst getrainde model blijven in de repo staan als
+# afgerond, gedocumenteerd experiment. `workflow_dispatch` hieronder
+# blijft beschikbaar voor handmatige runs (bv. nieuwe experimenten met
+# andere features, zoals meta-features op basis van de bestaande
+# strategie-scores in de `selecties`-tabel).
+#
+# Om de geplande live/train-runs te heractiveren: haal de '#' weg bij
+# de 'schedule:'-regels hieronder, alleen nadat een nieuwe aanpak
+# overtuigend beter heeft gepresteerd dan de baseline over meerdere
+# onafhankelijke periodes.
+# ============================================================
 
 on:
-  schedule:
-    # Live scan: weekdagen 19:50 UTC, zelfde tijdstip als bot_01cointegr/bot_01marktsent
-    - cron: "50 19 * * 1-5"
-    # Hertraining: elke zondag 06:00 UTC (voor de MRA Nitro filter-run om 07:00 UTC),
-    # zodat het model wekelijks bijblijft met de meest recente marktdata.
-    - cron: "0 6 * * 0"
+  # schedule:
+  #   # Live scan: weekdagen 19:50 UTC, zelfde tijdstip als bot_01cointegr/bot_01marktsent
+  #   - cron: "50 19 * * 1-5"
+  #   # Hertraining: elke zondag 06:00 UTC (voor de MRA Nitro filter-run om 07:00 UTC),
+  #   # zodat het model wekelijks bijblijft met de meest recente marktdata.
+  #   - cron: "0 6 * * 0"
   workflow_dispatch:
     inputs:
       mode:
         description: "Modus (enkel voor handmatige run): live, train of backtest"
         required: false
-        default: "live"
+        default: "backtest"
         type: choice
         options:
           - live
@@ -91,7 +119,7 @@ jobs:
             git push
           fi
 
-  # Handmatige backtest-run (workflow_dispatch met mode=backtest) — resultaten
+  # Handmatige backtest-run (workflow_dispatch met mode=backtest) â€” resultaten
   # verschijnen enkel in de Actions-log, er wordt niets gecommit of verstuurd.
   bot-01xgboost-backtest:
     needs: bepaal-modus
