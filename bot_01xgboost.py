@@ -172,7 +172,6 @@ FEATURE_COLUMNS = [
     "dist_sma50_pct", "dist_sma200_pct",
     "atr_pct", "vol_ratio_20d",
     "ret_5d", "ret_20d", "ret_60d",
-    "markt_ret_5d",  # cross-sectionele context, zie add_market_context()
 ]
 
 MODEL_PATH      = "model_xgboost.json"
@@ -422,48 +421,10 @@ def build_features(df_ticker: pd.DataFrame) -> pd.DataFrame:
     feat["Close"] = close
     return feat
 
-def add_market_context(dataset: pd.DataFrame, ticker_to_beurs: Optional[Dict[str, str]] = None) -> pd.DataFrame:
-    """
-    Voegt 'markt_ret_5d' toe: het cross-sectionele gemiddelde 5-daagse
-    rendement, per datum, berekend BINNEN DEZELFDE BEURS als de ticker zelf
-    -- niet universum-breed. Een universum-brede versie (eerste poging)
-    mengde 59 beurzen met verschillende tijdzones/handelskalenders door
-    elkaar, wat vooral ruis toevoegde (validatie-AUC zakte van ~0,52 naar
-    0,499 en de walk-forward backtest werd duidelijk negatiever). Per-beurs
-    voorkomt die vermenging en is bovendien consistent met hoe live-scans
-    al werken (die verwerken toch al één beurs per keer).
-
-    Werking: als ticker_to_beurs wordt meegegeven, wordt elke rij eerst
-    gelabeld met zijn beurs (via de ticker), en wordt het gemiddelde per
-    (Beurs, Date) berekend -- dit is het pad voor train/backtest, waar hist
-    de volledige combinatie van 041-059 bevat. Wordt geen mapping
-    meegegeven (of bevat hist sowieso maar tickers van één beurs, zoals in
-    run_live_engine), dan wordt gewoon per Date gegroepeerd -- correct
-    omdat in dat geval alle tickers al tot dezelfde beurs behoren.
-
-    Zo blijft de feature identiek gedefinieerd (en dus vergelijkbaar) tussen
-    trainingstijd en live-inferentietijd -- een verschil daarin zou het
-    model onbedoeld op iets anders laten scoren dan waarop het getraind is.
-    """
-    if dataset.empty or "ret_5d" not in dataset.columns:
-        dataset["markt_ret_5d"] = np.nan
-        return dataset
-    dataset = dataset.copy()
-    if ticker_to_beurs:
-        dataset["Beurs"] = dataset["Ticker"].map(ticker_to_beurs).fillna("ONBEKEND")
-        dataset["markt_ret_5d"] = dataset.groupby(["Beurs", "Date"])["ret_5d"].transform("mean")
-        dataset.drop(columns=["Beurs"], inplace=True)
-    else:
-        dataset["markt_ret_5d"] = dataset.groupby("Date")["ret_5d"].transform("mean")
-    return dataset
-
-def build_dataset(hist: pd.DataFrame, ticker_to_beurs: Optional[Dict[str, str]] = None) -> pd.DataFrame:
+def build_dataset(hist: pd.DataFrame) -> pd.DataFrame:
     """hist = output van download_history() over meerdere tickers.
     Geeft één lange DataFrame terug met kolommen Ticker/Date/FEATURE_COLUMNS/
-    label/fwd_return_pct/Close, één rij per (ticker, datum).
-    ticker_to_beurs (optioneel): zie add_market_context() -- vereist voor
-    train/backtest (universum-breed universum), niet nodig voor live (al
-    per-beurs)."""
+    label/fwd_return_pct/Close, één rij per (ticker, datum)."""
     frames = []
     for ticker, g in hist.groupby("Ticker"):
         g = g.sort_values("Date")
@@ -476,7 +437,6 @@ def build_dataset(hist: pd.DataFrame, ticker_to_beurs: Optional[Dict[str, str]] 
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
-    out = add_market_context(out, ticker_to_beurs=ticker_to_beurs)
     return out
 
 
@@ -548,13 +508,8 @@ def run_train():
     print(f"{'='*60}")
 
     universum = set()
-    ticker_to_beurs: Dict[str, str] = {}
     for f_name in bouw_bestandslijst():
-        tickers_hier = load_tickers_from_file(f_name)
-        universum.update(tickers_hier)
-        beurs_naam = label_voor(f_name)
-        for t in tickers_hier:
-            ticker_to_beurs[t] = beurs_naam
+        universum.update(load_tickers_from_file(f_name))
     universum = sorted(universum)
     if not universum:
         print("[ERROR] Geen ticker bestanden gevonden.")
@@ -567,7 +522,7 @@ def run_train():
         return
     print(f"Historische data: {len(hist)} rijen over {hist['Ticker'].nunique()} tickers")
 
-    dataset = build_dataset(hist, ticker_to_beurs=ticker_to_beurs)
+    dataset = build_dataset(hist)
     dataset = dataset.dropna(subset=FEATURE_COLUMNS + ["label"])
     if len(dataset) < XGB_CFG["min_train_rows"]:
         print(f"[ERROR] Te weinig trainingsrijen ({len(dataset)}), stop.")
@@ -642,13 +597,8 @@ def run_backtest():
     )
 
     universum = set()
-    ticker_to_beurs: Dict[str, str] = {}
     for f_name in bouw_bestandslijst():
-        tickers_hier = load_tickers_from_file(f_name)
-        universum.update(tickers_hier)
-        beurs_naam = label_voor(f_name)
-        for t in tickers_hier:
-            ticker_to_beurs[t] = beurs_naam
+        universum.update(load_tickers_from_file(f_name))
     universum = sorted(universum)
     if not universum:
         print("[ERROR] Geen ticker bestanden gevonden.")
@@ -659,7 +609,7 @@ def run_backtest():
         print("[ERROR] Geen historische data opgehaald.")
         return
 
-    dataset = build_dataset(hist, ticker_to_beurs=ticker_to_beurs)
+    dataset = build_dataset(hist)
     dataset = dataset[dataset["Date"] >= pd.Timestamp(BACKTEST_START) - pd.Timedelta(days=XGB_CFG["is_window"] * 2)]
     if dataset.empty:
         print("[ERROR] Onvoldoende data voor backtestvenster.")
@@ -839,7 +789,6 @@ class LiveSignaal:
     ret_5d: float
     ret_20d: float
     ret_60d: float
-    markt_ret_5d: float
 
 def format_bericht(exchange_name: str, signalen: List[LiveSignaal], n_geanalyseerd: int) -> Optional[str]:
     if not signalen:
@@ -908,13 +857,11 @@ def run_live_engine():
 
         signalen: List[LiveSignaal] = []
         n_geanalyseerd = 0
-        ds = build_dataset(hist)  # incl. markt_ret_5d, cross-sectioneel over déze beurs
+        ds = build_dataset(hist)
         if not ds.empty:
             # laatste beschikbare dag per ticker afzonderlijk (niet één gedeelde
-            # datum voor de hele beurs) -- market-contextkolom is per rij al
-            # correct berekend over de tickers die op precies díé datum in de
-            # dataset zaten, dus dit blijft correct ook als niet elke ticker
-            # exact dezelfde laatste handelsdag heeft.
+            # datum voor de hele beurs), zodat een ticker met een net iets
+            # andere laatste handelsdag niet wordt overgeslagen.
             laatste_per_ticker = ds.sort_values("Date").groupby("Ticker").tail(1)
             laatste_per_ticker = laatste_per_ticker.dropna(subset=FEATURE_COLUMNS)
             n_geanalyseerd = len(laatste_per_ticker)
@@ -931,7 +878,7 @@ def run_live_engine():
                             dist_sma200_pct=safe_float(row["dist_sma200_pct"]),
                             atr_pct=safe_float(row["atr_pct"]), vol_ratio_20d=safe_float(row["vol_ratio_20d"]),
                             ret_5d=safe_float(row["ret_5d"]), ret_20d=safe_float(row["ret_20d"]),
-                            ret_60d=safe_float(row["ret_60d"]), markt_ret_5d=safe_float(row["markt_ret_5d"]),
+                            ret_60d=safe_float(row["ret_60d"]),
                         ))
 
         signalen.sort(key=lambda s: s.proba, reverse=True)
@@ -958,7 +905,6 @@ def run_live_engine():
                     "ret_5d": round(s.ret_5d, 2) if not math.isnan(s.ret_5d) else None,
                     "ret_20d": round(s.ret_20d, 2) if not math.isnan(s.ret_20d) else None,
                     "ret_60d": round(s.ret_60d, 2) if not math.isnan(s.ret_60d) else None,
-                    "markt_ret_5d": round(s.markt_ret_5d, 2) if not math.isnan(s.markt_ret_5d) else None,
                     "horizon_days": XGB_CFG["horizon_days"],
                     "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                 },
