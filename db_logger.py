@@ -46,6 +46,10 @@ zie migratie_kasstr_kolommen.sql.
 2026-08-19: _KOLOM_WHITELIST uitgebreid met de kolommen van bot_01xgboost.py
 (XGBoost richtingsvoorspelling). Vereist de bijhorende ALTER TABLE-migratie,
 zie migratie_xgboost_kolommen.sql.
+
+2026-08-22: _KOLOM_WHITELIST uitgebreid met de kolommen van bot_01hoogl.py
+(GARP onderwaardering). Vereist de bijhorende ALTER TABLE-migratie, zie
+migratie_hoogl_kolommen.sql.
 """
 
 import os
@@ -98,6 +102,8 @@ _KOLOM_WHITELIST = {
     "horizon_days",
     # bot_01xgboost -- markt_ret_5d toegevoegd 2026-08-20 (marktcontext-feature)
     "markt_ret_5d",
+    # bot_01hoogl (GARP onderwaardering) -- toegevoegd 2026-08-22
+    "roe_pct", "terugverdienperiode", "forward_pe", "verwachte_winstgroei_pct",
 }
 
 
