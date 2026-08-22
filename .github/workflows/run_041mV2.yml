@@ -2,7 +2,7 @@ name: filter_tickers MRA Nitro
 
 on:
   schedule:
-    - cron: '0 7 * * 0'   # elke zondag om 08:00 UTC
+    - cron: '0 3 * * 0'   # elke zondag om 08:00 UTC
   workflow_dispatch:
 
 jobs:
