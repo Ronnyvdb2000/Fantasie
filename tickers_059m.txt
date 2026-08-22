@@ -1,0 +1,13 @@
+# MASTERLIJST 059 — Oostenrijk Slovenie Slovakije
+# Laatste update: 22/08/2026
+# Criteria: ROE>7% | Debt<130 | Marge>4% | Vol 18%-65% | Omzet>€150,000
+# Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
+# --------------------------------------------------------------------------------
+ANDR.VI          | opname:2026-08-22 | ROE:20.2% | Debt:25.4 | Marge:5.8% | Vol:29.1% | Omzet:6,000,102 | actief
+EVN.VI           | opname:2026-08-22 | ROE:8.1% | Debt:17.5 | Marge:16.1% | Vol:21.0% | Omzet:1,287,669 | actief
+OMV.VI           | opname:2026-08-22 | ROE:8.8% | Debt:37.6 | Marge:10.6% | Vol:22.5% | Omzet:18,341,597 | actief
+STR.VI           | opname:2026-08-22 | ROE:17.2% | Debt:14.6 | Marge:4.9% | Vol:34.8% | Omzet:3,717,947 | actief
+TKA.VI           | opname:2026-08-22 | ROE:12.6% | Debt:47.7 | Marge:11.7% | Vol:21.8% | Omzet:514,838 | actief
+UQA.VI           | opname:2026-08-22 | ROE:13.7% | Debt:52.7 | Marge:5.7% | Vol:24.2% | Omzet:2,191,554 | actief
+VER.VI           | opname:2026-08-22 | ROE:12.8% | Debt:31.1 | Marge:15.9% | Vol:25.8% | Omzet:8,936,419 | actief
+VIG.VI           | opname:2026-08-22 | ROE:12.4% | Debt:32.9 | Marge:6.1% | Vol:30.8% | Omzet:2,967,278 | actief

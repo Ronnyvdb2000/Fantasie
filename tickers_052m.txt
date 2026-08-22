@@ -1,38 +1,61 @@
 # MASTERLIJST 052 — Oslo
-# Laatste update: 16/08/2026
-# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
+# Laatste update: 22/08/2026
+# Criteria: ROE>7% | Debt<130 | Marge>4% | Vol 18%-65% | Omzet>€150,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-AKER.OL          | opname:2026-07-19 | ROE:45.1% | Debt:63.6 | Marge:69.3% | Vol:31.8% | Omzet:65,844,670 | actief
-AKRBP.OL         | opname:2026-07-19 | ROE:12.1% | Debt:83.4 | Marge:11.9% | Vol:34.4% | Omzet:357,683,812 | actief
-AKSO.OL          | opname:2026-07-19 | ROE:35.7% | Debt:32.6 | Marge:5.5% | Vol:31.3% | Omzet:25,763,460 | actief
-AKVA.OL          | opname:2026-07-19 | ROE:14.5% | Debt:115.4 | Marge:4.4% | Vol:36.6% | Omzet:723,737 | actief
-AUTO.OL          | opname:2026-07-19 | ROE:10.6% | Debt:11.9 | Marge:24.3% | Vol:57.3% | Omzet:55,554,875 | actief
-BWE.OL           | opname:2026-07-19 | ROE:9.5% | Debt:106.9 | Marge:12.2% | Vol:48.3% | Omzet:6,126,810 | actief
-BWLPG.OL         | opname:2026-07-19 | ROE:20.9% | Debt:44.5 | Marge:10.1% | Vol:39.7% | Omzet:72,557,840 | actief
+AKER.OL          | opname:2026-07-19 | ROE:45.1% | Debt:63.6 | Marge:69.3% | Vol:31.0% | Omzet:69,137,613 | actief
+AKRBP.OL         | opname:2026-07-19 | ROE:12.1% | Debt:83.4 | Marge:11.9% | Vol:34.2% | Omzet:359,812,332 | actief
+AKSO.OL          | opname:2026-07-19 | ROE:35.7% | Debt:32.6 | Marge:5.5% | Vol:31.0% | Omzet:25,737,938 | actief
+AKVA.OL          | opname:2026-07-19 | ROE:15.7% | Debt:118.2 | Marge:4.8% | Vol:35.7% | Omzet:705,220 | actief
+APR.OL           | opname:2026-08-22 | ROE:18.3% | Debt:10.6 | Marge:11.5% | Vol:54.1% | Omzet:11,931,850 | actief
+ARR.OL           | opname:2026-08-22 | ROE:10.5% | Debt:8.2 | Marge:4.9% | Vol:54.0% | Omzet:2,552,793 | actief
+AUTO.OL          | opname:2026-07-19 | ROE:10.6% | Debt:11.9 | Marge:24.3% | Vol:57.1% | Omzet:55,338,365 | actief
+BAKKA.OL         | opname:2026-08-22 | ROE:7.4% | Debt:43.7 | Marge:11.7% | Vol:28.1% | Omzet:51,645,572 | actief
+BONHR.OL         | opname:2026-08-22 | ROE:14.0% | Debt:64.3 | Marge:8.0% | Vol:23.2% | Omzet:6,872,119 | actief
+BOUV.OL          | opname:2026-08-22 | ROE:114.4% | Debt:119.8 | Marge:8.6% | Vol:29.6% | Omzet:7,800,874 | actief
+BWE.OL           | opname:2026-07-19 | ROE:9.5% | Debt:106.9 | Marge:12.2% | Vol:48.1% | Omzet:6,179,792 | actief
+BWLPG.OL         | opname:2026-07-19 | ROE:20.9% | Debt:44.5 | Marge:10.1% | Vol:39.2% | Omzet:72,657,588 | actief
 BWO.OL           | opname:2026-07-26 | ROE:10.6% | Debt:125.9 | Marge:26.4% | Vol:30.8% | Omzet:5,548,194 | actief
 CADLR.OL         | opname:2026-07-19 | ROE:18.7% | Debt:94.8 | Marge:39.9% | Vol:34.9% | Omzet:34,658,526 | actief
-DNO.OL           | opname:2026-08-16 | ROE:8.6% | Debt:83.2 | Marge:5.0% | Vol:39.0% | Omzet:53,686,005 | actief
-EQNR.OL          | opname:2026-07-19 | ROE:21.3% | Debt:75.2 | Marge:8.0% | Vol:38.5% | Omzet:1,058,277,060 | actief
+DNO.OL           | opname:2026-08-16 | ROE:8.6% | Debt:83.2 | Marge:5.0% | Vol:37.9% | Omzet:53,143,806 | actief
+DOFG.OL          | opname:2026-08-22 | ROE:23.3% | Debt:82.0 | Marge:21.8% | Vol:25.2% | Omzet:47,694,555 | actief
+ELO.OL           | opname:2026-08-22 | ROE:19.5% | Debt:125.1 | Marge:5.6% | Vol:35.1% | Omzet:12,235,673 | actief
+EQNR.OL          | opname:2026-07-19 | ROE:21.3% | Debt:75.2 | Marge:8.0% | Vol:38.3% | Omzet:1,057,251,114 | actief
 FRO.OL           | opname:2026-07-19 | ROE:35.0% | Debt:92.6 | Marge:40.2% | Vol:41.2% | Omzet:342,532,716 | actief
-HAFNI.OL         | opname:2026-07-19 | ROE:18.9% | Debt:40.4 | Marge:19.0% | Vol:34.6% | Omzet:47,597,474 | actief
-HAUTO.OL         | opname:2026-07-19 | ROE:36.6% | Debt:75.8 | Marge:31.7% | Vol:36.8% | Omzet:67,184,344 | actief
-KIT.OL           | opname:2026-08-16 | ROE:23.8% | Debt:37.3 | Marge:7.0% | Vol:42.0% | Omzet:52,520,357 | actief
-KOA.OL           | opname:2026-07-19 | ROE:7.9% | Debt:98.9 | Marge:2.1% | Vol:32.0% | Omzet:4,848,157 | actief
-KOG.OL           | opname:2026-08-16 | ROE:32.6% | Debt:24.1 | Marge:20.5% | Vol:48.1% | Omzet:401,263,516 | actief
-MEDI.OL          | opname:2026-07-19 | ROE:32.1% | Debt:6.8 | Marge:21.7% | Vol:39.9% | Omzet:4,820,647 | actief
-MPCC.OL          | opname:2026-07-19 | ROE:24.4% | Debt:48.8 | Marge:42.8% | Vol:31.1% | Omzet:40,812,927 | actief
-NHY.OL           | opname:2026-08-09 | ROE:9.4% | Debt:32.0 | Marge:4.8% | Vol:30.5% | Omzet:344,284,335 | actief
-NOD.OL           | opname:2026-08-09 | ROE:5.0% | Debt:23.0 | Marge:4.2% | Vol:40.2% | Omzet:131,847,448 | actief
-PEXIP.OL         | opname:2026-07-19 | ROE:17.5% | Debt:2.6 | Marge:21.1% | Vol:36.1% | Omzet:15,560,476 | actief
-SMOP.OL          | opname:2026-07-19 | ROE:26.5% | Debt:22.1 | Marge:7.7% | Vol:60.5% | Omzet:9,022,962 | actief
-SNI.OL           | opname:2026-07-19 | ROE:9.2% | Debt:97.9 | Marge:7.8% | Vol:31.5% | Omzet:17,774,440 | actief
-SOFF.OL          | opname:2026-07-19 | ROE:35.2% | Debt:105.6 | Marge:43.6% | Vol:33.0% | Omzet:7,396,432 | actief
-SOMA.OL          | opname:2026-08-16 | ROE:28.4% | Debt:69.8 | Marge:39.7% | Vol:32.2% | Omzet:5,530,941 | actief
+GJF.OL           | opname:2026-08-22 | ROE:27.2% | Debt:23.0 | Marge:14.2% | Vol:19.4% | Omzet:87,759,463 | actief
+GOD.OL           | opname:2026-08-22 | ROE:14.0% | Debt:20.1 | Marge:5.4% | Vol:32.1% | Omzet:489,431 | actief
+HAFNI.OL         | opname:2026-07-19 | ROE:18.9% | Debt:40.4 | Marge:19.0% | Vol:34.0% | Omzet:47,534,494 | actief
+HAUTO.OL         | opname:2026-07-19 | ROE:34.2% | Debt:76.5 | Marge:29.0% | Vol:38.6% | Omzet:69,172,347 | actief
+IWS.OL           | opname:2026-08-22 | ROE:11.9% | Debt:90.2 | Marge:15.1% | Vol:28.4% | Omzet:651,011 | actief
+KCC.OL           | opname:2026-08-22 | ROE:12.3% | Debt:91.9 | Marge:17.4% | Vol:27.2% | Omzet:5,426,359 | actief
+KIT.OL           | opname:2026-08-16 | ROE:23.8% | Debt:37.3 | Marge:7.0% | Vol:41.5% | Omzet:53,428,703 | actief
+KOG.OL           | opname:2026-08-16 | ROE:32.6% | Debt:24.1 | Marge:20.5% | Vol:47.4% | Omzet:401,353,949 | actief
+MEDI.OL          | opname:2026-07-19 | ROE:32.1% | Debt:6.8 | Marge:21.7% | Vol:37.0% | Omzet:4,714,816 | actief
+MOWI.OL          | opname:2026-08-22 | ROE:15.5% | Debt:82.9 | Marge:10.4% | Vol:21.3% | Omzet:206,369,135 | actief
+MPCC.OL          | opname:2026-07-19 | ROE:24.4% | Debt:48.8 | Marge:42.8% | Vol:31.1% | Omzet:40,704,373 | actief
+MULTI.OL         | opname:2026-08-22 | ROE:22.8% | Debt:118.8 | Marge:4.7% | Vol:21.9% | Omzet:2,816,203 | actief
+NHY.OL           | opname:2026-08-09 | ROE:9.4% | Debt:32.0 | Marge:4.8% | Vol:30.6% | Omzet:346,312,257 | actief
+NORBT.OL         | opname:2026-08-22 | ROE:38.2% | Debt:59.5 | Marge:15.8% | Vol:38.6% | Omzet:32,318,120 | actief
+NORCO.OL         | opname:2026-08-22 | ROE:22.4% | Debt:81.7 | Marge:4.9% | Vol:23.0% | Omzet:12,960,786 | actief
+ODF.OL           | opname:2026-07-26 | ROE:16.2% | Debt:106.3 | Marge:13.9% | Vol:32.0% | Omzet:5,574,345 | actief
+ODL.OL           | opname:2026-08-22 | ROE:15.7% | Debt:67.1 | Marge:20.5% | Vol:26.3% | Omzet:27,731,269 | actief
+ORK.OL           | opname:2026-08-22 | ROE:15.1% | Debt:49.4 | Marge:9.6% | Vol:20.9% | Omzet:151,096,415 | actief
+PEXIP.OL         | opname:2026-07-19 | ROE:22.0% | Debt:3.0 | Marge:21.2% | Vol:36.0% | Omzet:15,194,598 | actief
+PROT.OL          | opname:2026-08-22 | ROE:30.6% | Debt:31.6 | Marge:14.5% | Vol:27.2% | Omzet:64,080,387 | actief
+SALM.OL          | opname:2026-08-22 | ROE:9.8% | Debt:109.0 | Marge:7.1% | Vol:27.2% | Omzet:123,512,670 | actief
+SMOP.OL          | opname:2026-07-19 | ROE:26.5% | Debt:22.1 | Marge:7.7% | Vol:60.7% | Omzet:9,136,777 | actief
+SNI.OL           | opname:2026-07-19 | ROE:9.2% | Debt:97.9 | Marge:7.8% | Vol:31.1% | Omzet:17,637,126 | actief
+SNTIA.OL         | opname:2026-08-22 | ROE:42.1% | Debt:10.9 | Marge:5.0% | Vol:21.4% | Omzet:9,910,446 | actief
+SOFF.OL          | opname:2026-07-19 | ROE:35.2% | Debt:105.6 | Marge:43.6% | Vol:32.5% | Omzet:7,300,544 | actief
+SOMA.OL          | opname:2026-08-16 | ROE:28.4% | Debt:69.8 | Marge:39.7% | Vol:31.6% | Omzet:5,394,127 | actief
 SUBC.OL          | opname:2026-07-19 | ROE:14.2% | Debt:19.5 | Marge:8.2% | Vol:31.5% | Omzet:100,452,731 | actief
-TGS.OL           | opname:2026-08-02 | ROE:5.0% | Debt:41.2 | Marge:7.2% | Vol:39.9% | Omzet:52,015,408 | actief
-WAWI.OL          | opname:2026-07-19 | ROE:21.9% | Debt:71.9 | Marge:13.5% | Vol:32.4% | Omzet:46,335,101 | actief
-ZAP.OL           | opname:2026-07-19 | ROE:11.3% | Debt:7.5 | Marge:4.9% | Vol:50.0% | Omzet:12,741,165 | actief
+TEL.OL           | opname:2026-08-22 | ROE:25.0% | Debt:128.1 | Marge:15.7% | Vol:23.7% | Omzet:225,338,734 | actief
+TOM.OL           | opname:2026-08-22 | ROE:14.8% | Debt:115.7 | Marge:5.8% | Vol:42.8% | Omzet:71,031,066 | actief
+VISTN.OL         | opname:2026-08-22 | ROE:22.9% | Debt:4.8 | Marge:16.3% | Vol:24.7% | Omzet:404,976 | actief
+WAWI.OL          | opname:2026-07-19 | ROE:21.9% | Debt:71.9 | Marge:13.5% | Vol:32.6% | Omzet:46,668,834 | actief
+YAR.OL           | opname:2026-07-19 | ROE:17.9% | Debt:41.7 | Marge:9.3% | Vol:32.3% | Omzet:235,625,889 | actief
+ZAP.OL           | opname:2026-07-19 | ROE:16.5% | Debt:8.4 | Marge:6.3% | Vol:50.1% | Omzet:13,334,285 | actief
+KOA.OL           | opname:2026-07-19 | ROE:7.9% | Debt:98.9 | Marge:2.1% | Vol:31.5% | Omzet:4,708,185 | zwakker | weken_buiten:1
+NOD.OL           | opname:2026-08-09 | ROE:5.0% | Debt:23.0 | Marge:4.2% | Vol:40.0% | Omzet:132,097,583 | zwakker | weken_buiten:1
 ODFB.OL          | opname:2026-07-26 | ROE:16.2% | Debt:106.3 | Marge:13.9% | Vol:30.1% | Omzet:2,115,148 | zwakker | weken_buiten:2
-YAR.OL           | opname:2026-07-19 | ROE:17.9% | Debt:41.7 | Marge:9.3% | Vol:32.3% | Omzet:234,084,900 | zwakker | weken_buiten:2
-ODF.OL           | opname:2026-07-26 | ROE:16.2% | Debt:106.3 | Marge:13.9% | Vol:32.2% | Omzet:5,612,427 | verwijderd | verwijderd:2026-08-16
+TGS.OL           | opname:2026-08-02 | ROE:5.0% | Debt:41.2 | Marge:7.2% | Vol:40.0% | Omzet:52,669,661 | zwakker | weken_buiten:1

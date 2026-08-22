@@ -1,205 +1,206 @@
 # MASTERLIJST 045 — Londen
-# Laatste update: 16/08/2026
-# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
+# Laatste update: 22/08/2026
+# Criteria: ROE>7% | Debt<130 | Marge>4% | Vol 18%-65% | Omzet>€150,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-AAZ.L            | opname:2026-08-11 | ROE:23.2% | Debt:78.5 | Marge:14.4% | Vol:61.9% | Omzet:43,414,483 | actief
-AEP.L            | opname:2026-05-04 | ROE:15.1% | Debt:9.2 | Marge:19.5% | Vol:44.9% | Omzet:90,643,889 | actief
-AIEA.L           | opname:2026-08-16 | ROE:6.1% | Debt:4.8 | Marge:4.6% | Vol:36.1% | Omzet:709,299 | actief
-AJB.L            | opname:2026-05-04 | ROE:59.9% | Debt:5.7 | Marge:35.5% | Vol:30.9% | Omzet:585,829,907 | actief
-ALTN.L           | opname:2026-08-16 | ROE:53.4% | Debt:27.5 | Marge:35.4% | Vol:69.8% | Omzet:73,193,501 | actief
-AMRQ.L           | opname:2026-08-16 | ROE:1.8% | Debt:29.4 | Marge:6.3% | Vol:49.7% | Omzet:76,259,322 | actief
-AMS.L            | opname:2026-08-16 | ROE:4.0% | Debt:31.3 | Marge:4.3% | Vol:39.8% | Omzet:399,220,536 | actief
-ANP.L            | opname:2026-08-11 | ROE:17.5% | Debt:59.6 | Marge:14.3% | Vol:37.7% | Omzet:18,645,186 | actief
-ANTO.L           | opname:2026-05-04 | ROE:17.8% | Debt:53.9 | Marge:17.8% | Vol:50.5% | Omzet:4,360,663,423 | actief
-AO.L             | opname:2026-08-16 | ROE:22.4% | Debt:36.9 | Marge:2.8% | Vol:30.8% | Omzet:50,595,108 | actief
-AOTI.L           | opname:2026-08-16 | ROE:14.3% | Debt:106.3 | Marge:4.0% | Vol:68.9% | Omzet:2,531,674 | actief
-APN.L            | opname:2026-05-04 | ROE:49.4% | Debt:4.5 | Marge:20.6% | Vol:35.9% | Omzet:124,342,326 | actief
-ASHM.L           | opname:2026-05-04 | ROE:14.5% | Debt:2.2 | Marge:85.7% | Vol:39.0% | Omzet:297,544,815 | actief
-ATYM.L           | opname:2026-05-04 | ROE:15.7% | Debt:4.4 | Marge:22.2% | Vol:47.2% | Omzet:551,126,578 | actief
-AXS.L            | opname:2026-08-16 | ROE:6.4% | Debt:56.4 | Marge:4.2% | Vol:32.2% | Omzet:7,468,591 | actief
-BA.L             | opname:2026-05-04 | ROE:18.6% | Debt:73.0 | Marge:7.2% | Vol:30.6% | Omzet:12,751,085,992 | actief
-BEZ.L            | opname:2026-05-04 | ROE:14.2% | Debt:12.8 | Marge:11.8% | Vol:46.3% | Omzet:4,939,141,310 | actief
-BMY.L            | opname:2026-08-11 | ROE:12.5% | Debt:13.8 | Marge:8.3% | Vol:31.5% | Omzet:175,108,743 | actief
-BOY.L            | opname:2026-05-08 | ROE:9.3% | Debt:34.9 | Marge:7.9% | Vol:43.9% | Omzet:278,933,040 | actief
-BPT.L            | opname:2026-07-06 | ROE:3.4% | Debt:53.4 | Marge:3.7% | Vol:39.2% | Omzet:490,795,494 | actief
+AAIF.L           | opname:2026-05-08 | ROE:41.8% | Debt:8.0 | Marge:94.5% | Vol:21.3% | Omzet:98,811,892 | actief
+AAZ.L            | opname:2026-08-11 | ROE:23.2% | Debt:78.5 | Marge:14.4% | Vol:61.6% | Omzet:43,859,652 | actief
+ABDN.L           | opname:2026-05-08 | ROE:7.6% | Debt:10.8 | Marge:28.1% | Vol:29.8% | Omzet:949,060,160 | actief
+ABF.L            | opname:2026-05-08 | ROE:8.5% | Debt:8.4 | Marge:4.9% | Vol:27.5% | Omzet:1,898,386,790 | actief
+AEP.L            | opname:2026-05-04 | ROE:15.1% | Debt:9.2 | Marge:19.5% | Vol:44.4% | Omzet:91,197,544 | actief
+AJB.L            | opname:2026-05-04 | ROE:59.9% | Debt:5.7 | Marge:35.5% | Vol:31.0% | Omzet:587,311,066 | actief
+ALFA.L           | opname:2026-08-11 | ROE:61.5% | Debt:18.0 | Marge:23.8% | Vol:30.9% | Omzet:117,649,694 | actief
+ALU.L            | opname:2026-08-11 | ROE:18.8% | Debt:48.0 | Marge:7.1% | Vol:39.0% | Omzet:21,331,578 | actief
+AMCO.L           | opname:2026-08-11 | ROE:13.5% | Debt:95.2 | Marge:4.2% | Vol:46.1% | Omzet:19,814,052 | actief
+ANP.L            | opname:2026-08-11 | ROE:17.5% | Debt:59.6 | Marge:14.3% | Vol:37.4% | Omzet:18,701,407 | actief
+ANTO.L           | opname:2026-05-04 | ROE:17.8% | Debt:53.9 | Marge:17.8% | Vol:50.6% | Omzet:4,386,667,787 | actief
+APN.L            | opname:2026-05-04 | ROE:49.4% | Debt:4.5 | Marge:20.6% | Vol:34.1% | Omzet:124,134,852 | actief
+APTD.L           | opname:2026-05-08 | ROE:7.2% | Debt:15.4 | Marge:6.2% | Vol:34.9% | Omzet:11,736,092 | actief
+ARC.L            | opname:2026-08-11 | ROE:9.7% | Debt:4.3 | Marge:27.0% | Vol:24.0% | Omzet:1,372,133 | actief
+ASHM.L           | opname:2026-05-04 | ROE:14.5% | Debt:2.2 | Marge:85.7% | Vol:39.0% | Omzet:301,170,261 | actief
+ATYM.L           | opname:2026-05-04 | ROE:15.7% | Debt:4.4 | Marge:22.2% | Vol:47.2% | Omzet:558,396,636 | actief
+AUTO.L           | opname:2026-05-04 | ROE:60.2% | Debt:51.8 | Marge:47.1% | Vol:28.2% | Omzet:2,592,461,156 | actief
+AVON.L           | opname:2026-05-17 | ROE:10.5% | Debt:48.3 | Marge:5.6% | Vol:28.3% | Omzet:151,246,358 | actief
+AZN.L            | opname:2026-05-04 | ROE:22.0% | Debt:64.2 | Marge:17.0% | Vol:27.7% | Omzet:33,241,523,048 | actief
+BA.L             | opname:2026-05-04 | ROE:18.6% | Debt:73.0 | Marge:7.2% | Vol:30.4% | Omzet:12,832,933,717 | actief
+BAG.L            | opname:2026-08-11 | ROE:14.1% | Debt:13.9 | Marge:10.8% | Vol:20.2% | Omzet:123,681,989 | actief
+BATS.L           | opname:2026-05-04 | ROE:13.4% | Debt:72.2 | Marge:25.0% | Vol:24.6% | Omzet:18,549,702,507 | actief
+BCG.L            | opname:2026-05-04 | ROE:15.8% | Debt:24.8 | Marge:57.6% | Vol:39.0% | Omzet:483,033,826 | actief
+BEZ.L            | opname:2026-05-04 | ROE:14.2% | Debt:12.8 | Marge:11.8% | Vol:46.3% | Omzet:4,947,350,928 | actief
+BKG.L            | opname:2026-05-04 | ROE:8.8% | Debt:18.2 | Marge:13.4% | Vol:29.4% | Omzet:1,226,461,909 | actief
+BLND.L           | opname:2026-05-08 | ROE:7.8% | Debt:53.1 | Marge:73.7% | Vol:24.7% | Omzet:1,868,989,782 | actief
+BMY.L            | opname:2026-08-11 | ROE:12.5% | Debt:13.8 | Marge:8.3% | Vol:31.5% | Omzet:175,936,555 | actief
+BOKU.L           | opname:2026-08-11 | ROE:8.4% | Debt:3.5 | Marge:9.5% | Vol:49.1% | Omzet:165,395,938 | actief
+BOY.L            | opname:2026-05-08 | ROE:9.3% | Debt:34.9 | Marge:7.9% | Vol:43.9% | Omzet:286,945,651 | actief
 BRWM.L           | opname:2026-05-08 | ROE:53.5% | Debt:6.0 | Marge:98.8% | Vol:33.6% | Omzet:429,112,790 | actief
-BTRW.L           | opname:2026-08-09 | ROE:2.8% | Debt:3.2 | Marge:3.6% | Vol:31.7% | Omzet:2,136,127,676 | actief
-BWY.L            | opname:2026-08-16 | ROE:4.5% | Debt:5.4 | Marge:5.5% | Vol:37.1% | Omzet:1,222,286,211 | actief
-BYIT.L           | opname:2026-08-11 | ROE:57.2% | Debt:2.4 | Marge:23.3% | Vol:34.4% | Omzet:306,822,617 | actief
-CABP.L           | opname:2026-05-08 | ROE:12.9% | Debt:10.5 | Marge:24.6% | Vol:39.5% | Omzet:21,608,471 | actief
-CARD.L           | opname:2026-05-08 | ROE:8.9% | Debt:58.8 | Marge:5.4% | Vol:37.3% | Omzet:100,950,543 | actief
-CHG.L            | opname:2026-05-04 | ROE:13.1% | Debt:51.3 | Marge:6.6% | Vol:32.3% | Omzet:592,067,805 | actief
-CHRT.L           | opname:2026-08-11 | ROE:13.9% | Debt:29.9 | Marge:7.8% | Vol:48.4% | Omzet:223,567,674 | actief
-CLIG.L           | opname:2026-05-04 | ROE:14.0% | Debt:3.3 | Marge:28.0% | Vol:31.4% | Omzet:26,537,240 | actief
-CMCX.L           | opname:2026-05-04 | ROE:16.9% | Debt:30.2 | Marge:19.1% | Vol:59.8% | Omzet:168,594,847 | actief
-CNE.L            | opname:2026-05-08 | ROE:4.6% | Debt:12.3 | Marge:14.1% | Vol:49.5% | Omzet:39,924,030 | actief
-COST.L           | opname:2026-05-08 | ROE:15.2% | Debt:12.6 | Marge:3.6% | Vol:37.5% | Omzet:216,550,649 | actief
-CPG.L            | opname:2026-05-08 | ROE:26.9% | Debt:113.1 | Marge:4.2% | Vol:49.1% | Omzet:93,578,601 | actief
-CRDA.L           | opname:2026-08-02 | ROE:3.7% | Debt:35.8 | Marge:4.6% | Vol:30.3% | Omzet:1,629,519,794 | actief
-DOCS.L           | opname:2026-08-16 | ROE:6.5% | Debt:108.9 | Marge:3.1% | Vol:33.8% | Omzet:104,434,951 | actief
-DSCV.L           | opname:2026-08-11 | ROE:9.1% | Debt:73.0 | Marge:6.5% | Vol:32.3% | Omzet:173,667,302 | actief
-ECOR.L           | opname:2026-05-08 | ROE:4.9% | Debt:20.7 | Marge:39.7% | Vol:35.7% | Omzet:73,345,952 | actief
-EDV.L            | opname:2026-05-04 | ROE:31.3% | Debt:29.4 | Marge:17.7% | Vol:50.0% | Omzet:3,460,054,246 | actief
-EZJ.L            | opname:2026-05-08 | ROE:13.1% | Debt:82.4 | Marge:3.9% | Vol:41.0% | Omzet:2,826,938,906 | actief
-FCH.L            | opname:2026-05-08 | ROE:20.7% | Debt:119.8 | Marge:22.5% | Vol:44.1% | Omzet:146,101,259 | actief
-FSTA.L           | opname:2026-06-21 | ROE:5.2% | Debt:51.0 | Marge:5.3% | Vol:30.4% | Omzet:23,398,986 | actief
-FTC.L            | opname:2026-08-16 | ROE:12.0% | Debt:13.8 | Marge:8.2% | Vol:79.0% | Omzet:565,264,900 | actief
-GAMA.L           | opname:2026-08-11 | ROE:17.2% | Debt:13.1 | Marge:10.1% | Vol:33.8% | Omzet:459,280,424 | actief
-GMS.L            | opname:2026-05-08 | ROE:4.8% | Debt:50.8 | Marge:10.0% | Vol:43.1% | Omzet:53,103,846 | actief
-GRG.L            | opname:2026-05-08 | ROE:22.0% | Debt:74.2 | Marge:5.9% | Vol:36.0% | Omzet:816,261,276 | actief
+BYIT.L           | opname:2026-08-11 | ROE:57.2% | Debt:2.4 | Marge:23.3% | Vol:33.5% | Omzet:304,129,556 | actief
+CABP.L           | opname:2026-05-08 | ROE:12.9% | Debt:10.5 | Marge:24.6% | Vol:39.0% | Omzet:21,201,977 | actief
+CAPD.L           | opname:2026-05-04 | ROE:21.9% | Debt:31.3 | Marge:19.1% | Vol:41.9% | Omzet:38,374,645 | actief
+CARD.L           | opname:2026-05-08 | ROE:8.9% | Debt:58.8 | Marge:5.4% | Vol:37.0% | Omzet:101,114,895 | actief
+CER.L            | opname:2026-08-11 | ROE:24.4% | Debt:6.6 | Marge:32.2% | Vol:41.0% | Omzet:137,757,331 | actief
+CHG.L            | opname:2026-05-04 | ROE:13.1% | Debt:51.3 | Marge:6.6% | Vol:32.3% | Omzet:591,886,439 | actief
+CHRT.L           | opname:2026-08-11 | ROE:13.9% | Debt:29.9 | Marge:7.8% | Vol:48.6% | Omzet:223,109,888 | actief
+CKN.L            | opname:2026-05-04 | ROE:15.3% | Debt:10.8 | Marge:10.4% | Vol:23.5% | Omzet:336,734,481 | actief
+CLIG.L           | opname:2026-05-04 | ROE:14.0% | Debt:3.3 | Marge:28.0% | Vol:31.3% | Omzet:26,611,962 | actief
+CMCL.L           | opname:2026-08-11 | ROE:27.9% | Debt:36.1 | Marge:24.1% | Vol:55.0% | Omzet:12,847,710 | actief
+CMCX.L           | opname:2026-05-04 | ROE:16.9% | Debt:30.2 | Marge:19.1% | Vol:60.1% | Omzet:175,701,433 | actief
+CPG.L            | opname:2026-05-08 | ROE:26.9% | Debt:113.1 | Marge:4.2% | Vol:42.2% | Omzet:97,161,508 | actief
+CTEC.L           | opname:2026-05-04 | ROE:7.7% | Debt:121.8 | Marge:5.0% | Vol:28.9% | Omzet:2,086,542,687 | actief
+DATA.L           | opname:2026-08-11 | ROE:13.4% | Debt:58.6 | Marge:10.3% | Vol:48.2% | Omzet:212,393,863 | actief
+DPLM.L           | opname:2026-05-04 | ROE:19.0% | Debt:47.5 | Marge:11.5% | Vol:28.9% | Omzet:2,649,512,913 | actief
+DSCV.L           | opname:2026-08-11 | ROE:9.1% | Debt:73.0 | Marge:6.5% | Vol:32.4% | Omzet:173,594,311 | actief
+EDV.L            | opname:2026-05-04 | ROE:31.3% | Debt:29.4 | Marge:17.7% | Vol:50.5% | Omzet:3,484,861,674 | actief
+ELM.L            | opname:2026-08-11 | ROE:10.7% | Debt:39.9 | Marge:11.9% | Vol:23.9% | Omzet:195,888,079 | actief
+EMG.L            | opname:2026-05-04 | ROE:21.3% | Debt:19.1 | Marge:19.2% | Vol:29.1% | Omzet:802,653,389 | actief
+EXPN.L           | opname:2026-05-08 | ROE:28.3% | Debt:100.3 | Marge:17.8% | Vol:30.0% | Omzet:9,322,396,871 | actief
+FAN.L            | opname:2026-05-08 | ROE:19.1% | Debt:100.9 | Marge:11.2% | Vol:27.1% | Omzet:324,433,432 | actief
+FCH.L            | opname:2026-05-08 | ROE:20.7% | Debt:119.8 | Marge:22.5% | Vol:44.0% | Omzet:146,981,121 | actief
+FORT.L           | opname:2026-05-08 | ROE:8.5% | Debt:43.8 | Marge:5.4% | Vol:28.4% | Omzet:106,650,534 | actief
+FRAS.L           | opname:2026-05-04 | ROE:15.5% | Debt:103.1 | Marge:7.0% | Vol:29.4% | Omzet:127,497,470 | actief
+FRES.L           | opname:2026-05-04 | ROE:53.0% | Debt:15.4 | Marge:38.0% | Vol:57.4% | Omzet:4,029,838,599 | actief
+FSG.L            | opname:2026-08-11 | ROE:50.5% | Debt:32.7 | Marge:26.0% | Vol:27.7% | Omzet:145,178,649 | actief
+GAMA.L           | opname:2026-08-11 | ROE:17.2% | Debt:13.1 | Marge:10.1% | Vol:33.7% | Omzet:458,828,037 | actief
+GAW.L            | opname:2026-05-04 | ROE:66.9% | Debt:16.7 | Marge:31.2% | Vol:27.0% | Omzet:1,634,785,449 | actief
+GFM.L            | opname:2026-08-11 | ROE:8.0% | Debt:16.4 | Marge:16.0% | Vol:38.0% | Omzet:30,270,504 | actief
+GFTU.L           | opname:2026-05-08 | ROE:8.4% | Debt:37.6 | Marge:5.4% | Vol:23.6% | Omzet:371,418,846 | actief
+GNS.L            | opname:2026-05-08 | ROE:9.3% | Debt:51.7 | Marge:7.1% | Vol:37.6% | Omzet:468,626,670 | actief
+GPE.L            | opname:2026-05-08 | ROE:7.5% | Debt:41.3 | Marge:120.6% | Vol:25.3% | Omzet:341,167,222 | actief
+GRG.L            | opname:2026-05-08 | ROE:22.0% | Debt:74.2 | Marge:5.9% | Vol:35.9% | Omzet:805,006,435 | actief
 GROW.L           | opname:2026-05-08 | ROE:8.9% | Debt:9.4 | Marge:81.1% | Vol:38.9% | Omzet:336,811,961 | actief
-HBR.L            | opname:2026-08-09 | ROE:6.5% | Debt:115.5 | Marge:2.9% | Vol:40.3% | Omzet:1,403,037,995 | actief
-HIK.L            | opname:2026-05-04 | ROE:15.4% | Debt:77.1 | Marge:11.3% | Vol:34.8% | Omzet:1,466,972,115 | actief
-HSW.L            | opname:2026-05-08 | ROE:9.0% | Debt:15.4 | Marge:6.4% | Vol:31.2% | Omzet:20,326,781 | actief
-HTG.L            | opname:2026-08-16 | ROE:4.8% | Debt:13.3 | Marge:4.0% | Vol:32.1% | Omzet:200,795,333 | actief
-III.L            | opname:2026-05-04 | ROE:19.1% | Debt:4.1 | Marge:94.8% | Vol:45.6% | Omzet:7,346,372,106 | actief
-IPO.L            | opname:2026-08-16 | ROE:6.9% | Debt:12.3 | Marge:83.7% | Vol:33.7% | Omzet:186,621,277 | actief
-ITH.L            | opname:2026-05-24 | ROE:9.3% | Debt:69.6 | Marge:7.8% | Vol:50.2% | Omzet:450,595,136 | actief
-JD.L             | opname:2026-05-08 | ROE:13.7% | Debt:107.0 | Marge:3.4% | Vol:36.6% | Omzet:1,374,304,715 | actief
-JET2.L           | opname:2026-08-11 | ROE:22.4% | Debt:62.1 | Marge:5.5% | Vol:33.6% | Omzet:962,294,050 | actief
-JFJ.L            | opname:2026-05-04 | ROE:21.9% | Debt:5.2 | Marge:96.5% | Vol:20.7% | Omzet:233,311,598 | actief
-JUP.L            | opname:2026-05-04 | ROE:12.0% | Debt:4.8 | Marge:21.2% | Vol:31.7% | Omzet:218,437,359 | actief
-KLR.L            | opname:2026-05-08 | ROE:25.3% | Debt:47.8 | Marge:4.8% | Vol:34.3% | Omzet:342,982,089 | actief
-KNOS.L           | opname:2026-05-04 | ROE:35.6% | Debt:6.1 | Marge:9.9% | Vol:43.1% | Omzet:359,642,864 | actief
-LUCE.L           | opname:2026-05-04 | ROE:20.3% | Debt:61.3 | Marge:7.5% | Vol:40.6% | Omzet:76,781,982 | actief
-MACF.L           | opname:2026-08-02 | ROE:5.2% | Debt:74.1 | Marge:2.1% | Vol:37.3% | Omzet:25,195,479 | actief
-MAFL.L           | opname:2026-08-11 | ROE:24.2% | Debt:6.1 | Marge:81.5% | Vol:53.8% | Omzet:5,002,978 | actief
+GSK.L            | opname:2026-05-08 | ROE:33.4% | Debt:106.5 | Marge:14.5% | Vol:24.9% | Omzet:15,823,671,838 | actief
+HFEL.L           | opname:2026-07-12 | ROE:30.2% | Debt:9.6 | Marge:92.4% | Vol:18.2% | Omzet:278,734,863 | actief
+HIK.L            | opname:2026-05-04 | ROE:15.4% | Debt:77.1 | Marge:11.3% | Vol:34.9% | Omzet:1,466,187,902 | actief
+HILS.L           | opname:2026-05-04 | ROE:15.0% | Debt:41.0 | Marge:8.0% | Vol:25.3% | Omzet:449,602,716 | actief
+HLMA.L           | opname:2026-05-04 | ROE:18.3% | Debt:42.1 | Marge:14.4% | Vol:31.3% | Omzet:4,004,516,327 | actief
+HLN.L            | opname:2026-05-04 | ROE:10.1% | Debt:50.2 | Marge:14.6% | Vol:22.6% | Omzet:7,435,706,259 | actief
+HMSO.L           | opname:2026-05-04 | ROE:10.6% | Debt:86.4 | Marge:67.5% | Vol:26.9% | Omzet:331,475,390 | actief
+HOC.L            | opname:2026-05-04 | ROE:31.6% | Debt:39.7 | Marge:17.1% | Vol:62.1% | Omzet:1,126,416,192 | actief
+HSW.L            | opname:2026-05-08 | ROE:9.0% | Debt:15.4 | Marge:6.4% | Vol:31.8% | Omzet:20,482,597 | actief
+HSX.L            | opname:2026-05-04 | ROE:16.5% | Debt:21.4 | Marge:15.6% | Vol:24.0% | Omzet:2,100,156,050 | actief
+HWDN.L           | opname:2026-05-04 | ROE:23.9% | Debt:62.4 | Marge:10.9% | Vol:27.3% | Omzet:1,506,508,056 | actief
+ICG.L            | opname:2026-05-04 | ROE:18.4% | Debt:47.0 | Marge:48.9% | Vol:29.5% | Omzet:2,208,520,209 | actief
+IHP.L            | opname:2026-05-04 | ROE:28.9% | Debt:5.7 | Marge:38.1% | Vol:24.7% | Omzet:253,818,795 | actief
+III.L            | opname:2026-05-04 | ROE:19.1% | Debt:4.1 | Marge:94.8% | Vol:45.5% | Omzet:7,306,082,971 | actief
+IMI.L            | opname:2026-05-04 | ROE:35.8% | Debt:80.3 | Marge:14.1% | Vol:23.1% | Omzet:2,538,019,568 | actief
+ITH.L            | opname:2026-05-24 | ROE:10.2% | Debt:72.5 | Marge:8.2% | Vol:48.6% | Omzet:458,224,854 | actief
+ITV.L            | opname:2026-05-08 | ROE:13.5% | Debt:52.2 | Marge:6.6% | Vol:30.6% | Omzet:787,628,961 | actief
+JET2.L           | opname:2026-08-11 | ROE:22.4% | Debt:62.1 | Marge:5.5% | Vol:33.7% | Omzet:966,140,177 | actief
+JFJ.L            | opname:2026-05-04 | ROE:21.9% | Debt:5.2 | Marge:96.5% | Vol:20.9% | Omzet:233,798,988 | actief
+JHD.L            | opname:2026-08-11 | ROE:21.3% | Debt:5.1 | Marge:14.6% | Vol:26.2% | Omzet:70,619,665 | actief
+JSG.L            | opname:2026-08-11 | ROE:12.7% | Debt:61.9 | Marge:6.9% | Vol:29.3% | Omzet:211,354,307 | actief
+JUP.L            | opname:2026-05-04 | ROE:12.0% | Debt:4.8 | Marge:21.2% | Vol:31.7% | Omzet:220,625,094 | actief
+KLR.L            | opname:2026-05-08 | ROE:25.3% | Debt:47.8 | Marge:4.8% | Vol:34.6% | Omzet:346,416,425 | actief
+KNOS.L           | opname:2026-05-04 | ROE:35.6% | Debt:6.1 | Marge:9.9% | Vol:48.5% | Omzet:384,134,854 | actief
+LRE.L            | opname:2026-05-04 | ROE:21.7% | Debt:32.0 | Marge:21.4% | Vol:25.2% | Omzet:477,322,921 | actief
+LSEG.L           | opname:2026-05-24 | ROE:7.7% | Debt:64.3 | Marge:14.6% | Vol:32.5% | Omzet:14,621,771,689 | actief
+LSL.L            | opname:2026-05-04 | ROE:21.1% | Debt:59.9 | Marge:9.3% | Vol:26.5% | Omzet:37,186,280 | actief
+LUCE.L           | opname:2026-05-04 | ROE:20.3% | Debt:61.3 | Marge:7.5% | Vol:40.8% | Omzet:78,913,261 | actief
+MAFL.L           | opname:2026-08-11 | ROE:24.2% | Debt:6.1 | Marge:81.5% | Vol:53.7% | Omzet:5,036,248 | actief
 MCB.L            | opname:2026-05-08 | ROE:33.3% | Debt:145.8 | Marge:3.2% | Vol:38.2% | Omzet:49,877,455 | actief
-MSI.L            | opname:2026-08-16 | ROE:17.0% | Debt:133.2 | Marge:9.6% | Vol:44.6% | Omzet:34,971,107 | actief
-OTB.L            | opname:2026-08-09 | ROE:12.8% | Debt:23.9 | Marge:3.0% | Vol:48.4% | Omzet:152,964,919 | actief
-OXIG.L           | opname:2026-05-08 | ROE:12.4% | Debt:13.1 | Marge:11.4% | Vol:37.7% | Omzet:550,821,737 | actief
-PGH.L            | opname:2026-08-11 | ROE:20.3% | Debt:123.1 | Marge:15.1% | Vol:33.2% | Omzet:21,990,374 | actief
-PINE.L           | opname:2026-05-04 | ROE:41.4% | Debt:73.5 | Marge:124.2% | Vol:65.0% | Omzet:165,534,142 | actief
-PMG.L            | opname:2026-08-11 | ROE:34.3% | Debt:2.3 | Marge:220.0% | Vol:48.4% | Omzet:3,732,378 | actief
-POLR.L           | opname:2026-08-11 | ROE:41.1% | Debt:2.7 | Marge:22.3% | Vol:33.9% | Omzet:257,583,739 | actief
+MONY.L           | opname:2026-05-04 | ROE:37.1% | Debt:32.0 | Marge:18.3% | Vol:26.5% | Omzet:277,839,893 | actief
+N91.L            | opname:2026-05-04 | ROE:28.5% | Debt:14.8 | Marge:23.6% | Vol:27.4% | Omzet:182,842,635 | actief
+NG.L             | opname:2026-05-08 | ROE:8.4% | Debt:121.3 | Marge:18.3% | Vol:20.6% | Omzet:13,201,997,413 | actief
+NXT.L            | opname:2026-05-08 | ROE:50.8% | Debt:101.6 | Marge:12.9% | Vol:23.6% | Omzet:5,704,214,224 | actief
+OXIG.L           | opname:2026-05-08 | ROE:12.4% | Debt:13.1 | Marge:11.4% | Vol:37.9% | Omzet:555,648,429 | actief
+PAF.L            | opname:2026-05-04 | ROE:43.6% | Debt:19.8 | Marge:28.8% | Vol:58.7% | Omzet:905,555,218 | actief
+PBEE.L           | opname:2026-08-22 | ROE:26.5% | Debt:7.5 | Marge:20.8% | Vol:35.2% | Omzet:20,850,149 | actief
+PEEL.L           | opname:2026-08-11 | ROE:15.1% | Debt:30.8 | Marge:10.6% | Vol:24.6% | Omzet:15,017,730 | actief
+PFD.L            | opname:2026-05-08 | ROE:9.6% | Debt:24.1 | Marge:11.6% | Vol:19.8% | Omzet:302,584,156 | actief
+PGH.L            | opname:2026-08-11 | ROE:20.3% | Debt:123.1 | Marge:15.1% | Vol:33.0% | Omzet:21,659,345 | actief
+PLUS.L           | opname:2026-05-04 | ROE:47.4% | Debt:4.0 | Marge:34.1% | Vol:30.0% | Omzet:625,860,060 | actief
+PMG.L            | opname:2026-08-11 | ROE:34.3% | Debt:2.3 | Marge:220.0% | Vol:48.9% | Omzet:3,785,888 | actief
+POLN.L           | opname:2026-08-11 | ROE:9.6% | Debt:34.1 | Marge:42.1% | Vol:22.0% | Omzet:82,172,147 | actief
+POLR.L           | opname:2026-08-11 | ROE:41.1% | Debt:2.7 | Marge:22.3% | Vol:34.0% | Omzet:260,743,567 | actief
+POW.L            | opname:2026-08-11 | ROE:13.0% | Debt:2.3 | Marge:4665.8% | Vol:41.6% | Omzet:7,154,609 | actief
+PRU.L            | opname:2026-05-04 | ROE:20.6% | Debt:28.3 | Marge:27.6% | Vol:26.4% | Omzet:7,274,218,380 | actief
 PRV.L            | opname:2026-05-04 | ROE:11.3% | Debt:14.5 | Marge:9.2% | Vol:31.1% | Omzet:44,260,460 | actief
 PSN.L            | opname:2026-05-08 | ROE:8.6% | Debt:7.6 | Marge:7.7% | Vol:33.5% | Omzet:2,235,567,379 | actief
-PZC.L            | opname:2026-08-09 | ROE:12.5% | Debt:37.1 | Marge:3.7% | Vol:41.8% | Omzet:80,560,120 | actief
-QQ.L             | opname:2026-05-24 | ROE:18.2% | Debt:76.7 | Marge:5.6% | Vol:31.9% | Omzet:771,327,558 | actief
-RFX.L            | opname:2026-08-11 | ROE:31.6% | Debt:26.9 | Marge:13.2% | Vol:51.1% | Omzet:67,907,673 | actief
-RNK.L            | opname:2026-05-08 | ROE:7.8% | Debt:60.8 | Marge:3.6% | Vol:37.6% | Omzet:59,685,599 | actief
-ROR.L            | opname:2026-05-04 | ROE:21.8% | Debt:8.0 | Marge:15.7% | Vol:70.6% | Omzet:1,113,953,755 | actief
-RS1.L            | opname:2026-05-08 | ROE:11.7% | Debt:35.0 | Marge:5.6% | Vol:30.1% | Omzet:916,501,698 | actief
-SCT.L            | opname:2026-05-04 | ROE:49.8% | Debt:13.1 | Marge:8.1% | Vol:31.9% | Omzet:737,740,899 | actief
+QQ.L             | opname:2026-05-24 | ROE:18.2% | Debt:76.7 | Marge:5.6% | Vol:31.7% | Omzet:775,432,910 | actief
+RAT.L            | opname:2026-05-08 | ROE:9.0% | Debt:10.1 | Marge:11.3% | Vol:28.4% | Omzet:239,291,908 | actief
+RFX.L            | opname:2026-08-11 | ROE:31.6% | Debt:26.9 | Marge:13.2% | Vol:51.0% | Omzet:68,327,841 | actief
+RIO.L            | opname:2026-05-04 | ROE:19.3% | Debt:31.9 | Marge:19.6% | Vol:27.8% | Omzet:19,000,675,794 | actief
+RMV.L            | opname:2026-05-04 | ROE:282.4% | Debt:7.3 | Marge:49.7% | Vol:29.7% | Omzet:2,152,641,528 | actief
+RS1.L            | opname:2026-05-08 | ROE:11.7% | Debt:35.0 | Marge:5.6% | Vol:30.0% | Omzet:921,820,725 | actief
+SCT.L            | opname:2026-05-04 | ROE:49.8% | Debt:13.1 | Marge:8.1% | Vol:32.0% | Omzet:738,789,945 | actief
 SDR.L            | opname:2026-05-04 | ROE:15.8% | Debt:12.6 | Marge:19.1% | Vol:33.0% | Omzet:1,878,288,515 | actief
-SRC.L            | opname:2026-08-11 | ROE:10.6% | Debt:74.6 | Marge:7.7% | Vol:36.5% | Omzet:499,255,404 | actief
-SSE.L            | opname:2026-05-08 | ROE:9.7% | Debt:62.0 | Marge:11.9% | Vol:30.1% | Omzet:8,057,142,469 | actief
-STCM.L           | opname:2026-08-16 | ROE:5.8% | Debt:4.5 | Marge:3.3% | Vol:31.2% | Omzet:1,400,032 | actief
-SUP.L            | opname:2026-08-11 | ROE:22.2% | Debt:16.7 | Marge:6.7% | Vol:30.3% | Omzet:26,476,173 | actief
-SUS.L            | opname:2026-05-08 | ROE:9.7% | Debt:97.4 | Marge:29.6% | Vol:30.8% | Omzet:18,072,898 | actief
-TATE.L           | opname:2026-05-24 | ROE:6.2% | Debt:81.0 | Marge:4.8% | Vol:55.2% | Omzet:1,068,095,566 | actief
-TBTG.L           | opname:2026-08-11 | ROE:16.8% | Debt:4.3 | Marge:7.0% | Vol:41.7% | Omzet:77,561,534 | actief
+SHC.L            | opname:2026-05-08 | ROE:9.7% | Debt:20.3 | Marge:156.7% | Vol:22.9% | Omzet:564,823,308 | actief
+SHEL.L           | opname:2026-05-08 | ROE:14.3% | Debt:40.2 | Marge:8.8% | Vol:22.7% | Omzet:30,954,506,443 | actief
+SN.L             | opname:2026-05-04 | ROE:11.9% | Debt:73.1 | Marge:10.1% | Vol:25.7% | Omzet:3,566,220,556 | actief
+SRC.L            | opname:2026-08-11 | ROE:10.6% | Debt:74.6 | Marge:7.7% | Vol:36.7% | Omzet:498,904,515 | actief
+SRE.L            | opname:2026-05-04 | ROE:12.8% | Debt:76.7 | Marge:65.2% | Vol:21.1% | Omzet:353,201,297 | actief
+SSE.L            | opname:2026-05-08 | ROE:9.7% | Debt:62.0 | Marge:11.9% | Vol:30.2% | Omzet:8,120,406,805 | actief
+SUP.L            | opname:2026-08-11 | ROE:22.2% | Debt:16.7 | Marge:6.7% | Vol:30.4% | Omzet:26,773,208 | actief
+SUS.L            | opname:2026-05-08 | ROE:9.7% | Debt:97.4 | Marge:29.6% | Vol:30.8% | Omzet:17,008,439 | actief
+TAM.L            | opname:2026-08-11 | ROE:35.4% | Debt:114.6 | Marge:34.7% | Vol:28.4% | Omzet:86,113,939 | actief
+TBTG.L           | opname:2026-08-11 | ROE:16.8% | Debt:4.3 | Marge:7.0% | Vol:41.4% | Omzet:77,224,865 | actief
+TEP.L            | opname:2026-06-28 | ROE:31.1% | Debt:87.9 | Marge:4.2% | Vol:41.2% | Omzet:344,737,759 | actief
 TET.L            | opname:2026-05-08 | ROE:3.1% | Debt:4.6 | Marge:3.4% | Vol:63.5% | Omzet:96,025,861 | actief
-TRN.L            | opname:2026-05-04 | ROE:32.8% | Debt:128.2 | Marge:17.6% | Vol:34.3% | Omzet:438,304,442 | actief
-ULTP.L           | opname:2026-08-16 | ROE:8.2% | Debt:34.6 | Marge:2.7% | Vol:42.1% | Omzet:8,055,604 | actief
-VLX.L            | opname:2026-08-11 | ROE:16.4% | Debt:45.7 | Marge:5.3% | Vol:38.8% | Omzet:383,729,806 | actief
+THX.L            | opname:2026-08-11 | ROE:55.5% | Debt:3.4 | Marge:62.2% | Vol:57.3% | Omzet:46,167,407 | actief
+TRN.L            | opname:2026-05-04 | ROE:32.8% | Debt:128.2 | Marge:17.6% | Vol:38.2% | Omzet:451,782,628 | actief
+VLX.L            | opname:2026-08-11 | ROE:16.4% | Debt:45.7 | Marge:5.3% | Vol:38.9% | Omzet:389,460,338 | actief
 WEIR.L           | opname:2026-05-04 | ROE:13.9% | Debt:91.1 | Marge:10.0% | Vol:30.6% | Omzet:2,841,872,981 | actief
-WOSG.L           | opname:2026-05-08 | ROE:16.9% | Debt:87.2 | Marge:5.4% | Vol:38.8% | Omzet:389,715,213 | actief
-YOU.L            | opname:2026-08-16 | ROE:6.9% | Debt:112.4 | Marge:3.1% | Vol:44.6% | Omzet:178,662,982 | actief
-ZTF.L            | opname:2026-08-11 | ROE:19.0% | Debt:44.9 | Marge:13.9% | Vol:39.9% | Omzet:55,286,685 | actief
-ABDN.L           | opname:2026-05-08 | ROE:7.6% | Debt:10.8 | Marge:28.1% | Vol:29.8% | Omzet:945,658,252 | zwakker | weken_buiten:1
-ABF.L            | opname:2026-05-08 | ROE:8.5% | Debt:8.4 | Marge:4.9% | Vol:27.5% | Omzet:1,935,392,123 | zwakker | weken_buiten:1
-ALFA.L           | opname:2026-08-11 | ROE:61.5% | Debt:18.0 | Marge:23.8% | Vol:30.9% | Omzet:117,112,803 | zwakker | weken_buiten:1
-ALU.L            | opname:2026-08-11 | ROE:18.8% | Debt:48.0 | Marge:7.1% | Vol:38.9% | Omzet:21,548,874 | zwakker | weken_buiten:1
-AMCO.L           | opname:2026-08-11 | ROE:13.5% | Debt:95.2 | Marge:4.2% | Vol:46.1% | Omzet:19,616,442 | zwakker | weken_buiten:1
-APTD.L           | opname:2026-05-08 | ROE:7.2% | Debt:15.4 | Marge:6.2% | Vol:35.3% | Omzet:11,741,227 | zwakker | weken_buiten:1
-ARC.L            | opname:2026-08-11 | ROE:9.7% | Debt:4.3 | Marge:27.0% | Vol:24.4% | Omzet:1,381,701 | zwakker | weken_buiten:1
-AUTO.L           | opname:2026-05-04 | ROE:60.2% | Debt:51.8 | Marge:47.1% | Vol:28.1% | Omzet:2,581,751,127 | zwakker | weken_buiten:1
-AVON.L           | opname:2026-05-17 | ROE:10.5% | Debt:48.3 | Marge:5.6% | Vol:28.3% | Omzet:152,436,930 | zwakker | weken_buiten:1
-AZN.L            | opname:2026-05-04 | ROE:22.0% | Debt:64.2 | Marge:17.0% | Vol:27.6% | Omzet:33,208,105,508 | zwakker | weken_buiten:1
-BAG.L            | opname:2026-08-11 | ROE:14.1% | Debt:13.9 | Marge:10.8% | Vol:20.2% | Omzet:123,858,007 | zwakker | weken_buiten:1
-BATS.L           | opname:2026-05-04 | ROE:13.4% | Debt:72.2 | Marge:25.0% | Vol:24.7% | Omzet:18,627,908,872 | zwakker | weken_buiten:1
-BCG.L            | opname:2026-05-04 | ROE:15.8% | Debt:24.8 | Marge:57.6% | Vol:39.0% | Omzet:482,035,420 | zwakker | weken_buiten:1
-BKG.L            | opname:2026-05-04 | ROE:8.8% | Debt:18.2 | Marge:13.4% | Vol:29.4% | Omzet:1,245,777,051 | zwakker | weken_buiten:1
-BLND.L           | opname:2026-05-08 | ROE:7.8% | Debt:53.1 | Marge:73.7% | Vol:24.7% | Omzet:1,833,262,016 | zwakker | weken_buiten:1
-BOKU.L           | opname:2026-08-11 | ROE:8.4% | Debt:3.5 | Marge:9.5% | Vol:49.2% | Omzet:164,501,062 | zwakker | weken_buiten:1
-CAPD.L           | opname:2026-05-04 | ROE:21.2% | Debt:33.7 | Marge:20.1% | Vol:40.2% | Omzet:37,929,102 | zwakker | weken_buiten:1
-CER.L            | opname:2026-08-11 | ROE:24.4% | Debt:6.6 | Marge:32.2% | Vol:42.1% | Omzet:136,370,138 | zwakker | weken_buiten:1
-CKN.L            | opname:2026-05-04 | ROE:15.3% | Debt:10.8 | Marge:10.4% | Vol:23.5% | Omzet:334,106,535 | zwakker | weken_buiten:1
-CMCL.L           | opname:2026-08-11 | ROE:27.9% | Debt:36.1 | Marge:24.1% | Vol:54.9% | Omzet:12,583,293 | zwakker | weken_buiten:1
-CTEC.L           | opname:2026-05-04 | ROE:7.7% | Debt:121.8 | Marge:5.0% | Vol:29.4% | Omzet:2,097,912,728 | zwakker | weken_buiten:1
-DATA.L           | opname:2026-08-11 | ROE:13.4% | Debt:58.6 | Marge:10.3% | Vol:48.3% | Omzet:212,843,901 | zwakker | weken_buiten:1
-DPLM.L           | opname:2026-05-04 | ROE:19.0% | Debt:47.5 | Marge:11.5% | Vol:28.8% | Omzet:2,623,605,678 | zwakker | weken_buiten:1
-ELM.L            | opname:2026-08-11 | ROE:10.7% | Debt:39.9 | Marge:11.9% | Vol:23.9% | Omzet:195,338,447 | zwakker | weken_buiten:1
-EMG.L            | opname:2026-05-04 | ROE:21.3% | Debt:19.1 | Marge:19.2% | Vol:29.1% | Omzet:797,086,572 | zwakker | weken_buiten:1
-EXPN.L           | opname:2026-05-08 | ROE:28.3% | Debt:100.3 | Marge:17.8% | Vol:29.7% | Omzet:9,267,954,862 | zwakker | weken_buiten:1
-FAN.L            | opname:2026-05-08 | ROE:19.1% | Debt:100.9 | Marge:11.2% | Vol:27.0% | Omzet:324,034,723 | zwakker | weken_buiten:1
-FORT.L           | opname:2026-05-08 | ROE:8.5% | Debt:43.8 | Marge:5.4% | Vol:28.1% | Omzet:105,615,280 | zwakker | weken_buiten:1
-FRAS.L           | opname:2026-05-04 | ROE:15.5% | Debt:103.1 | Marge:7.0% | Vol:29.7% | Omzet:126,887,628 | zwakker | weken_buiten:1
-FRES.L           | opname:2026-05-04 | ROE:53.0% | Debt:15.4 | Marge:38.0% | Vol:57.0% | Omzet:4,063,724,573 | zwakker | weken_buiten:1
-FSG.L            | opname:2026-08-11 | ROE:50.5% | Debt:32.7 | Marge:26.0% | Vol:27.6% | Omzet:145,267,752 | zwakker | weken_buiten:1
-GAW.L            | opname:2026-05-04 | ROE:66.9% | Debt:16.7 | Marge:31.2% | Vol:27.0% | Omzet:1,625,137,784 | zwakker | weken_buiten:1
-GFM.L            | opname:2026-08-11 | ROE:8.0% | Debt:16.4 | Marge:16.0% | Vol:37.8% | Omzet:30,060,832 | zwakker | weken_buiten:1
-GFTU.L           | opname:2026-05-08 | ROE:8.4% | Debt:37.6 | Marge:5.4% | Vol:23.5% | Omzet:372,580,299 | zwakker | weken_buiten:1
-GNS.L            | opname:2026-05-08 | ROE:9.3% | Debt:51.7 | Marge:7.1% | Vol:37.7% | Omzet:470,080,174 | zwakker | weken_buiten:1
-GPE.L            | opname:2026-05-08 | ROE:7.5% | Debt:41.3 | Marge:120.6% | Vol:25.3% | Omzet:340,778,540 | zwakker | weken_buiten:1
-GSK.L            | opname:2026-05-08 | ROE:33.4% | Debt:106.5 | Marge:14.5% | Vol:24.9% | Omzet:15,840,997,307 | zwakker | weken_buiten:1
-HFEL.L           | opname:2026-07-12 | ROE:30.2% | Debt:9.6 | Marge:92.4% | Vol:18.1% | Omzet:274,730,768 | zwakker | weken_buiten:1
-HILS.L           | opname:2026-05-04 | ROE:15.0% | Debt:41.0 | Marge:8.0% | Vol:24.8% | Omzet:445,373,667 | zwakker | weken_buiten:1
-HLMA.L           | opname:2026-05-04 | ROE:18.3% | Debt:42.1 | Marge:14.4% | Vol:31.1% | Omzet:3,954,998,003 | zwakker | weken_buiten:1
-HLN.L            | opname:2026-05-04 | ROE:10.1% | Debt:50.2 | Marge:14.6% | Vol:22.6% | Omzet:7,430,584,941 | zwakker | weken_buiten:1
-HMSO.L           | opname:2026-05-04 | ROE:10.6% | Debt:86.4 | Marge:67.5% | Vol:26.9% | Omzet:330,177,955 | zwakker | weken_buiten:1
-HOC.L            | opname:2026-05-04 | ROE:31.6% | Debt:39.7 | Marge:17.1% | Vol:61.2% | Omzet:1,111,170,414 | zwakker | weken_buiten:1
-HSX.L            | opname:2026-05-04 | ROE:16.5% | Debt:21.4 | Marge:15.6% | Vol:24.0% | Omzet:2,118,152,269 | zwakker | weken_buiten:1
-HWDN.L           | opname:2026-05-04 | ROE:23.9% | Debt:62.4 | Marge:10.9% | Vol:27.2% | Omzet:1,506,887,681 | zwakker | weken_buiten:1
-ICG.L            | opname:2026-05-04 | ROE:18.4% | Debt:47.0 | Marge:48.9% | Vol:29.3% | Omzet:2,193,186,341 | zwakker | weken_buiten:1
-IHP.L            | opname:2026-05-04 | ROE:28.9% | Debt:5.7 | Marge:38.1% | Vol:24.6% | Omzet:250,483,285 | zwakker | weken_buiten:1
-IMI.L            | opname:2026-05-04 | ROE:35.8% | Debt:80.3 | Marge:14.1% | Vol:23.2% | Omzet:2,514,790,808 | zwakker | weken_buiten:1
-ITV.L            | opname:2026-05-08 | ROE:13.5% | Debt:52.2 | Marge:6.6% | Vol:30.5% | Omzet:788,144,473 | zwakker | weken_buiten:1
-JHD.L            | opname:2026-08-11 | ROE:21.3% | Debt:5.1 | Marge:14.6% | Vol:26.3% | Omzet:70,015,653 | zwakker | weken_buiten:1
-JSG.L            | opname:2026-08-11 | ROE:12.7% | Debt:61.9 | Marge:6.9% | Vol:29.2% | Omzet:211,263,715 | zwakker | weken_buiten:1
-LRE.L            | opname:2026-05-04 | ROE:21.7% | Debt:32.0 | Marge:21.4% | Vol:25.3% | Omzet:479,269,505 | zwakker | weken_buiten:1
-LSEG.L           | opname:2026-05-24 | ROE:7.7% | Debt:64.3 | Marge:14.6% | Vol:32.6% | Omzet:14,693,406,280 | zwakker | weken_buiten:1
-LSL.L            | opname:2026-05-04 | ROE:21.1% | Debt:59.9 | Marge:9.3% | Vol:26.5% | Omzet:36,574,320 | zwakker | weken_buiten:1
-MONY.L           | opname:2026-05-04 | ROE:37.1% | Debt:32.0 | Marge:18.3% | Vol:26.3% | Omzet:277,090,292 | zwakker | weken_buiten:1
-N91.L            | opname:2026-05-04 | ROE:28.5% | Debt:14.8 | Marge:23.6% | Vol:27.4% | Omzet:181,775,689 | zwakker | weken_buiten:1
-NG.L             | opname:2026-05-08 | ROE:8.4% | Debt:121.3 | Marge:18.3% | Vol:20.4% | Omzet:13,131,065,571 | zwakker | weken_buiten:1
-NXT.L            | opname:2026-05-08 | ROE:50.8% | Debt:101.6 | Marge:12.9% | Vol:23.7% | Omzet:5,701,256,463 | zwakker | weken_buiten:1
-PAF.L            | opname:2026-05-04 | ROE:43.6% | Debt:19.8 | Marge:28.8% | Vol:57.6% | Omzet:892,348,467 | zwakker | weken_buiten:1
-PEEL.L           | opname:2026-08-11 | ROE:15.1% | Debt:30.8 | Marge:10.6% | Vol:24.6% | Omzet:14,966,829 | zwakker | weken_buiten:1
-PFD.L            | opname:2026-05-08 | ROE:9.6% | Debt:24.1 | Marge:11.6% | Vol:19.8% | Omzet:308,120,271 | zwakker | weken_buiten:1
-PLUS.L           | opname:2026-05-04 | ROE:47.4% | Debt:4.0 | Marge:34.1% | Vol:29.7% | Omzet:634,689,015 | zwakker | weken_buiten:1
-POLN.L           | opname:2026-08-11 | ROE:9.6% | Debt:34.1 | Marge:42.1% | Vol:21.9% | Omzet:80,870,514 | zwakker | weken_buiten:1
-POW.L            | opname:2026-08-11 | ROE:13.0% | Debt:2.3 | Marge:4665.8% | Vol:43.0% | Omzet:7,419,871 | zwakker | weken_buiten:1
-PRU.L            | opname:2026-05-04 | ROE:20.6% | Debt:28.3 | Marge:27.6% | Vol:26.4% | Omzet:7,259,558,137 | zwakker | weken_buiten:1
-RAT.L            | opname:2026-05-08 | ROE:9.0% | Debt:10.1 | Marge:11.3% | Vol:28.4% | Omzet:239,001,037 | zwakker | weken_buiten:1
-RBN.L            | opname:2026-08-11 | ROE:9.2% | Debt:31.2 | Marge:4.1% | Vol:25.8% | Omzet:1,244,882 | zwakker | weken_buiten:1
-RIO.L            | opname:2026-05-04 | ROE:19.3% | Debt:31.9 | Marge:19.6% | Vol:27.5% | Omzet:18,980,942,571 | zwakker | weken_buiten:1
-RMV.L            | opname:2026-05-04 | ROE:282.4% | Debt:7.3 | Marge:49.7% | Vol:29.5% | Omzet:2,121,942,713 | zwakker | weken_buiten:1
-SHC.L            | opname:2026-05-08 | ROE:9.7% | Debt:20.3 | Marge:156.7% | Vol:23.0% | Omzet:562,128,901 | zwakker | weken_buiten:1
-SHEL.L           | opname:2026-05-08 | ROE:14.3% | Debt:40.2 | Marge:8.8% | Vol:22.6% | Omzet:30,916,714,105 | zwakker | weken_buiten:1
-SN.L             | opname:2026-05-04 | ROE:11.9% | Debt:73.1 | Marge:10.1% | Vol:25.5% | Omzet:3,620,126,454 | zwakker | weken_buiten:1
-SRE.L            | opname:2026-05-04 | ROE:12.8% | Debt:76.7 | Marge:65.2% | Vol:21.1% | Omzet:356,044,610 | zwakker | weken_buiten:1
-TAM.L            | opname:2026-08-11 | ROE:35.4% | Debt:114.6 | Marge:34.7% | Vol:28.5% | Omzet:86,646,450 | zwakker | weken_buiten:1
-TEP.L            | opname:2026-06-28 | ROE:31.1% | Debt:87.9 | Marge:4.2% | Vol:40.6% | Omzet:340,652,200 | zwakker | weken_buiten:1
-THX.L            | opname:2026-08-11 | ROE:55.5% | Debt:3.4 | Marge:62.2% | Vol:56.8% | Omzet:45,826,152 | zwakker | weken_buiten:1
-XPS.L            | opname:2026-08-11 | ROE:14.7% | Debt:44.7 | Marge:10.1% | Vol:24.8% | Omzet:270,658,241 | zwakker | weken_buiten:1
-YU.L             | opname:2026-08-11 | ROE:42.7% | Debt:11.5 | Marge:5.1% | Vol:26.8% | Omzet:48,176,074 | zwakker | weken_buiten:1
-ZIG.L            | opname:2026-05-08 | ROE:7.1% | Debt:93.8 | Marge:4.1% | Vol:25.3% | Omzet:267,193,343 | zwakker | weken_buiten:1
-AAIF.L           | opname:2026-05-08 | ROE:18.8% | Debt:7.7 | Marge:92.2% | Vol:21.2% | Omzet:98,111,489 | verwijderd | verwijderd:2026-07-19
-BREE.L           | opname:2026-05-08 | ROE:6.9% | Debt:62.4 | Marge:4.7% | Vol:29.7% | Omzet:416,123,253 | verwijderd | verwijderd:2026-07-19
-CCH.L            | opname:2026-05-04 | ROE:26.0% | Debt:147.1 | Marge:8.1% | Vol:23.4% | Omzet:2,494,966,716 | verwijderd | verwijderd:2026-07-19
-COA.L            | opname:2026-05-08 | ROE:22.3% | Debt:143.7 | Marge:6.6% | Vol:27.9% | Omzet:288,758,905 | verwijderd | verwijderd:2026-05-17
-CWK.L            | opname:2026-05-08 | ROE:15.2% | Debt:23.3 | Marge:5.3% | Vol:17.7% | Omzet:635,435,665 | verwijderd | verwijderd:2026-05-17
-FDM.L            | opname:2026-08-02 | ROE:4.5% | Debt:37.5 | Marge:1.6% | Vol:41.9% | Omzet:48,416,137 | verwijderd | verwijderd:2026-08-16
-FOUR.L           | opname:2026-05-04 | ROE:70.1% | Debt:179.8 | Marge:7.5% | Vol:36.8% | Omzet:300,285,838 | verwijderd | verwijderd:2026-08-16
-FOXT.L           | opname:2026-05-08 | ROE:5.8% | Debt:46.8 | Marge:4.9% | Vol:28.3% | Omzet:23,697,797 | verwijderd | verwijderd:2026-07-19
-GRI.L            | opname:2026-05-04 | ROE:6.7% | Debt:83.7 | Marge:54.8% | Vol:24.0% | Omzet:486,226,662 | verwijderd | verwijderd:2026-05-17
+WOSG.L           | opname:2026-05-08 | ROE:16.9% | Debt:87.2 | Marge:5.4% | Vol:38.7% | Omzet:391,292,514 | actief
+XPS.L            | opname:2026-08-11 | ROE:14.7% | Debt:44.7 | Marge:10.1% | Vol:25.0% | Omzet:272,547,597 | actief
+YU.L             | opname:2026-08-11 | ROE:42.7% | Debt:11.5 | Marge:5.1% | Vol:26.4% | Omzet:47,855,691 | actief
+ZIG.L            | opname:2026-05-08 | ROE:7.1% | Debt:93.8 | Marge:4.1% | Vol:25.4% | Omzet:267,907,306 | actief
+ZTF.L            | opname:2026-08-11 | ROE:19.0% | Debt:44.9 | Marge:13.9% | Vol:39.3% | Omzet:54,343,484 | actief
+AIEA.L           | opname:2026-08-16 | ROE:6.1% | Debt:4.8 | Marge:4.6% | Vol:36.1% | Omzet:710,286 | zwakker | weken_buiten:1
+ALTN.L           | opname:2026-08-16 | ROE:53.4% | Debt:27.5 | Marge:35.4% | Vol:71.0% | Omzet:74,246,156 | zwakker | weken_buiten:1
+AMRQ.L           | opname:2026-08-16 | ROE:1.8% | Debt:29.4 | Marge:6.3% | Vol:49.8% | Omzet:76,179,155 | zwakker | weken_buiten:1
+AMS.L            | opname:2026-08-16 | ROE:4.0% | Debt:31.3 | Marge:4.3% | Vol:39.7% | Omzet:406,108,320 | zwakker | weken_buiten:1
+AO.L             | opname:2026-08-16 | ROE:22.4% | Debt:36.9 | Marge:2.8% | Vol:30.7% | Omzet:51,025,933 | zwakker | weken_buiten:1
+AOTI.L           | opname:2026-08-16 | ROE:14.3% | Debt:106.3 | Marge:4.0% | Vol:71.6% | Omzet:3,143,652 | zwakker | weken_buiten:1
+AXS.L            | opname:2026-08-16 | ROE:6.4% | Debt:56.4 | Marge:4.2% | Vol:33.0% | Omzet:7,486,685 | zwakker | weken_buiten:1
+BPT.L            | opname:2026-07-06 | ROE:3.4% | Debt:53.4 | Marge:3.7% | Vol:39.5% | Omzet:493,132,676 | zwakker | weken_buiten:1
+BTRW.L           | opname:2026-08-09 | ROE:2.8% | Debt:3.2 | Marge:3.6% | Vol:31.7% | Omzet:2,152,551,919 | zwakker | weken_buiten:1
+BWY.L            | opname:2026-08-16 | ROE:4.5% | Debt:5.4 | Marge:5.5% | Vol:37.1% | Omzet:1,220,939,659 | zwakker | weken_buiten:1
+CNE.L            | opname:2026-05-08 | ROE:4.6% | Debt:12.3 | Marge:14.1% | Vol:49.5% | Omzet:40,169,430 | zwakker | weken_buiten:1
+COST.L           | opname:2026-05-08 | ROE:15.2% | Debt:12.6 | Marge:3.6% | Vol:33.1% | Omzet:210,008,820 | zwakker | weken_buiten:1
+CRDA.L           | opname:2026-08-02 | ROE:3.7% | Debt:35.8 | Marge:4.6% | Vol:30.9% | Omzet:1,634,800,112 | zwakker | weken_buiten:1
+DOCS.L           | opname:2026-08-16 | ROE:6.5% | Debt:108.9 | Marge:3.1% | Vol:33.2% | Omzet:107,254,098 | zwakker | weken_buiten:1
+ECOR.L           | opname:2026-05-08 | ROE:4.9% | Debt:20.7 | Marge:39.7% | Vol:35.7% | Omzet:74,111,235 | zwakker | weken_buiten:1
+EZJ.L            | opname:2026-05-08 | ROE:13.1% | Debt:82.4 | Marge:3.9% | Vol:40.9% | Omzet:2,868,599,773 | zwakker | weken_buiten:1
+FSTA.L           | opname:2026-06-21 | ROE:5.2% | Debt:51.0 | Marge:5.3% | Vol:30.5% | Omzet:23,482,833 | zwakker | weken_buiten:1
+FTC.L            | opname:2026-08-16 | ROE:12.0% | Debt:13.8 | Marge:8.2% | Vol:79.1% | Omzet:568,432,282 | zwakker | weken_buiten:1
+GMS.L            | opname:2026-05-08 | ROE:4.8% | Debt:50.8 | Marge:10.0% | Vol:43.2% | Omzet:53,933,330 | zwakker | weken_buiten:1
+HBR.L            | opname:2026-08-09 | ROE:6.5% | Debt:115.5 | Marge:2.9% | Vol:40.4% | Omzet:1,401,616,281 | zwakker | weken_buiten:1
+HTG.L            | opname:2026-08-16 | ROE:4.8% | Debt:13.3 | Marge:4.0% | Vol:32.0% | Omzet:201,554,976 | zwakker | weken_buiten:1
+IPO.L            | opname:2026-08-16 | ROE:6.9% | Debt:12.3 | Marge:83.7% | Vol:34.1% | Omzet:185,571,641 | zwakker | weken_buiten:1
+JD.L             | opname:2026-05-08 | ROE:13.7% | Debt:107.0 | Marge:3.4% | Vol:38.8% | Omzet:1,380,447,457 | zwakker | weken_buiten:1
+MACF.L           | opname:2026-08-02 | ROE:5.2% | Debt:74.1 | Marge:2.1% | Vol:37.2% | Omzet:26,082,412 | zwakker | weken_buiten:1
+MSI.L            | opname:2026-08-16 | ROE:17.0% | Debt:133.2 | Marge:9.6% | Vol:44.0% | Omzet:34,905,675 | zwakker | weken_buiten:1
+OTB.L            | opname:2026-08-09 | ROE:12.8% | Debt:23.9 | Marge:3.0% | Vol:48.4% | Omzet:152,011,207 | zwakker | weken_buiten:1
+PINE.L           | opname:2026-05-04 | ROE:41.4% | Debt:73.5 | Marge:124.2% | Vol:65.1% | Omzet:185,232,346 | zwakker | weken_buiten:1
+PZC.L            | opname:2026-08-09 | ROE:12.5% | Debt:37.1 | Marge:3.7% | Vol:41.9% | Omzet:81,172,774 | zwakker | weken_buiten:1
+RBN.L            | opname:2026-08-11 | ROE:7.0% | Debt:32.7 | Marge:3.1% | Vol:25.0% | Omzet:1,205,010 | zwakker | weken_buiten:2
+RNK.L            | opname:2026-05-08 | ROE:7.8% | Debt:60.8 | Marge:3.6% | Vol:37.8% | Omzet:59,356,285 | zwakker | weken_buiten:1
+ROR.L            | opname:2026-05-04 | ROE:21.8% | Debt:8.0 | Marge:15.7% | Vol:70.6% | Omzet:1,138,632,159 | zwakker | weken_buiten:1
+STCM.L           | opname:2026-08-16 | ROE:5.8% | Debt:4.5 | Marge:3.3% | Vol:31.2% | Omzet:1,392,598 | zwakker | weken_buiten:1
+TATE.L           | opname:2026-05-24 | ROE:6.2% | Debt:81.0 | Marge:4.8% | Vol:55.2% | Omzet:1,085,819,378 | zwakker | weken_buiten:1
+ULTP.L           | opname:2026-08-16 | ROE:8.2% | Debt:34.6 | Marge:2.7% | Vol:41.1% | Omzet:7,881,559 | zwakker | weken_buiten:1
+YOU.L            | opname:2026-08-16 | ROE:6.9% | Debt:112.4 | Marge:3.1% | Vol:44.4% | Omzet:177,743,521 | zwakker | weken_buiten:1
+BREE.L           | opname:2026-05-08 | ROE:6.9% | Debt:62.4 | Marge:4.7% | Vol:29.6% | Omzet:416,148,285 | verwijderd | verwijderd:2026-07-19
+CCH.L            | opname:2026-05-04 | ROE:26.0% | Debt:147.1 | Marge:8.1% | Vol:23.4% | Omzet:2,506,574,031 | verwijderd | verwijderd:2026-07-19
+COA.L            | opname:2026-05-08 | ROE:22.3% | Debt:143.7 | Marge:6.6% | Vol:27.9% | Omzet:285,887,894 | verwijderd | verwijderd:2026-05-17
+CWK.L            | opname:2026-05-08 | ROE:15.2% | Debt:23.3 | Marge:5.3% | Vol:17.7% | Omzet:636,073,192 | verwijderd | verwijderd:2026-05-17
+FDM.L            | opname:2026-08-02 | ROE:4.5% | Debt:37.5 | Marge:1.6% | Vol:41.5% | Omzet:48,627,448 | verwijderd | verwijderd:2026-08-16
+FOUR.L           | opname:2026-05-04 | ROE:70.1% | Debt:179.8 | Marge:7.5% | Vol:37.1% | Omzet:298,696,173 | verwijderd | verwijderd:2026-08-16
+FOXT.L           | opname:2026-05-08 | ROE:5.8% | Debt:46.8 | Marge:4.9% | Vol:28.1% | Omzet:24,050,876 | verwijderd | verwijderd:2026-07-19
+GRI.L            | opname:2026-05-04 | ROE:6.7% | Debt:83.7 | Marge:54.8% | Vol:24.1% | Omzet:488,892,129 | verwijderd | verwijderd:2026-05-17
 IPF.L            | opname:2026-05-08 | ROE:9.1% | Debt:130.3 | Marge:6.0% | Vol:18.7% | Omzet:404,876,093 | verwijderd | verwijderd:2026-07-19
-ITRK.L           | opname:2026-05-08 | ROE:29.9% | Debt:172.7 | Marge:9.1% | Vol:32.2% | Omzet:4,504,234,427 | verwijderd | verwijderd:2026-08-11
-LIO.L            | opname:2026-05-08 | ROE:7.8% | Debt:181.8 | Marge:7.1% | Vol:36.5% | Omzet:96,955,482 | verwijderd | verwijderd:2026-07-05
-MGNS.L           | opname:2026-05-08 | ROE:26.1% | Debt:18.3 | Marge:3.6% | Vol:29.2% | Omzet:546,196,083 | verwijderd | verwijderd:2026-05-17
-MRO.L            | opname:2026-05-04 | ROE:5.6% | Debt:71.8 | Marge:4.3% | Vol:34.0% | Omzet:2,314,734,526 | verwijderd | verwijderd:2026-07-19
-PAG.L            | opname:2026-05-08 | ROE:12.0% | Debt:166.7 | Marge:35.1% | Vol:23.8% | Omzet:368,839,942 | verwijderd | verwijderd:2026-06-21
+ITRK.L           | opname:2026-05-08 | ROE:29.9% | Debt:172.7 | Marge:9.1% | Vol:32.1% | Omzet:4,542,299,061 | verwijderd | verwijderd:2026-08-11
+LIO.L            | opname:2026-05-08 | ROE:7.8% | Debt:181.8 | Marge:7.1% | Vol:36.7% | Omzet:96,833,800 | verwijderd | verwijderd:2026-07-05
+MGNS.L           | opname:2026-05-08 | ROE:26.1% | Debt:18.3 | Marge:3.6% | Vol:29.3% | Omzet:549,824,423 | verwijderd | verwijderd:2026-05-17
+MRO.L            | opname:2026-05-04 | ROE:5.6% | Debt:71.8 | Marge:4.3% | Vol:34.0% | Omzet:2,309,288,829 | verwijderd | verwijderd:2026-07-19
+PAG.L            | opname:2026-05-08 | ROE:12.0% | Debt:166.7 | Marge:35.1% | Vol:23.8% | Omzet:368,859,102 | verwijderd | verwijderd:2026-06-21
 PCTN.L           | opname:2026-05-08 | ROE:4.9% | Debt:38.9 | Marge:50.6% | Vol:19.7% | Omzet:102,167,991 | verwijderd | verwijderd:2026-06-28
-PETS.L           | opname:2026-05-08 | ROE:6.4% | Debt:40.8 | Marge:4.3% | Vol:29.1% | Omzet:200,654,554 | verwijderd | verwijderd:2026-06-07
+PETS.L           | opname:2026-05-08 | ROE:6.4% | Debt:40.8 | Marge:4.3% | Vol:28.9% | Omzet:200,777,203 | verwijderd | verwijderd:2026-06-07
 PSH.L            | opname:2026-05-04 | ROE:18.0% | Debt:24.4 | Marge:72.7% | Vol:24.7% | Omzet:678,468,315 | verwijderd | verwijderd:2026-07-19
 PSON.L           | opname:2026-05-08 | ROE:9.2% | Debt:52.4 | Marge:8.8% | Vol:25.0% | Omzet:2,193,315,541 | verwijderd | verwijderd:2026-07-19
 REC.L            | opname:2026-05-04 | ROE:24.7% | Debt:23.8 | Marge:19.1% | Vol:31.8% | Omzet:11,329,852 | verwijderd | verwijderd:2026-07-19
-RHIM.L           | opname:2026-08-02 | ROE:9.9% | Debt:156.4 | Marge:3.4% | Vol:42.8% | Omzet:59,357,082 | verwijderd | verwijderd:2026-08-16
-RKT.L            | opname:2026-05-08 | ROE:48.0% | Debt:179.7 | Marge:21.1% | Vol:21.9% | Omzet:10,182,120,189 | verwijderd | verwijderd:2026-07-19
-SGRO.L           | opname:2026-06-29 | ROE:2.5% | Debt:43.7 | Marge:40.0% | Vol:31.2% | Omzet:2,933,247,504 | verwijderd | verwijderd:2026-08-11
+RHIM.L           | opname:2026-08-02 | ROE:9.9% | Debt:156.4 | Marge:3.4% | Vol:43.0% | Omzet:59,602,151 | verwijderd | verwijderd:2026-08-16
+RKT.L            | opname:2026-05-08 | ROE:48.0% | Debt:179.7 | Marge:21.1% | Vol:21.8% | Omzet:10,210,459,877 | verwijderd | verwijderd:2026-07-19
+SGRO.L           | opname:2026-06-29 | ROE:2.5% | Debt:43.7 | Marge:40.0% | Vol:31.1% | Omzet:2,992,089,293 | verwijderd | verwijderd:2026-08-11
 SMIN.L           | opname:2026-05-04 | ROE:12.5% | Debt:73.1 | Marge:8.7% | Vol:23.6% | Omzet:2,782,414,331 | verwijderd | verwijderd:2026-07-19
 SPX.L            | opname:2026-05-04 | ROE:13.5% | Debt:83.8 | Marge:9.6% | Vol:29.3% | Omzet:1,394,168,198 | verwijderd | verwijderd:2026-07-19
-SREI.L           | opname:2026-05-08 | ROE:4.7% | Debt:62.8 | Marge:45.2% | Vol:22.7% | Omzet:72,809,292 | verwijderd | verwijderd:2026-07-19
+SREI.L           | opname:2026-05-08 | ROE:4.7% | Debt:62.8 | Marge:45.2% | Vol:22.8% | Omzet:73,460,631 | verwijderd | verwijderd:2026-07-19
