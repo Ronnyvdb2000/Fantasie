@@ -1,4 +1,4 @@
-name: "Bot 01: FULL scanner (041-059) GARP onderwaardering (Hoogland)"
+name: "Bot 01: quality scanner (x-lijsten) GARP onderwaardering (Hoogland) — dagelijks"
 
 on:
   schedule:
