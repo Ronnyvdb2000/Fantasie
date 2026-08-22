@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01hoogl.py  —  GARP ONDERWAARDERING SELECTIE ENGINE v1.0
+bot_01hoogl.py  —  GARP ONDERWAARDERING SELECTIE ENGINE v2.0
 
 Screent op "Growth At a Reasonable Price", geïnspireerd op de
 selectiecriteria uit de TopAandelen.com-rapporten (Jack Hoogland):
@@ -9,25 +9,39 @@ terugverdienperiode t.o.v. boekwaarde, koers-winstverhouding op
 verwachte winst, winstgroei en rendement op eigen vermogen (RoE).
 
 Criteria (score 0-4):
-  1. RoE                — returnOnEquity >= ROE_MIN (winst wordt goed herbelegd)
-  2. Terugverdienperiode  — (koers - boekwaarde/aandeel) / winst huidig jaar <= TERUGVERDIEN_MAX_JAAR
+  1. RoE                — returnOnEquity >= roe_min (winst wordt goed herbelegd)
+  2. Terugverdienperiode  — (koers - boekwaarde/aandeel) / winst huidig jaar <= terugverdien_max_jaar
                             (boekwaarde >= koers geeft een negatieve/lage periode en telt ook mee)
-  3. Forward P/E          — koers / verwachte winst komend jaar, tussen 0 en FWD_PE_MAX
+  3. Forward P/E          — koers / verwachte winst komend jaar, tussen 0 en fwd_pe_max
   4. Verwachte winstgroei — (forwardEps - trailingEps) / trailingEps > 0%
 
-Rapportage: enkel de top 5 hoogst scorende aandelen per beurs (Telegram + email).
+TWEE MODI:
+  live      — dagelijks (ma-vr), scant de voorgefilterde tickers_0NNx.txt
+              (Nitro-kwaliteitslijsten), top 5 per beurs, score>=3.
+              Universum: ~1.200 tickers, run duurt ~15-20 minuten.
+  full      — wekelijks (zaterdag), scant de RUWE tickers_0NNa.txt
+              (alle tickers per beurs, ~15.300 in totaal), top 3 per
+              beurs, strenger (score>=4 = perfecte score). Draait op
+              een moment dat geen enkele beurs wereldwijd open is, om
+              GitHub Actions-wachtrijen op populaire cron-tijden te
+              vermijden. Logt onder een aparte strategienaam
+              ("bot_01hoogl_full") zodat dit niet door de dagelijkse
+              resultaten heen loopt in Supabase.
 
-Supabase: logt naar de bestaande gedeelde `selecties`-tabel (db_logger.py),
-onder strategie "bot_01hoogl". De nieuwe parameters van deze bot
-(roe_pct, terugverdienperiode, forward_pe, verwachte_winstgroei_pct) zijn
-toegevoegd aan db_logger.py's _KOLOM_WHITELIST zodat ze als eigen kolommen
-worden weggeschreven i.p.v. enkel in de JSON parameters-kolom — vereist de
-bijhorende ALTER TABLE-migratie op Supabase, zie migratie_hoogl_kolommen.sql.
+Rapportage: Telegram + email, één bericht per beurs, lege beurzen worden
+overgeslagen.
+
+Supabase: logt naar de bestaande gedeelde `selecties`-tabel (db_logger.py).
+De parameters van deze bot (roe_pct, terugverdienperiode, forward_pe,
+verwachte_winstgroei_pct) zijn toegevoegd aan db_logger.py's
+_KOLOM_WHITELIST — vereist de bijhorende ALTER TABLE-migratie op
+Supabase, zie migratie_hoogl_kolommen.sql.
 
 Gebruik:
-  python bot_01hoogl.py live     # live rapport
-  python bot_01hoogl.py backtest # niet ondersteund (analyst-EPS-schattingen hebben geen
-                                   # bruikbare historische reeks via yfinance) — print uitleg en stopt
+  python bot_01hoogl.py live      # dagelijks rapport (x-lijsten)
+  python bot_01hoogl.py full      # wekelijks full-scan rapport (a-lijsten, strenger)
+  python bot_01hoogl.py backtest  # niet ondersteund (analyst-EPS-schattingen hebben geen
+                                    # bruikbare historische reeks via yfinance) — print uitleg en stopt
 """
 
 import os
@@ -64,40 +78,61 @@ EMAIL_USER       = os.getenv("EMAIL_USER", "")
 EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
 EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
 
+# Beursnamen per nummer (suffix-onafhankelijk: x of a wordt los toegevoegd)
 BEURS_NAMEN = {
-    "tickers_041x.txt": "041 Benelux Ierland",
-    "tickers_042x.txt": "042 Parijs",
-    "tickers_043x.txt": "043 Frankfurt",
-    "tickers_044x.txt": "044 Spanje/Portugal",
-    "tickers_045x.txt": "045 Londen",
-    "tickers_046x.txt": "046 Milaan",
-    "tickers_047x.txt": "047 Toronto",
-    "tickers_048x.txt": "048 Nasdaq/NYSE",
-    "tickers_049x.txt": "049 Stockholm",
-    "tickers_050x.txt": "050 Zurich",
-    "tickers_051x.txt": "051 Warschau",
-    "tickers_052x.txt": "052 Oslo",
-    "tickers_053x.txt": "053 Kopenhagen",
-    "tickers_054x.txt": "054 Helsinki",
-    "tickers_055x.txt": "055 CBoe",
-    "tickers_056x.txt": "056 NYSE int",
-    "tickers_057x.txt": "057 NYSE",
-    "tickers_058x.txt": "058 TSXV",
-    "tickers_059x.txt": "059 Oostenrijk Slovenie Slovakije",
+    "041": "041 Benelux Ierland",
+    "042": "042 Parijs",
+    "043": "043 Frankfurt",
+    "044": "044 Spanje/Portugal",
+    "045": "045 Londen",
+    "046": "046 Milaan",
+    "047": "047 Toronto",
+    "048": "048 Nasdaq/NYSE",
+    "049": "049 Stockholm",
+    "050": "050 Zurich",
+    "051": "051 Warschau",
+    "052": "052 Oslo",
+    "053": "053 Kopenhagen",
+    "054": "054 Helsinki",
+    "055": "055 CSE",
+    "056": "056 NYSE int",
+    "057": "057 NYSE",
+    "058": "058 TSXV",
+    "059": "059 Oostenrijk Slovenie Slovakije",
 }
 
-def bouw_bestandslijst() -> List[str]:
-    """Zelfde dynamische 041-059 opbouw als bot_00kr / bot_01kasstr / weekly_report.py."""
-    return [f"tickers_{n:03d}x.txt" for n in range(41, 60)]
+def bouw_bestandslijst(suffix: str) -> List[str]:
+    """Dynamische 041-059 opbouw. suffix='x' -> kwaliteitslijst, suffix='a' -> alle tickers."""
+    return [f"tickers_{n:03d}{suffix}.txt" for n in range(41, 60)]
 
 def label_voor(f_name: str) -> str:
-    return BEURS_NAMEN.get(f_name, f_name.replace(".txt", ""))
+    getal = f_name.replace("tickers_", "")[:3]
+    return BEURS_NAMEN.get(getal, f_name.replace(".txt", ""))
 
-HOOGL_CFG = {
-    "roe_min":               15.0,  # % — RoE-ondergrens (Hoogland-rapporten + kasstr-filosofie)
-    "terugverdien_max_jaar": 15.0,  # jaren om koers-boekwaarde-gat terug te verdienen met huidige winst
-    "fwd_pe_max":            15.0,  # forward P/E-bovengrens
-    "min_score":             3,
+# Twee configuraties: dagelijks (x-lijsten, ruimer) vs wekelijks (a-lijsten, strenger)
+MODUS_CFG = {
+    "live": {
+        "bestand_suffix":       "x",
+        "roe_min":              15.0,
+        "terugverdien_max_jaar": 15.0,
+        "fwd_pe_max":           15.0,
+        "min_score":            3,
+        "top_n":                5,
+        "strategie":            "bot_01hoogl",
+        "label":                "GARP ONDERWAARDERING",
+        "throttle_sec":         0.15,
+    },
+    "full": {
+        "bestand_suffix":       "a",
+        "roe_min":              18.0,   # strenger: hogere kwaliteitsdrempel op ongefilterd universum
+        "terugverdien_max_jaar": 10.0,  # strenger: kortere terugverdienperiode
+        "fwd_pe_max":           12.0,   # strenger: lagere forward P/E-cap
+        "min_score":            4,      # strenger: enkel de perfecte score
+        "top_n":                3,
+        "strategie":            "bot_01hoogl_full",
+        "label":                "GARP ONDERWAARDERING — WEEKLY FULL SCAN",
+        "throttle_sec":         0.12,
+    },
 }
 
 # ============================================================
@@ -182,7 +217,7 @@ class HooglSignaal:
     fwd_pe_label:             str
     groei_label:              str
 
-def analyse_ticker(ticker: str) -> Optional[HooglSignaal]:
+def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
     try:
         tk   = yf.Ticker(ticker)
         info = tk.info or {}
@@ -202,9 +237,9 @@ def analyse_ticker(ticker: str) -> Optional[HooglSignaal]:
 
         # 1. RoE (winst wordt goed herbelegd)
         roe_pct = roe * 100 if not math.isnan(roe) else float("nan")
-        if not math.isnan(roe_pct) and roe_pct >= HOOGL_CFG["roe_min"]:
+        if not math.isnan(roe_pct) and roe_pct >= cfg["roe_min"]:
             score += 1
-            roe_label = f"✓ {roe_pct:.1f}% (>= {HOOGL_CFG['roe_min']:.0f}%)"
+            roe_label = f"✓ {roe_pct:.1f}% (>= {cfg['roe_min']:.0f}%)"
         else:
             roe_label = f"✗ {roe_pct:.1f}%" if not math.isnan(roe_pct) else "✗ onbekend"
 
@@ -212,7 +247,7 @@ def analyse_ticker(ticker: str) -> Optional[HooglSignaal]:
         if not math.isnan(boekwaarde) and not math.isnan(winst_nu) and winst_nu > 0:
             terug_te_verdienen = price - boekwaarde
             terugverdienperiode = terug_te_verdienen / winst_nu
-            if terugverdienperiode <= HOOGL_CFG["terugverdien_max_jaar"]:
+            if terugverdienperiode <= cfg["terugverdien_max_jaar"]:
                 score += 1
                 terugverdien_label = f"✓ {terugverdienperiode:.1f} jaar"
             else:
@@ -222,9 +257,9 @@ def analyse_ticker(ticker: str) -> Optional[HooglSignaal]:
             terugverdien_label = "✗ onbekend (geen winst/boekwaarde)"
 
         # 3. Forward P/E
-        if not math.isnan(fwd_pe) and 0 < fwd_pe <= HOOGL_CFG["fwd_pe_max"]:
+        if not math.isnan(fwd_pe) and 0 < fwd_pe <= cfg["fwd_pe_max"]:
             score += 1
-            fwd_pe_label = f"✓ {fwd_pe:.1f}x (<= {HOOGL_CFG['fwd_pe_max']:.0f}x)"
+            fwd_pe_label = f"✓ {fwd_pe:.1f}x (<= {cfg['fwd_pe_max']:.0f}x)"
         else:
             fwd_pe_label = f"✗ {fwd_pe:.1f}x" if not math.isnan(fwd_pe) else "✗ onbekend"
 
@@ -262,15 +297,16 @@ def analyse_ticker(ticker: str) -> Optional[HooglSignaal]:
 def _score_bar(score: int) -> str:
     return "█" * score + "░" * (4 - score) + f" {score}/4"
 
-def format_bericht(exchange_name: str, signalen: List[HooglSignaal], alle: List[HooglSignaal]) -> Optional[str]:
+def format_bericht(exchange_name: str, signalen: List[HooglSignaal], alle: List[HooglSignaal], cfg: dict) -> Optional[str]:
     """Eén bericht per exchange. Lege exchanges -> None."""
     if not alle:
         return None
 
-    nu     = today_str()
-    top3   = sorted(alle, key=lambda s: (s.score, -s.terugverdienperiode), reverse=True)[:3]
-    max_sc = max((s.score for s in signalen), default=0) if signalen else 0
-    lbl    = {4: "⭐ PERFECTE SCORE (4/4)", 3: "🟡 STERK (3/4)"}.get(max_sc, "📊")
+    nu        = today_str()
+    top_n     = cfg["top_n"]
+    top_tonen = sorted(alle, key=lambda s: (s.score, -s.terugverdienperiode), reverse=True)[:top_n]
+    max_sc    = max((s.score for s in signalen), default=0) if signalen else 0
+    lbl       = {4: "⭐ PERFECTE SCORE (4/4)", 3: "🟡 STERK (3/4)"}.get(max_sc, "📊")
 
     def sig_regel(s: HooglSignaal, detail: bool = False) -> str:
         r = (
@@ -285,37 +321,38 @@ def format_bericht(exchange_name: str, signalen: List[HooglSignaal], alle: List[
         return r
 
     delen = [
-        f"📈 *GARP ONDERWAARDERING — {exchange_name}*",
-        f"_{nu} | {len(alle)} geanalyseerd | {len(signalen)} kandidaten (score>={HOOGL_CFG['min_score']})_",
+        f"📈 *{cfg['label']} — {exchange_name}*",
+        f"_{nu} | {len(alle)} geanalyseerd | {len(signalen)} kandidaten (score>={cfg['min_score']})_",
         "─────────────────────────────",
-        f"🏆 *TOP 3 HOOGSTE SCORE:*",
-        "\n\n".join(sig_regel(s, detail=True) for s in top3),
+        f"🏆 *TOP {top_n} HOOGSTE SCORE:*",
+        "\n\n".join(sig_regel(s, detail=True) for s in top_tonen),
     ]
 
-    overige = [s for s in signalen if s not in top3]
+    overige = [s for s in signalen if s not in top_tonen]
     if overige:
         delen += ["─────────────────────────────", f"*{lbl} — overige kandidaten:*"]
         for s in overige:
             delen.append(sig_regel(s))
 
     delen.append(
-        f"⚙️ _RoE>={HOOGL_CFG['roe_min']:.0f}% | terugverdienperiode<={HOOGL_CFG['terugverdien_max_jaar']:.0f}j | "
-        f"forward P/E<={HOOGL_CFG['fwd_pe_max']:.0f}x | verwachte winstgroei>0%_"
+        f"⚙️ _RoE>={cfg['roe_min']:.0f}% | terugverdienperiode<={cfg['terugverdien_max_jaar']:.0f}j | "
+        f"forward P/E<={cfg['fwd_pe_max']:.0f}x | verwachte winstgroei>0%_"
     )
     return "\n\n".join(delen)
 
 
 # ============================================================
-# LIVE ENGINE
+# ENGINE  — gedeeld door live (x-lijsten) en full (a-lijsten)
 # ============================================================
 
-def run_live_engine():
+def run_engine(modus: str):
+    cfg = MODUS_CFG[modus]
     print(f"{'='*60}")
-    print(f"GARP ONDERWAARDERING — LIVE  {today_str()}")
+    print(f"{cfg['label']}  {today_str()}  [bestand-suffix: {cfg['bestand_suffix']}]")
     print(f"{'='*60}")
 
     exchange_tickers: Dict[str, List[str]] = {}
-    for f_name in bouw_bestandslijst():
+    for f_name in bouw_bestandslijst(cfg["bestand_suffix"]):
         tlist = load_tickers_from_file(f_name)
         if not tlist:
             print(f"Bestand {f_name} niet gevonden of leeg, overslaan.")
@@ -335,24 +372,24 @@ def run_live_engine():
 
         alle: List[HooglSignaal] = []
         for ticker in tlist:
-            sig = analyse_ticker(ticker)
+            sig = analyse_ticker(ticker, cfg)
             if sig is not None:
                 alle.append(sig)
-                if sig.score >= HOOGL_CFG["min_score"]:
+                if sig.score >= cfg["min_score"]:
                     print(f"  ✓ {ticker}: score {sig.score}/4 | RoE={sig.roe_pct:.1f}%")
-            time.sleep(0.15)  # lichte throttle tegen Yahoo rate-limits (fundamentals-calls per ticker)
+            time.sleep(cfg["throttle_sec"])  # lichte throttle tegen Yahoo rate-limits
 
-        kandidaten = [s for s in alle if s.score >= HOOGL_CFG["min_score"]]
+        kandidaten = [s for s in alle if s.score >= cfg["min_score"]]
         kandidaten.sort(key=lambda s: (s.score, -s.terugverdienperiode), reverse=True)
-        signalen = kandidaten[:5]  # enkel top 5 per beurs
+        signalen = kandidaten[:cfg["top_n"]]
 
-        print(f"  → top {len(signalen)} van {len(kandidaten)} kandidaten (score >= {HOOGL_CFG['min_score']}) uit {len(alle)} geanalyseerd")
+        print(f"  → top {len(signalen)} van {len(kandidaten)} kandidaten (score >= {cfg['min_score']}) uit {len(alle)} geanalyseerd")
 
         for rank, s in enumerate(signalen, start=1):
             log_selectie(
                 ticker=s.ticker,
                 datum=today_str(),
-                strategie="bot_01hoogl",
+                strategie=cfg["strategie"],
                 beurs=ex_name,
                 koers=s.price,
                 parameters={
@@ -367,7 +404,7 @@ def run_live_engine():
                 },
             )
 
-        bericht = format_bericht(ex_name, signalen, alle)
+        bericht = format_bericht(ex_name, signalen, alle, cfg)
         if bericht:
             send_telegram_message(bericht)
             email_delen.append(bericht)
@@ -377,7 +414,7 @@ def run_live_engine():
 
     if email_delen:
         send_email(
-            f"GARP Onderwaardering rapport {today_str()}",
+            f"{cfg['label']} {today_str()}",
             "\n\n" + ("=" * 40 + "\n\n").join(email_delen),
         )
 
@@ -390,7 +427,7 @@ def run_backtest():
         "Backtest wordt niet ondersteund voor bot_01hoogl: yfinance biedt geen "
         "betrouwbare historische reeks van analyst-EPS-schattingen (forwardEps/forwardPE) "
         "per scandatum in het verleden, enkel de actuele consensus. "
-        "Gebruik 'live' om het huidige universum te screenen."
+        "Gebruik 'live' of 'full' om het huidige universum te screenen."
     )
 
 
@@ -402,5 +439,7 @@ if __name__ == "__main__":
     mode = sys.argv[1].lower() if len(sys.argv) > 1 else "live"
     if mode == "backtest":
         run_backtest()
+    elif mode == "full":
+        run_engine("full")
     else:
-        run_live_engine()
+        run_engine("live")
