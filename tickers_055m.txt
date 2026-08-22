@@ -1,0 +1,5 @@
+# MASTERLIJST 055 — CSE
+# Laatste update: nog niet gescand (bron vervangen: CBoe -> CSE op 22/08/2026)
+# Nitro Criteria: ROE>4% | Debt<140 | Marge>3% | Vol 35%-95% | Omzet>€2,500,000
+# Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
+# --------------------------------------------------------------------------------
