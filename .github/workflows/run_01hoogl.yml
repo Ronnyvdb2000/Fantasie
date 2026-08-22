@@ -1,0 +1,27 @@
+name: "Bot 01: FULL scanner (041-059) GARP onderwaardering (Hoogland)"
+
+on:
+  schedule:
+    - cron: "55 19 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  bot-01hoogl:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install yfinance pandas numpy requests python-dotenv psycopg2-binary
+      - name: Run bot_01hoogl
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
+          SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
+        run: python bot_01hoogl.py live
