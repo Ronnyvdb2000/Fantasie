@@ -80,7 +80,7 @@ BEURS_CONFIG = {
     "052": {"naam": "Oslo",            "suffixen": [".OL"]},
     "053": {"naam": "Kopenhagen",      "suffixen": [".CO"]},
     "054": {"naam": "Helsinki",        "suffixen": [".HE"]},
-    "055": {"naam": "CBoe",            "suffixen": [""]},
+    "055": {"naam": "CSE",             "suffixen": [".CN"]},
     "056": {"naam": "NYSE int",        "suffixen": [""]},
     "057": {"naam": "NYSE",            "suffixen": [""]},
     "058": {"naam": "TSXV",            "suffixen": [".V"]},
