@@ -268,10 +268,28 @@ def compute_atr_series(high: pd.Series, low: pd.Series, close: pd.Series, period
 # DATA DOWNLOAD — Twelve Data time_series (D1)
 # ============================================================
 
-def download_forex_history(paar: str, outputsize: int = 5000) -> Optional[pd.DataFrame]:
+# GLOBALE THROTTLE — module-niveau, geldt over ALLE aanroepen in deze
+# procesrun heen (dus ook over de grens tussen bv. Majors en Kruispaaren),
+# in tegenstelling tot de vorige versie die enkel pauzeerde TUSSEN paren
+# binnen één download_history_alle_paren()-aanroep en zo de rate limit
+# net op de groepsgrens liet doorbreken.
+_laatste_call_tijd: Optional[float] = None
+
+def _throttle_twelve_data() -> None:
+    global _laatste_call_tijd
+    nu = time.monotonic()
+    if _laatste_call_tijd is not None:
+        verstreken = nu - _laatste_call_tijd
+        if verstreken < TWELVE_DATA_SLEEP_SEC:
+            time.sleep(TWELVE_DATA_SLEEP_SEC - verstreken)
+    _laatste_call_tijd = time.monotonic()
+
+def download_forex_history(paar: str, outputsize: int = 5000, max_retries: int = 2) -> Optional[pd.DataFrame]:
     """Haalt dagelijkse OHLC-candles op voor één forex-paar via Twelve Data.
-    Geeft None terug bij een fout of leeg antwoord (bv. onbekend paar,
-    quota bereikt) -- de aanroeper slaat dat paar dan gewoon over."""
+    Geeft None terug bij een blijvende fout (bv. onbekend paar) -- de
+    aanroeper slaat dat paar dan gewoon over. Bij een rate-limit-fout wordt
+    (max_retries keer) een volle minuut gewacht en opnieuw geprobeerd, in
+    plaats van het paar meteen stilzwijgend op te geven."""
     if not TWELVE_DATA_API_KEY:
         print("[ERROR] TWELVE_DATA_API_KEY ontbreekt.")
         return None
@@ -283,46 +301,59 @@ def download_forex_history(paar: str, outputsize: int = 5000) -> Optional[pd.Dat
         "apikey": TWELVE_DATA_API_KEY,
         "order": "ASC",
     }
-    try:
-        resp = requests.get(TWELVE_DATA_URL, params=params, timeout=20)
-        data = resp.json()
-    except Exception as e:
-        print(f"[WARN] {paar}: request mislukt ({e})")
-        return None
 
-    if isinstance(data, dict) and data.get("status") == "error":
-        print(f"[WARN] {paar}: Twelve Data fout — {data.get('message')}")
-        return None
-    values = data.get("values") if isinstance(data, dict) else None
-    if not values:
-        print(f"[WARN] {paar}: geen data ontvangen")
-        return None
+    for poging in range(max_retries + 1):
+        _throttle_twelve_data()
+        try:
+            resp = requests.get(TWELVE_DATA_URL, params=params, timeout=20)
+            data = resp.json()
+        except Exception as e:
+            print(f"[WARN] {paar}: request mislukt ({e})")
+            return None
 
-    df = pd.DataFrame(values)
-    kolommen_nodig = {"datetime", "open", "high", "low", "close"}
-    if not kolommen_nodig.issubset(df.columns):
-        print(f"[WARN] {paar}: onverwacht antwoordformaat")
-        return None
+        if isinstance(data, dict) and data.get("status") == "error":
+            bericht = str(data.get("message", ""))
+            is_rate_limit = "api credits" in bericht.lower() or "run out" in bericht.lower()
+            if is_rate_limit and poging < max_retries:
+                print(f"[WARN] {paar}: rate limit bereikt, 65s wachten en opnieuw proberen "
+                      f"(poging {poging + 1}/{max_retries})...")
+                time.sleep(65)
+                continue
+            print(f"[WARN] {paar}: Twelve Data fout — {bericht}")
+            return None
 
-    df["Date"]  = pd.to_datetime(df["datetime"])
-    for c in ["open", "high", "low", "close"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
-    df = df.rename(columns={"open": "Open", "high": "High", "low": "Low", "close": "Close"})
-    df["Paar"] = paar
-    df = df[["Date", "Open", "High", "Low", "Close", "Paar"]].dropna()
-    df = df.sort_values("Date").reset_index(drop=True)
-    return df
+        values = data.get("values") if isinstance(data, dict) else None
+        if not values:
+            print(f"[WARN] {paar}: geen data ontvangen")
+            return None
+
+        df = pd.DataFrame(values)
+        kolommen_nodig = {"datetime", "open", "high", "low", "close"}
+        if not kolommen_nodig.issubset(df.columns):
+            print(f"[WARN] {paar}: onverwacht antwoordformaat")
+            return None
+
+        df["Date"]  = pd.to_datetime(df["datetime"])
+        for c in ["open", "high", "low", "close"]:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+        df = df.rename(columns={"open": "Open", "high": "High", "low": "Low", "close": "Close"})
+        df["Paar"] = paar
+        df = df[["Date", "Open", "High", "Low", "Close", "Paar"]].dropna()
+        df = df.sort_values("Date").reset_index(drop=True)
+        return df
+
+    return None
 
 def download_history_alle_paren(paren: List[str], outputsize: int = 5000) -> pd.DataFrame:
-    """Haalt alle paren na elkaar op, met een pauze tussen calls om binnen
-    de gratis-tier rate limit van Twelve Data (~8 req/min) te blijven."""
+    """Haalt alle paren na elkaar op. De throttle zit nu IN
+    download_forex_history zelf (globaal, module-niveau), dus dit werkt ook
+    correct als deze functie meerdere keren na elkaar wordt aangeroepen
+    (bv. één keer per beurs-groep, zoals in run_live_engine)."""
     frames = []
-    for i, paar in enumerate(paren):
+    for paar in paren:
         df = download_forex_history(paar, outputsize=outputsize)
         if df is not None and not df.empty:
             frames.append(df)
-        if i < len(paren) - 1:
-            time.sleep(TWELVE_DATA_SLEEP_SEC)
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
