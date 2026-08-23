@@ -1,7 +1,7 @@
-  #!/usr/bin/env python3
+ #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01kasstr.py  —  KASSTROOM ONDERWAARDERING SELECTIE ENGINE v1.1
+bot_01kasstr.py  —  KASSTROOM ONDERWAARDERING SELECTIE ENGINE v1.2
 
 Screent op onderwaardering via vrije kasstroom (Free Cash Flow), gecombineerd
 met kwaliteitsfilters om de bekende valkuilen van een pure FCF-multiple-screen
@@ -20,6 +20,23 @@ Criteria (score 0-8):
   8. Lage analist-coverage    — numberOfAnalystOpinions <= ANALISTEN_MAX (hoe minder analisten volgen
                                 het aandeel, hoe groter de kans op een "vergeten pareltje")
 
+Piotroski F-Score (apart, 0-9, informatief — telt NIET mee in score 0-8 hierboven):
+  Joseph Piotroski's negen boolean-criteria over winstgevendheid, hefboom/
+  liquiditeit en efficiëntie, telkens dit jaar vs. vorig jaar:
+    Winstgevendheid: 1) positieve ROA  2) positieve operationele kasstroom
+      3) ROA gestegen  4) operationele kasstroom > netto winst (winstkwaliteit)
+    Hefboom/liquiditeit: 5) langlopende schuld/activa gedaald
+      6) current ratio gestegen  7) geen nieuwe aandelenuitgifte (geen verwatering)
+    Efficiëntie: 8) brutomarge gestegen  9) omzet/activa (asset turnover) gestegen
+  Vereist minstens 2 jaar balans + resultatenrekening via yfinance
+  (tk.balance_sheet / tk.financials) — ontbreekt die data, dan is de score
+  -1 ("n.v.t.") en telt hij niet mee in de sortering. Wordt gebruikt als
+  tweede sorteersleutel (na de hoofdscore, vóór FCF yield) en enkel ter
+  info gerapporteerd — filtert geen tickers weg op zich. Let op: dit voegt
+  per ticker 2 extra yfinance-calls toe (balance_sheet + financials) naast
+  de al bestaande info/cashflow-calls, dus een volledige run duurt merkelijk
+  langer.
+
 Rapportage: enkel de top 5 hoogst scorende aandelen per beurs (Telegram + email).
 
 Supabase: logt naar de bestaande gedeelde `selecties`-tabel (db_logger.py),
@@ -28,7 +45,10 @@ onder strategie "bot_01kasstr". De nieuwe parameters van deze bot
 net_debt_ebitda, payout_pct) zijn toegevoegd aan db_logger.py's
 _KOLOM_WHITELIST zodat ze als eigen kolommen worden weggeschreven i.p.v.
 enkel in de JSON parameters-kolom — vereist de bijhorende ALTER TABLE-
-migratie op Supabase, zie migratie_kasstr_kolommen.sql.
+migratie op Supabase, zie migratie_kasstr_kolommen.sql. piotroski_score
+is eveneens gewhitelist (migratie_piotroski_kolom.sql); de volledige
+per-criterium breakdown (piotroski_detail) blijft in de JSON
+parameters-kolom staan.
 
 Gebruik:
   python bot_01kasstr.py live     # live rapport
@@ -219,8 +239,78 @@ def _shareholder_return(cashflow) -> float:
     return total
 
 
-@dataclass
-class FCFSignaal:
+def _piotroski_f_score(tk, cashflow):
+    """Berekent Piotroski F-Score (0-9) op basis van dit jaar vs. vorig jaar.
+    Retourneert (score, label, detail_dict). Score = -1 als er geen 2 jaar
+    balans + resultatenrekening beschikbaar is via yfinance."""
+    try:
+        bs  = tk.balance_sheet
+        inc = tk.financials
+    except Exception:
+        return -1, "n.v.t. (data-fout)", {}
+
+    if bs is None or bs.empty or inc is None or inc.empty:
+        return -1, "n.v.t. (geen balans/resultaten)", {}
+    if bs.shape[1] < 2 or inc.shape[1] < 2:
+        return -1, "n.v.t. (< 2 jaar data)", {}
+
+    def val(df, names, col):
+        row = _row(df, names)
+        if row is None or col >= len(row):
+            return float("nan")
+        return safe_float(row.iloc[col])
+
+    ta0, ta1   = val(bs, ["Total Assets"], 0), val(bs, ["Total Assets"], 1)
+    ca0, ca1   = val(bs, ["Current Assets", "Total Current Assets"], 0), val(bs, ["Current Assets", "Total Current Assets"], 1)
+    cl0, cl1   = val(bs, ["Current Liabilities", "Total Current Liabilities"], 0), val(bs, ["Current Liabilities", "Total Current Liabilities"], 1)
+    ltd0, ltd1 = val(bs, ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"], 0), val(bs, ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"], 1)
+    sh0, sh1   = val(bs, ["Share Issued", "Ordinary Shares Number"], 0), val(bs, ["Share Issued", "Ordinary Shares Number"], 1)
+
+    ni0, ni1   = val(inc, ["Net Income"], 0), val(inc, ["Net Income"], 1)
+    rev0, rev1 = val(inc, ["Total Revenue"], 0), val(inc, ["Total Revenue"], 1)
+    gp0, gp1   = val(inc, ["Gross Profit"], 0), val(inc, ["Gross Profit"], 1)
+
+    ocf_row = _row(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities", "Cash Flow From Continuing Operating Activities"])
+    ocf0 = safe_float(ocf_row.iloc[0]) if ocf_row is not None and len(ocf_row) > 0 else float("nan")
+
+    score, vlaggen = 0, {}
+
+    roa0 = ni0 / ta0 if not math.isnan(ni0) and not math.isnan(ta0) and ta0 != 0 else float("nan")
+    roa1 = ni1 / ta1 if not math.isnan(ni1) and not math.isnan(ta1) and ta1 != 0 else float("nan")
+    vlaggen["roa_positief"] = (not math.isnan(roa0)) and roa0 > 0
+    vlaggen["ocf_positief"] = (not math.isnan(ocf0)) and ocf0 > 0
+    vlaggen["roa_gestegen"] = (not math.isnan(roa0)) and (not math.isnan(roa1)) and roa0 > roa1
+    vlaggen["winstkwaliteit"] = (not math.isnan(ocf0)) and (not math.isnan(ni0)) and ocf0 > ni0
+
+    lev0 = ltd0 / ta0 if not math.isnan(ltd0) and not math.isnan(ta0) and ta0 != 0 else float("nan")
+    lev1 = ltd1 / ta1 if not math.isnan(ltd1) and not math.isnan(ta1) and ta1 != 0 else float("nan")
+    vlaggen["hefboom_gedaald"] = (not math.isnan(lev0)) and (not math.isnan(lev1)) and lev0 < lev1
+
+    cr0 = ca0 / cl0 if not math.isnan(ca0) and not math.isnan(cl0) and cl0 != 0 else float("nan")
+    cr1 = ca1 / cl1 if not math.isnan(ca1) and not math.isnan(cl1) and cl1 != 0 else float("nan")
+    vlaggen["liquiditeit_gestegen"] = (not math.isnan(cr0)) and (not math.isnan(cr1)) and cr0 > cr1
+
+    vlaggen["geen_verwatering"] = (not math.isnan(sh0)) and (not math.isnan(sh1)) and sh0 <= sh1
+
+    gm0 = gp0 / rev0 if not math.isnan(gp0) and not math.isnan(rev0) and rev0 != 0 else float("nan")
+    gm1 = gp1 / rev1 if not math.isnan(gp1) and not math.isnan(rev1) and rev1 != 0 else float("nan")
+    vlaggen["marge_gestegen"] = (not math.isnan(gm0)) and (not math.isnan(gm1)) and gm0 > gm1
+
+    at0 = rev0 / ta0 if not math.isnan(rev0) and not math.isnan(ta0) and ta0 != 0 else float("nan")
+    at1 = rev1 / ta1 if not math.isnan(rev1) and not math.isnan(ta1) and ta1 != 0 else float("nan")
+    vlaggen["efficientie_gestegen"] = (not math.isnan(at0)) and (not math.isnan(at1)) and at0 > at1
+
+    score = sum(1 for v in vlaggen.values() if v)
+    kort = {
+        "roa_positief": "ROA", "ocf_positief": "OCF", "roa_gestegen": "ΔROA",
+        "winstkwaliteit": "Accruals", "hefboom_gedaald": "Hefboom", "liquiditeit_gestegen": "Liquid.",
+        "geen_verwatering": "GeenDilutie", "marge_gestegen": "Marge", "efficientie_gestegen": "Efficiëntie",
+    }
+    label = f"{score}/9 (" + " ".join((("✓" if vlaggen[k] else "✗") + kort[k]) for k in kort) + ")"
+    return score, label, vlaggen
+
+
+
     ticker:          str
     price:           float
     score:           int
@@ -243,6 +333,8 @@ class FCFSignaal:
     payout_label:    str
     marktkap_label:  str
     analisten_label: str
+    piotroski_score: int
+    piotroski_label: str
 
 def analyse_ticker(ticker: str) -> Optional[FCFSignaal]:
     try:
@@ -355,6 +447,8 @@ def analyse_ticker(ticker: str) -> Optional[FCFSignaal]:
             analisten_count = float("nan")
             analisten_label = "✗ coverage onbekend"
 
+        piotroski_score, piotroski_label, _piotroski_vlaggen = _piotroski_f_score(tk, cashflow)
+
         return FCFSignaal(
             ticker=ticker, price=round(price, 2), score=score,
             market_cap=market_cap, fcf_now=fcf_now,
@@ -368,6 +462,7 @@ def analyse_ticker(ticker: str) -> Optional[FCFSignaal]:
             yield_label=yield_label, trend_label=trend_label, consist_label=consist_label,
             growth_label=growth_label, debt_label=debt_label, payout_label=payout_label,
             marktkap_label=marktkap_label, analisten_label=analisten_label,
+            piotroski_score=piotroski_score, piotroski_label=piotroski_label,
         )
     except Exception as e:
         print(f"[WARN] {ticker}: fout — {e}")
@@ -387,7 +482,7 @@ def format_bericht(exchange_name: str, signalen: List[FCFSignaal], alle: List[FC
         return None
 
     nu     = today_str()
-    top3   = sorted(alle, key=lambda s: (s.score, s.fcf_yield), reverse=True)[:3]
+    top3   = sorted(alle, key=lambda s: (s.score, s.piotroski_score, s.fcf_yield), reverse=True)[:3]
     max_sc = max((s.score for s in signalen), default=0) if signalen else 0
     lbl    = {8: "⭐ PERFECTE SCORE (8/8)", 7: "🟡 STERK (7/8)", 6: "🟠 GOED (6/8)", 5: "🟠 WATCHLIST (5/8)"}.get(max_sc, "📊")
 
@@ -401,6 +496,7 @@ def format_bericht(exchange_name: str, signalen: List[FCFSignaal], alle: List[FC
                 f"\n  {s.trend_label} | {s.consist_label}"
                 f"\n  Omzet: {s.growth_label} | Schuld: {s.debt_label} | Payout: {s.payout_label}"
                 f"\n  Marktkap: {s.marktkap_label} | Coverage: {s.analisten_label}"
+                f"\n  Piotroski F-Score: {s.piotroski_label}"
             )
         return r
 
@@ -464,7 +560,7 @@ def run_live_engine():
             time.sleep(0.15)  # lichte throttle tegen Yahoo rate-limits (fundamentals-calls per ticker)
 
         kandidaten = [s for s in alle if s.score >= FCF_CFG["min_score"]]
-        kandidaten.sort(key=lambda s: (s.score, s.fcf_yield), reverse=True)
+        kandidaten.sort(key=lambda s: (s.score, s.piotroski_score, s.fcf_yield), reverse=True)
         signalen = kandidaten[:5]  # enkel top 5 per beurs
 
         print(f"  → top {len(signalen)} van {len(kandidaten)} kandidaten (score >= {FCF_CFG['min_score']}) uit {len(alle)} geanalyseerd")
@@ -489,6 +585,8 @@ def run_live_engine():
                     "div_yield": s.div_yield,
                     "market_cap": s.market_cap,
                     "analisten_count": s.analisten_count,
+                    "piotroski_score": s.piotroski_score,
+                    "piotroski_detail": s.piotroski_label,
                     "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                 },
             )
