@@ -50,6 +50,11 @@ zie migratie_xgboost_kolommen.sql.
 2026-08-22: _KOLOM_WHITELIST uitgebreid met de kolommen van bot_01hoogl.py
 (GARP onderwaardering). Vereist de bijhorende ALTER TABLE-migratie, zie
 migratie_hoogl_kolommen.sql.
+
+2026-08-23: _KOLOM_WHITELIST uitgebreid met market_cap en analisten_count,
+gedeeld door bot_01kasstr.py en bot_01hoogl.py (nieuwe marktkap/analist-
+coverage criteria, BeursBrink-stijl). Vereist de bijhorende ALTER TABLE-
+migratie, zie migratie_marktkap_analisten_kolommen.sql.
 """
 
 import os
@@ -76,6 +81,8 @@ _dsn_invalid = False
 # geen kolom heeft.
 _KOLOM_WHITELIST = {
     "score", "total_score", "grafiek",
+    # gedeeld door bot_01kasstr en bot_01hoogl (marktkap/analist-coverage criteria) -- toegevoegd 2026-08-23
+    "market_cap", "analisten_count",
     # bot_00kr
     "rsi_monthly", "rsi_label", "macd_label", "rr_pct",
     "resistance", "support", "div_yield", "atr", "stop",
