@@ -1,4 +1,4 @@
- #!/usr/bin/env python3
+  #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 bot_01kasstr.py  —  KASSTROOM ONDERWAARDERING SELECTIE ENGINE v1.1
@@ -8,13 +8,17 @@ met kwaliteitsfilters om de bekende valkuilen van een pure FCF-multiple-screen
 te ondervangen (value traps, kasstroom-volatiliteit, cyclische vertekening,
 verborgen schuldrisico).
 
-Criteria (score 0-6):
+Criteria (score 0-8):
   1. FCF yield        — FCF / marktkap >= FCF_YIELD_MIN (goedkoop t.o.v. kasstroom)
   2. FCF-trend         — FCF laatste jaar > FCF oudste jaar in de reeks (groeiend, geen value trap)
   3. FCF-consistentie   — FCF was in ALLE beschikbare jaren positief (geen volatiele/verlieslatende jaren)
   4. Omzetgroei        — revenueGrowth (YoY) > 0 (onderbouwt dat de FCF niet uit krimp komt)
   5. Balans-kwaliteit   — Net Debt / EBITDA <= NET_DEBT_EBITDA_MAX (schuld draagbaar t.o.v. kasstroom)
   6. Aandeelhoudersvriendelijkheid — dividend+buyback payout uit FCF > 0% en <= 100% (houdbaar, niet nul)
+  7. Marktkap (small/midcap) — marketCap <= MARKTKAP_MAX (BeursBrink-stijl: focus op kleinere,
+                                onderbelichte bedrijven i.p.v. large caps)
+  8. Lage analist-coverage    — numberOfAnalystOpinions <= ANALISTEN_MAX (hoe minder analisten volgen
+                                het aandeel, hoe groter de kans op een "vergeten pareltje")
 
 Rapportage: enkel de top 5 hoogst scorende aandelen per beurs (Telegram + email).
 
@@ -100,7 +104,10 @@ FCF_CFG = {
     "net_debt_ebitda_max": 3.0,   # jaren kasstroom om nettoschuld af te betalen
     "payout_max_pct":      100.0, # dividend+buyback mag niet meer zijn dan 100% van FCF
     "min_years_required":  2,     # minimum aantal jaarlijkse cashflow-kolommen om trend/consistentie te beoordelen
-    "min_score":           4,
+    "marktkap_max":        5_000_000_000.0,  # small/midcap-plafond (in valuta van de ticker zelf,
+                                              # geen FX-omrekening — ruwe cap, geen exacte grens)
+    "analisten_max":       5,     # max. aantal analisten dat het aandeel volgt om als 'onderbelicht' te tellen
+    "min_score":           5,     # was 4/6 (~67%) — op 5/8 (62.5%) blijft de strengheid vergelijkbaar
 }
 
 # ============================================================
@@ -227,12 +234,15 @@ class FCFSignaal:
     net_debt_ebitda: float
     payout_pct:      float
     div_yield:       float
+    analisten_count: float
     yield_label:     str
     trend_label:     str
     consist_label:   str
     growth_label:    str
     debt_label:      str
     payout_label:    str
+    marktkap_label:  str
+    analisten_label: str
 
 def analyse_ticker(ticker: str) -> Optional[FCFSignaal]:
     try:
@@ -324,6 +334,27 @@ def analyse_ticker(ticker: str) -> Optional[FCFSignaal]:
         else:
             payout_label = "✗ geen dividend/buyback"
 
+        # 7. Marktkap (small/midcap) — BeursBrink-stijl: kleinere, onderbelichte bedrijven
+        if market_cap <= FCF_CFG["marktkap_max"]:
+            score += 1
+            marktkap_label = f"✓ {market_cap/1e9:.2f}B (<= {FCF_CFG['marktkap_max']/1e9:.0f}B)"
+        else:
+            marktkap_label = f"✗ {market_cap/1e9:.2f}B"
+
+        # 8. Lage analist-coverage — hoe minder gevolgd, hoe groter de kans op een "vergeten pareltje"
+        analisten_raw = safe_float(info.get("numberOfAnalystOpinions"))
+        if not math.isnan(analisten_raw):
+            analisten_count = analisten_raw
+            if analisten_count <= FCF_CFG["analisten_max"]:
+                score += 1
+                analisten_label = f"✓ {analisten_count:.0f} analisten (<= {FCF_CFG['analisten_max']})"
+            else:
+                analisten_label = f"✗ {analisten_count:.0f} analisten"
+        else:
+            # onbekend aantal analisten telt niet mee als punt, maar sluit de ticker niet uit
+            analisten_count = float("nan")
+            analisten_label = "✗ coverage onbekend"
+
         return FCFSignaal(
             ticker=ticker, price=round(price, 2), score=score,
             market_cap=market_cap, fcf_now=fcf_now,
@@ -333,8 +364,10 @@ def analyse_ticker(ticker: str) -> Optional[FCFSignaal]:
             net_debt_ebitda=round(net_debt_ebitda, 2) if not math.isnan(net_debt_ebitda) else 0.0,
             payout_pct=round(payout_pct, 1) if not math.isnan(payout_pct) else 0.0,
             div_yield=round(div_yield, 2) if not math.isnan(div_yield) else 0.0,
+            analisten_count=round(analisten_count, 0) if not math.isnan(analisten_count) else -1.0,
             yield_label=yield_label, trend_label=trend_label, consist_label=consist_label,
             growth_label=growth_label, debt_label=debt_label, payout_label=payout_label,
+            marktkap_label=marktkap_label, analisten_label=analisten_label,
         )
     except Exception as e:
         print(f"[WARN] {ticker}: fout — {e}")
@@ -346,7 +379,7 @@ def analyse_ticker(ticker: str) -> Optional[FCFSignaal]:
 # ============================================================
 
 def _score_bar(score: int) -> str:
-    return "█" * score + "░" * (6 - score) + f" {score}/6"
+    return "█" * score + "░" * (8 - score) + f" {score}/8"
 
 def format_bericht(exchange_name: str, signalen: List[FCFSignaal], alle: List[FCFSignaal]) -> Optional[str]:
     """Eén bericht per exchange. Lege exchanges -> None."""
@@ -356,7 +389,7 @@ def format_bericht(exchange_name: str, signalen: List[FCFSignaal], alle: List[FC
     nu     = today_str()
     top3   = sorted(alle, key=lambda s: (s.score, s.fcf_yield), reverse=True)[:3]
     max_sc = max((s.score for s in signalen), default=0) if signalen else 0
-    lbl    = {6: "⭐ PERFECTE SCORE (6/6)", 5: "🟡 STERK (5/6)", 4: "🟠 WATCHLIST (4/6)"}.get(max_sc, "📊")
+    lbl    = {8: "⭐ PERFECTE SCORE (8/8)", 7: "🟡 STERK (7/8)", 6: "🟠 GOED (6/8)", 5: "🟠 WATCHLIST (5/8)"}.get(max_sc, "📊")
 
     def sig_regel(s: FCFSignaal, detail: bool = False) -> str:
         r = (
@@ -367,6 +400,7 @@ def format_bericht(exchange_name: str, signalen: List[FCFSignaal], alle: List[FC
             r += (
                 f"\n  {s.trend_label} | {s.consist_label}"
                 f"\n  Omzet: {s.growth_label} | Schuld: {s.debt_label} | Payout: {s.payout_label}"
+                f"\n  Marktkap: {s.marktkap_label} | Coverage: {s.analisten_label}"
             )
         return r
 
@@ -386,7 +420,8 @@ def format_bericht(exchange_name: str, signalen: List[FCFSignaal], alle: List[FC
 
     delen.append(
         f"⚙️ _FCF yield>={FCF_CFG['fcf_yield_min']:.0f}% | groeiende & consistente FCF | "
-        f"omzetgroei>0 | NetDebt/EBITDA<={FCF_CFG['net_debt_ebitda_max']:.0f}x | payout<=100% FCF_"
+        f"omzetgroei>0 | NetDebt/EBITDA<={FCF_CFG['net_debt_ebitda_max']:.0f}x | payout<=100% FCF | "
+        f"marktkap<={FCF_CFG['marktkap_max']/1e9:.0f}B | analisten<={FCF_CFG['analisten_max']}_"
     )
     return "\n\n".join(delen)
 
@@ -452,6 +487,8 @@ def run_live_engine():
                     "net_debt_ebitda": s.net_debt_ebitda,
                     "payout_pct": s.payout_pct,
                     "div_yield": s.div_yield,
+                    "market_cap": s.market_cap,
+                    "analisten_count": s.analisten_count,
                     "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                 },
             )
