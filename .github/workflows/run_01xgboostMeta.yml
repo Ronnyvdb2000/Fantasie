@@ -1,4 +1,4 @@
-name: "Bot 01: XGBoost richtingsvoorspelling (Forex/Twelve Data)"
+name: "Bot 01: FULL scanner (041-059) XGBoost richtingsvoorspelling (Forex/Twelve Data)"
 
 # Zelfde bepaal-modus-patroon als run_01xgboost.yml: één workflow voor
 # train + live + handmatige backtest. Draait volledig in GitHub Actions
