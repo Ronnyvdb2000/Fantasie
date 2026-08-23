@@ -10,11 +10,11 @@ name: "Bot 01: FULL scanner (041-059) XGBoost richtingsvoorspelling (Forex/Twelv
 # XGBoost-bot (bot_01xgboost.py, op aandelen) toonde geen bewezen edge.
 
 on:
-  schedule:
+  #schedule:
     # Live scan: weekdagen 20:00 UTC (net na de andere bots)
-    - cron: "0 20 * * 1-5"
+    #- cron: "0 20 * * 1-5"
     # Hertraining: elke zondag 06:15 UTC (na run_01xgboost_train, voor MRA Nitro om 07:00 UTC)
-    - cron: "15 6 * * 0"
+    #- cron: "15 6 * * 0"
   workflow_dispatch:
     inputs:
       mode:
