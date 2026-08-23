@@ -1,31 +1,31 @@
 # MASTERLIJST 054 — Helsinki
-# Laatste update: 22/08/2026
-# Criteria: ROE>7% | Debt<130 | Marge>4% | Vol 18%-65% | Omzet>€150,000
+# Laatste update: 23/08/2026
+# Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-ADMCM.HE         | opname:2026-08-22 | ROE:14.2% | Debt:43.7 | Marge:11.7% | Vol:37.2% | Omzet:441,605 | actief
-ALMA.HE          | opname:2026-08-22 | ROE:27.5% | Debt:58.3 | Marge:18.9% | Vol:34.4% | Omzet:234,163 | actief
-CAPMAN.HE        | opname:2026-08-22 | ROE:8.6% | Debt:56.5 | Marge:20.1% | Vol:19.6% | Omzet:209,430 | actief
-ELISA.HE         | opname:2026-08-22 | ROE:28.1% | Debt:119.0 | Marge:15.2% | Vol:19.6% | Omzet:14,041,251 | actief
-FORTUM.HE        | opname:2026-08-22 | ROE:10.0% | Debt:47.5 | Marge:15.1% | Vol:29.3% | Omzet:22,197,518 | actief
-HARVIA.HE        | opname:2026-07-19 | ROE:22.9% | Debt:76.9 | Marge:13.5% | Vol:41.2% | Omzet:1,297,023 | actief
-HUH1V.HE         | opname:2026-08-22 | ROE:11.4% | Debt:81.7 | Marge:5.3% | Vol:20.8% | Omzet:6,764,817 | actief
+BITTI.HE         | opname:2026-08-09 | ROE:22.4% | Debt:14.1 | Marge:20.3% | Vol:71.1% | Omzet:2,983,831 | actief
+CTY1S.HE         | opname:2026-07-19 | ROE:4.5% | Debt:110.7 | Marge:26.9% | Vol:41.1% | Omzet:679,015 | actief
+HARVIA.HE        | opname:2026-07-19 | ROE:22.9% | Debt:76.9 | Marge:13.5% | Vol:41.2% | Omzet:1,296,003 | actief
 KCR.HE           | opname:2026-07-19 | ROE:19.8% | Debt:19.9 | Marge:9.4% | Vol:39.5% | Omzet:9,283,989 | actief
-KEMIRA.HE        | opname:2026-08-22 | ROE:9.5% | Debt:49.9 | Marge:5.3% | Vol:23.0% | Omzet:4,138,919 | actief
-KNEBV.HE         | opname:2026-08-22 | ROE:41.4% | Debt:29.3 | Marge:8.3% | Vol:20.5% | Omzet:33,215,555 | actief
-MANTA.HE         | opname:2026-08-22 | ROE:10.8% | Debt:39.1 | Marge:26.2% | Vol:23.5% | Omzet:6,538,961 | actief
-MEKKO.HE         | opname:2026-08-22 | ROE:40.6% | Debt:45.4 | Marge:12.9% | Vol:29.4% | Omzet:374,656 | actief
-METSO.HE         | opname:2026-07-19 | ROE:20.0% | Debt:61.4 | Marge:9.2% | Vol:36.6% | Omzet:19,546,677 | actief
-NESTE.HE         | opname:2026-07-19 | ROE:19.4% | Debt:55.5 | Marge:7.4% | Vol:41.7% | Omzet:32,621,057 | actief
-OLVAS.HE         | opname:2026-08-22 | ROE:19.1% | Debt:34.0 | Marge:9.3% | Vol:18.7% | Omzet:332,826 | actief
-ORNAV.HE         | opname:2026-07-19 | ROE:53.7% | Debt:10.5 | Marge:28.5% | Vol:33.4% | Omzet:480,638 | actief
-ORNBV.HE         | opname:2026-07-19 | ROE:53.7% | Debt:10.5 | Marge:28.5% | Vol:32.9% | Omzet:12,423,410 | actief
-QTCOM.HE         | opname:2026-08-09 | ROE:11.4% | Debt:59.6 | Marge:9.8% | Vol:54.1% | Omzet:4,209,925 | actief
+METSO.HE         | opname:2026-07-19 | ROE:20.0% | Debt:61.4 | Marge:9.2% | Vol:37.0% | Omzet:19,572,649 | actief
+NESTE.HE         | opname:2026-07-19 | ROE:19.4% | Debt:55.5 | Marge:7.4% | Vol:41.7% | Omzet:32,644,970 | actief
+NOKIA.HE         | opname:2026-07-19 | ROE:3.5% | Debt:15.8 | Marge:3.5% | Vol:55.7% | Omzet:112,932,014 | actief
+ORNBV.HE         | opname:2026-07-19 | ROE:53.7% | Debt:10.5 | Marge:28.5% | Vol:32.9% | Omzet:12,401,903 | actief
+QTCOM.HE         | opname:2026-08-09 | ROE:11.4% | Debt:59.6 | Marge:9.8% | Vol:54.1% | Omzet:4,197,766 | actief
 SSABBH.HE        | opname:2026-07-19 | ROE:8.1% | Debt:15.3 | Marge:5.7% | Vol:51.8% | Omzet:1,892,964 | actief
-TIETO.HE         | opname:2026-08-02 | ROE:21.1% | Debt:64.4 | Marge:6.7% | Vol:31.8% | Omzet:5,891,421 | actief
-VALMT.HE         | opname:2026-07-26 | ROE:12.3% | Debt:63.2 | Marge:5.6% | Vol:35.0% | Omzet:9,241,244 | actief
-WRT1V.HE         | opname:2026-08-22 | ROE:26.4% | Debt:21.7 | Marge:9.6% | Vol:35.4% | Omzet:26,686,412 | actief
-BITTI.HE         | opname:2026-08-09 | ROE:22.4% | Debt:14.1 | Marge:20.3% | Vol:71.0% | Omzet:2,987,858 | zwakker | weken_buiten:1
-CTY1S.HE         | opname:2026-07-19 | ROE:4.5% | Debt:110.7 | Marge:26.9% | Vol:41.1% | Omzet:681,111 | zwakker | weken_buiten:1
-NOKIA.HE         | opname:2026-07-19 | ROE:3.5% | Debt:15.8 | Marge:3.5% | Vol:55.7% | Omzet:113,072,348 | zwakker | weken_buiten:1
-STERV.HE         | opname:2026-08-02 | ROE:5.4% | Debt:36.4 | Marge:6.2% | Vol:31.2% | Omzet:15,712,639 | verwijderd | verwijderd:2026-08-22
+TIETO.HE         | opname:2026-08-02 | ROE:21.1% | Debt:64.4 | Marge:6.7% | Vol:31.8% | Omzet:5,882,933 | actief
+VALMT.HE         | opname:2026-07-26 | ROE:12.3% | Debt:63.2 | Marge:5.6% | Vol:35.1% | Omzet:9,233,156 | actief
+ADMCM.HE         | opname:2026-08-22 | ROE:14.2% | Debt:43.7 | Marge:11.7% | Vol:37.2% | Omzet:440,318 | zwakker | weken_buiten:1
+ALMA.HE          | opname:2026-08-22 | ROE:27.5% | Debt:58.3 | Marge:18.9% | Vol:34.4% | Omzet:233,589 | zwakker | weken_buiten:1
+CAPMAN.HE        | opname:2026-08-22 | ROE:8.6% | Debt:56.5 | Marge:20.1% | Vol:19.6% | Omzet:209,282 | zwakker | weken_buiten:1
+ELISA.HE         | opname:2026-08-22 | ROE:28.1% | Debt:119.0 | Marge:15.2% | Vol:19.6% | Omzet:14,024,781 | zwakker | weken_buiten:1
+FORTUM.HE        | opname:2026-08-22 | ROE:10.0% | Debt:47.5 | Marge:15.1% | Vol:29.3% | Omzet:22,184,589 | zwakker | weken_buiten:1
+HUH1V.HE         | opname:2026-08-22 | ROE:11.4% | Debt:81.7 | Marge:5.3% | Vol:20.8% | Omzet:6,757,521 | zwakker | weken_buiten:1
+KEMIRA.HE        | opname:2026-08-22 | ROE:9.5% | Debt:49.9 | Marge:5.3% | Vol:23.0% | Omzet:4,130,942 | zwakker | weken_buiten:1
+KNEBV.HE         | opname:2026-08-22 | ROE:41.4% | Debt:29.3 | Marge:8.3% | Vol:20.6% | Omzet:33,279,288 | zwakker | weken_buiten:1
+MANTA.HE         | opname:2026-08-22 | ROE:10.8% | Debt:39.1 | Marge:26.2% | Vol:23.6% | Omzet:6,566,072 | zwakker | weken_buiten:1
+MEKKO.HE         | opname:2026-08-22 | ROE:40.6% | Debt:45.4 | Marge:12.9% | Vol:29.4% | Omzet:374,161 | zwakker | weken_buiten:1
+OLVAS.HE         | opname:2026-08-22 | ROE:19.1% | Debt:34.0 | Marge:9.3% | Vol:18.7% | Omzet:332,205 | zwakker | weken_buiten:1
+ORNAV.HE         | opname:2026-07-19 | ROE:53.7% | Debt:10.5 | Marge:28.5% | Vol:33.4% | Omzet:479,229 | zwakker | weken_buiten:1
+WRT1V.HE         | opname:2026-08-22 | ROE:26.4% | Debt:21.7 | Marge:9.6% | Vol:35.4% | Omzet:26,661,566 | zwakker | weken_buiten:1
+STERV.HE         | opname:2026-08-02 | ROE:5.4% | Debt:36.4 | Marge:6.2% | Vol:31.2% | Omzet:15,694,046 | verwijderd | verwijderd:2026-08-22

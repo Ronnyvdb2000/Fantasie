@@ -1,10 +1,10 @@
 # MASTERLIJST 058 — TSXV
-# Laatste update: 22/08/2026
-# Criteria: ROE>8% | Debt<120 | Marge>7% | Vol 22%-70% | Omzet>€500,000
+# Laatste update: 23/08/2026
+# Nitro Criteria: ROE>4% | Debt<140 | Marge>3% | Vol 35%-95% | Omzet>€2,500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-AFM.V            | opname:2026-08-22 | ROE:58.5% | Debt:8.7 | Marge:25.9% | Vol:57.7% | Omzet:1,518,486 | actief
-ARTG.V           | opname:2026-08-22 | ROE:53.5% | Debt:44.4 | Marge:40.1% | Vol:53.7% | Omzet:16,130,525 | actief
-LGN.V            | opname:2026-08-22 | ROE:11.3% | Debt:36.4 | Marge:18.7% | Vol:39.2% | Omzet:535,928 | actief
-LMN.V            | opname:2026-08-22 | ROE:13.7% | Debt:58.9 | Marge:12.9% | Vol:54.9% | Omzet:4,105,196 | actief
-MKO.V            | opname:2026-08-22 | ROE:36.6% | Debt:21.9 | Marge:25.1% | Vol:50.6% | Omzet:1,169,592 | actief
+AFM.V            | opname:2026-08-22 | ROE:58.5% | Debt:8.7 | Marge:25.9% | Vol:57.7% | Omzet:1,518,486 | zwakker | weken_buiten:1
+ARTG.V           | opname:2026-08-22 | ROE:53.5% | Debt:44.4 | Marge:40.1% | Vol:53.7% | Omzet:16,130,525 | zwakker | weken_buiten:1
+LGN.V            | opname:2026-08-22 | ROE:11.3% | Debt:36.4 | Marge:18.7% | Vol:39.2% | Omzet:534,716 | zwakker | weken_buiten:1
+LMN.V            | opname:2026-08-22 | ROE:13.7% | Debt:58.9 | Marge:12.9% | Vol:54.9% | Omzet:4,105,196 | zwakker | weken_buiten:1
+MKO.V            | opname:2026-08-22 | ROE:36.6% | Debt:21.9 | Marge:25.1% | Vol:50.6% | Omzet:1,169,592 | zwakker | weken_buiten:1
