@@ -8,12 +8,16 @@ selectiecriteria uit de TopAandelen.com-rapporten (Jack Hoogland):
 terugverdienperiode t.o.v. boekwaarde, koers-winstverhouding op
 verwachte winst, winstgroei en rendement op eigen vermogen (RoE).
 
-Criteria (score 0-4):
+Criteria (score 0-6):
   1. RoE                — returnOnEquity >= roe_min (winst wordt goed herbelegd)
   2. Terugverdienperiode  — (koers - boekwaarde/aandeel) / winst huidig jaar <= terugverdien_max_jaar
                             (boekwaarde >= koers geeft een negatieve/lage periode en telt ook mee)
   3. Forward P/E          — koers / verwachte winst komend jaar, tussen 0 en fwd_pe_max
   4. Verwachte winstgroei — (forwardEps - trailingEps) / trailingEps > 0%
+  5. Marktkap (small/midcap) — marketCap <= marktkap_max (BeursBrink-stijl: focus op kleinere,
+                                onderbelichte bedrijven i.p.v. large caps)
+  6. Lage analist-coverage    — numberOfAnalystOpinions <= analisten_max (hoe minder analisten volgen
+                                het aandeel, hoe groter de kans op een "vergeten pareltje")
 
 TWEE MODI:
   live      — dagelijks (ma-vr), scant de voorgefilterde tickers_0NNx.txt
@@ -116,7 +120,9 @@ MODUS_CFG = {
         "roe_min":              15.0,
         "terugverdien_max_jaar": 15.0,
         "fwd_pe_max":           15.0,
-        "min_score":            3,
+        "marktkap_max":         5_000_000_000.0,  # small/midcap-plafond (valuta van de ticker zelf)
+        "analisten_max":        5,
+        "min_score":            4,   # was 3/4 (75%) — op 4/6 (~67%) vergelijkbaar strikt
         "top_n":                5,
         "strategie":            "bot_01hoogl",
         "label":                "GARP ONDERWAARDERING",
@@ -127,7 +133,9 @@ MODUS_CFG = {
         "roe_min":              18.0,   # strenger: hogere kwaliteitsdrempel op ongefilterd universum
         "terugverdien_max_jaar": 10.0,  # strenger: kortere terugverdienperiode
         "fwd_pe_max":           12.0,   # strenger: lagere forward P/E-cap
-        "min_score":            4,      # strenger: enkel de perfecte score
+        "marktkap_max":         5_000_000_000.0,
+        "analisten_max":        5,
+        "min_score":            6,      # strenger: enkel de perfecte score
         "top_n":                3,
         "strategie":            "bot_01hoogl_full",
         "label":                "GARP ONDERWAARDERING — WEEKLY FULL SCAN",
@@ -212,10 +220,14 @@ class HooglSignaal:
     forward_pe:               float
     verwachte_winstgroei_pct: float
     div_yield:                float
+    market_cap:               float
+    analisten_count:          float
     roe_label:                str
     terugverdien_label:       str
     fwd_pe_label:             str
     groei_label:              str
+    marktkap_label:           str
+    analisten_label:          str
 
 def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
     try:
@@ -232,6 +244,7 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
         roe          = safe_float(info.get("returnOnEquity"))
         fwd_pe       = safe_float(info.get("forwardPE"))
         div_yield    = safe_float(info.get("dividendYield"), 0.0)
+        market_cap   = safe_float(info.get("marketCap"))
 
         score = 0
 
@@ -275,6 +288,27 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
             verwachte_groei_pct = float("nan")
             groei_label = "✗ onbekend"
 
+        # 5. Marktkap (small/midcap) — BeursBrink-stijl: kleinere, onderbelichte bedrijven
+        if not math.isnan(market_cap) and market_cap > 0 and market_cap <= cfg["marktkap_max"]:
+            score += 1
+            marktkap_label = f"✓ {market_cap/1e9:.2f}B (<= {cfg['marktkap_max']/1e9:.0f}B)"
+        else:
+            marktkap_label = f"✗ {market_cap/1e9:.2f}B" if not math.isnan(market_cap) else "✗ onbekend"
+
+        # 6. Lage analist-coverage — hoe minder gevolgd, hoe groter de kans op een "vergeten pareltje"
+        analisten_raw = safe_float(info.get("numberOfAnalystOpinions"))
+        if not math.isnan(analisten_raw):
+            analisten_count = analisten_raw
+            if analisten_count <= cfg["analisten_max"]:
+                score += 1
+                analisten_label = f"✓ {analisten_count:.0f} analisten (<= {cfg['analisten_max']})"
+            else:
+                analisten_label = f"✗ {analisten_count:.0f} analisten"
+        else:
+            # onbekend aantal analisten telt niet mee als punt, maar sluit de ticker niet uit
+            analisten_count = float("nan")
+            analisten_label = "✗ coverage onbekend"
+
         return HooglSignaal(
             ticker=ticker, price=round(price, 2), score=score,
             roe_pct=round(roe_pct, 1) if not math.isnan(roe_pct) else 0.0,
@@ -282,8 +316,11 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
             forward_pe=round(fwd_pe, 1) if not math.isnan(fwd_pe) else 0.0,
             verwachte_winstgroei_pct=round(verwachte_groei_pct, 1) if not math.isnan(verwachte_groei_pct) else 0.0,
             div_yield=round(div_yield, 2) if not math.isnan(div_yield) else 0.0,
+            market_cap=round(market_cap, 0) if not math.isnan(market_cap) else 0.0,
+            analisten_count=round(analisten_count, 0) if not math.isnan(analisten_count) else -1.0,
             roe_label=roe_label, terugverdien_label=terugverdien_label,
             fwd_pe_label=fwd_pe_label, groei_label=groei_label,
+            marktkap_label=marktkap_label, analisten_label=analisten_label,
         )
     except Exception as e:
         print(f"[WARN] {ticker}: fout — {e}")
@@ -295,7 +332,7 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
 # ============================================================
 
 def _score_bar(score: int) -> str:
-    return "█" * score + "░" * (4 - score) + f" {score}/4"
+    return "█" * score + "░" * (6 - score) + f" {score}/6"
 
 def format_bericht(exchange_name: str, signalen: List[HooglSignaal], alle: List[HooglSignaal], cfg: dict) -> Optional[str]:
     """Eén bericht per exchange. Lege exchanges -> None."""
@@ -306,7 +343,7 @@ def format_bericht(exchange_name: str, signalen: List[HooglSignaal], alle: List[
     top_n     = cfg["top_n"]
     top_tonen = sorted(alle, key=lambda s: (s.score, -s.terugverdienperiode), reverse=True)[:top_n]
     max_sc    = max((s.score for s in signalen), default=0) if signalen else 0
-    lbl       = {4: "⭐ PERFECTE SCORE (4/4)", 3: "🟡 STERK (3/4)"}.get(max_sc, "📊")
+    lbl       = {6: "⭐ PERFECTE SCORE (6/6)", 5: "🟡 STERK (5/6)", 4: "🟠 GOED (4/6)"}.get(max_sc, "📊")
 
     def sig_regel(s: HooglSignaal, detail: bool = False) -> str:
         r = (
@@ -317,6 +354,7 @@ def format_bericht(exchange_name: str, signalen: List[HooglSignaal], alle: List[
             r += (
                 f"\n  {s.roe_label} | {s.terugverdien_label}"
                 f"\n  Fwd P/E: {s.fwd_pe_label} | Verw. winstgroei: {s.groei_label}"
+                f"\n  Marktkap: {s.marktkap_label} | Coverage: {s.analisten_label}"
             )
         return r
 
@@ -336,7 +374,8 @@ def format_bericht(exchange_name: str, signalen: List[HooglSignaal], alle: List[
 
     delen.append(
         f"⚙️ _RoE>={cfg['roe_min']:.0f}% | terugverdienperiode<={cfg['terugverdien_max_jaar']:.0f}j | "
-        f"forward P/E<={cfg['fwd_pe_max']:.0f}x | verwachte winstgroei>0%_"
+        f"forward P/E<={cfg['fwd_pe_max']:.0f}x | verwachte winstgroei>0% | "
+        f"marktkap<={cfg['marktkap_max']/1e9:.0f}B | analisten<={cfg['analisten_max']}_"
     )
     return "\n\n".join(delen)
 
@@ -400,6 +439,8 @@ def run_engine(modus: str):
                     "forward_pe": s.forward_pe,
                     "verwachte_winstgroei_pct": s.verwachte_winstgroei_pct,
                     "div_yield": s.div_yield,
+                    "market_cap": s.market_cap,
+                    "analisten_count": s.analisten_count,
                     "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                 },
             )
