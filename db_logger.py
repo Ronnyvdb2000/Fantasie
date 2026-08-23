@@ -55,6 +55,12 @@ migratie_hoogl_kolommen.sql.
 gedeeld door bot_01kasstr.py en bot_01hoogl.py (nieuwe marktkap/analist-
 coverage criteria, BeursBrink-stijl). Vereist de bijhorende ALTER TABLE-
 migratie, zie migratie_marktkap_analisten_kolommen.sql.
+
+2026-08-23: _KOLOM_WHITELIST uitgebreid met piotroski_score (Piotroski
+F-Score, 0-9, informatief) in bot_01kasstr.py. Vereist de bijhorende
+ALTER TABLE-migratie, zie migratie_piotroski_kolom.sql. De volledige
+per-criterium breakdown (piotroski_detail) is NIET gewhitelist en blijft
+enkel in de JSON parameters-kolom staan.
 """
 
 import os
@@ -111,6 +117,8 @@ _KOLOM_WHITELIST = {
     "markt_ret_5d",
     # bot_01hoogl (GARP onderwaardering) -- toegevoegd 2026-08-22
     "roe_pct", "terugverdienperiode", "forward_pe", "verwachte_winstgroei_pct",
+    # bot_01kasstr (Piotroski F-Score, informatief) -- toegevoegd 2026-08-23
+    "piotroski_score",
 }
 
 
