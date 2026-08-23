@@ -1,0 +1,134 @@
+name: "Bot 01: FULL scanner (041-059) XGBoost richtingsvoorspelling (Forex/Twelve Data)"
+
+# Zelfde bepaal-modus-patroon als run_01xgboost.yml: één workflow voor
+# train + live + handmatige backtest. Draait volledig in GitHub Actions
+# (geen lokale MT5-terminal nodig) omdat de data via de Twelve Data REST-API
+# komt in plaats van via MetaTrader 5.
+#
+# EXPERIMENTEEL -- draai eerst 'backtest' handmatig en bekijk de
+# walk-forward-AUC voor je de schedule hieronder actief laat: de vorige
+# XGBoost-bot (bot_01xgboost.py, op aandelen) toonde geen bewezen edge.
+
+on:
+  schedule:
+    # Live scan: weekdagen 20:00 UTC (net na de andere bots)
+    - cron: "0 20 * * 1-5"
+    # Hertraining: elke zondag 06:15 UTC (na run_01xgboost_train, voor MRA Nitro om 07:00 UTC)
+    - cron: "15 6 * * 0"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modus (enkel voor handmatige run): live, train of backtest"
+        required: false
+        default: "backtest"
+        type: choice
+        options:
+          - live
+          - train
+          - backtest
+
+jobs:
+  bepaal-modus:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.kies.outputs.mode }}
+    steps:
+      - id: kies
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "15 6 * * 0" ]; then
+            echo "mode=train" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=live" >> "$GITHUB_OUTPUT"
+          fi
+
+  bot-01xgboostmeta-live:
+    needs: bepaal-modus
+    if: needs.bepaal-modus.outputs.mode == 'live'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installeer packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests psycopg2-binary xgboost scikit-learn
+      - name: Controleer of model aanwezig is
+        run: |
+          if [ ! -f model_xgboostmeta.json ] || [ ! -f model_xgboostmeta_meta.json ]; then
+            echo "::error::model_xgboostmeta.json/meta ontbreekt in de repo. Draai eerst deze workflow handmatig met mode=train."
+            exit 1
+          fi
+      - name: Run bot_01xgboostMeta (live)
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          TELEGRAM_TOKEN:      ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER:          ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:          ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:      ${{ secrets.EMAIL_RECEIVER }}
+          SUPABASE_DB_URL:     ${{ secrets.SUPABASE_DB_URL }}
+        run: python bot_01xgboostMeta.py live
+
+  bot-01xgboostmeta-train:
+    needs: bepaal-modus
+    if: needs.bepaal-modus.outputs.mode == 'train'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installeer packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests psycopg2-binary xgboost scikit-learn
+      - name: Run bot_01xgboostMeta (train)
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: python bot_01xgboostMeta.py train
+      - name: Model committen
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add model_xgboostmeta.json model_xgboostmeta_meta.json
+          if git diff --staged --quiet; then
+            echo "Geen wijzigingen aan het model."
+          else
+            git commit -m "Hertraining bot_01xgboostMeta $(date +%Y-%m-%d)"
+            git pull --rebase=false -X ours origin main
+            git push
+          fi
+
+  # Handmatige backtest-run (workflow_dispatch met mode=backtest) -- resultaten
+  # verschijnen enkel in de Actions-log, er wordt niets gecommit of verstuurd.
+  bot-01xgboostmeta-backtest:
+    needs: bepaal-modus
+    if: needs.bepaal-modus.outputs.mode == 'backtest'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installeer packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests psycopg2-binary xgboost scikit-learn
+      - name: Run bot_01xgboostMeta (backtest)
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+        run: python bot_01xgboostMeta.py backtest
