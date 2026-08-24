@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_00graham.py  —  BENJAMIN GRAHAM "DEFENSIVE INVESTOR" SELECTIE ENGINE v1.0
+bot_01graham.py  —  BENJAMIN GRAHAM "DEFENSIVE INVESTOR" SELECTIE ENGINE v1.1
 
 Screent op de klassieke criteria voor de "defensive investor" uit Benjamin
-Grahams The Intelligent Investor, vertaald naar wat via yfinance meetbaar is.
+Grahams The Intelligent Investor, vertaald naar wat via yfinance meetbaar is,
+aangevuld met Joseph Piotroski's F-Score als kwaliteitscheck.
 
-Criteria (score 0-7):
+Criteria (score 0-8):
   1. Adequate omvang       — marketCap >= marktkap_min (groot/gevestigd genoeg,
                               Graham mikte op stabiliteit i.p.v. speculatieve small caps)
   2. Sterke financiële conditie — currentRatio >= current_ratio_min (werkkapitaal-buffer)
@@ -24,6 +25,19 @@ Criteria (score 0-7):
   7. Gematigde koers-boekwaarde / Graham Number — priceToBook <= pb_max
                               OF trailingPE * priceToBook <= graham_multiple_max (22.5,
                               Grahams eigen vuistregel: PE x PB mag niet boven de 22,5 liggen)
+  8. Piotroski F-Score     — F-Score (0-9, zie hieronder) >= piotroski_min telt als 1 punt.
+                              Ontbreekt de data (< 2 jaar balans/resultatenrekening), dan
+                              telt dit criterium niet mee (geen punt, sluit niet uit) —
+                              zelfde behandeling als een onbekende waarde bij de andere
+                              criteria hierboven.
+
+Piotroski F-Score (0-9, hetzelfde patroon/dezelfde negen boolean-criteria als in
+bot_01kasstr.py — winstgevendheid, hefboom/liquiditeit, efficiëntie, telkens dit
+jaar vs. vorig jaar). Hier NIET louter informatief zoals in kasstr: het volledige
+F-Score wordt gerapporteerd, én een drempel (>= piotroski_min) telt mee als 8ste
+scorepunt hierboven. Vereist tk.balance_sheet + tk.financials + tk.cashflow
+(2 jaar), dus 2 extra yfinance-calls per ticker t.o.v. v1.0 — een volledige run
+duurt daardoor merkelijk langer.
 
 BEPERKINGEN (belangrijk, in tegenstelling tot Grahams oorspronkelijke 10/20-jaar eisen):
   - yfinance levert doorgaans slechts ~4 jaar jaarlijkse resultatenrekening
@@ -33,6 +47,8 @@ BEPERKINGEN (belangrijk, in tegenstelling tot Grahams oorspronkelijke 10/20-jaar
     verificatie van 20 jaar ononderbroken uitkering.
   - marketCap/koers worden niet omgerekend naar één munt — net als bij de
     andere bots is dit een ruwe grens in de eigen valuta van de ticker.
+  - Piotroski F-Score vereist minstens 2 jaar balans + resultatenrekening;
+    ontbreekt die data, dan is de score -1 ("n.v.t.") en telt hij niet mee.
 
 TWEE MODI: enkel 'live' (zoals bot_01kasstr/bot_01hoogl-live) — geen aparte
 full-scan, Grahams criteria zijn strikt genoeg om ook op de x-kwaliteitslijsten
@@ -42,10 +58,14 @@ Rapportage: Telegram + email, één bericht per beurs, top 5 per beurs,
 lege beurzen worden overgeslagen.
 
 Supabase: logt naar de bestaande gedeelde `selecties`-tabel (db_logger.py)
-onder strategie "bot_01graham". Nieuwe parameters (current_ratio, eps_years,
-eps_all_positive, eps_growth_pct, pe_ratio, pb_ratio, graham_number_ok)
+onder strategie "bot_01graham". Parameters current_ratio, eps_years,
+eps_all_positive, eps_growth_pct, pe_ratio, pb_ratio en graham_number_ok
 moeten aan db_logger.py's _KOLOM_WHITELIST toegevoegd worden — vereist de
 bijhorende ALTER TABLE-migratie, zie migratie_graham_kolommen.sql.
+piotroski_score is al gewhitelist (toegevoegd bij bot_01kasstr) — geen
+nieuwe migratie nodig voor die kolom. piotroski_detail (de per-criterium
+breakdown) blijft, net als bij kasstr, enkel in de JSON parameters-kolom
+staan.
 
 Gebruik:
   python bot_01graham.py live      # dagelijks rapport (x-lijsten)
@@ -124,7 +144,8 @@ GRAHAM_CFG = {
     "pe_max":              15.0,
     "pb_max":              1.5,
     "graham_multiple_max": 22.5,             # PE x PB vuistregel
-    "min_score":           5,                # 5/7
+    "piotroski_min":       7.0,              # F-Score >= 7/9 telt als 1 extra punt
+    "min_score":           6,                # was 5/7 (~71%) — op 6/8 (75%) vergelijkbaar strikt
     "top_n":               5,
     "strategie":           "bot_01graham",
     "throttle_sec":        0.15,
@@ -217,6 +238,78 @@ def _net_income_series(financials) -> List[float]:
     return list(reversed(vals))  # yfinance-kolommen staan nieuwste-eerst -> omdraaien
 
 
+def _piotroski_f_score(tk, cashflow):
+    """Berekent Piotroski F-Score (0-9) op basis van dit jaar vs. vorig jaar.
+    Identieke implementatie als bot_01kasstr.py. Retourneert (score, label,
+    detail_dict). Score = -1 als er geen 2 jaar balans + resultatenrekening
+    beschikbaar is via yfinance."""
+    try:
+        bs  = tk.balance_sheet
+        inc = tk.financials
+    except Exception:
+        return -1, "n.v.t. (data-fout)", {}
+
+    if bs is None or bs.empty or inc is None or inc.empty:
+        return -1, "n.v.t. (geen balans/resultaten)", {}
+    if bs.shape[1] < 2 or inc.shape[1] < 2:
+        return -1, "n.v.t. (< 2 jaar data)", {}
+
+    def val(df, names, col):
+        row = _row(df, names)
+        if row is None or col >= len(row):
+            return float("nan")
+        return safe_float(row.iloc[col])
+
+    ta0, ta1   = val(bs, ["Total Assets"], 0), val(bs, ["Total Assets"], 1)
+    ca0, ca1   = val(bs, ["Current Assets", "Total Current Assets"], 0), val(bs, ["Current Assets", "Total Current Assets"], 1)
+    cl0, cl1   = val(bs, ["Current Liabilities", "Total Current Liabilities"], 0), val(bs, ["Current Liabilities", "Total Current Liabilities"], 1)
+    ltd0, ltd1 = val(bs, ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"], 0), val(bs, ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"], 1)
+    sh0, sh1   = val(bs, ["Share Issued", "Ordinary Shares Number"], 0), val(bs, ["Share Issued", "Ordinary Shares Number"], 1)
+
+    ni0, ni1   = val(inc, ["Net Income"], 0), val(inc, ["Net Income"], 1)
+    rev0, rev1 = val(inc, ["Total Revenue"], 0), val(inc, ["Total Revenue"], 1)
+    gp0, gp1   = val(inc, ["Gross Profit"], 0), val(inc, ["Gross Profit"], 1)
+
+    ocf_row = _row(cashflow, ["Operating Cash Flow", "Total Cash From Operating Activities", "Cash Flow From Continuing Operating Activities"])
+    ocf0 = safe_float(ocf_row.iloc[0]) if ocf_row is not None and len(ocf_row) > 0 else float("nan")
+
+    score, vlaggen = 0, {}
+
+    roa0 = ni0 / ta0 if not math.isnan(ni0) and not math.isnan(ta0) and ta0 != 0 else float("nan")
+    roa1 = ni1 / ta1 if not math.isnan(ni1) and not math.isnan(ta1) and ta1 != 0 else float("nan")
+    vlaggen["roa_positief"] = (not math.isnan(roa0)) and roa0 > 0
+    vlaggen["ocf_positief"] = (not math.isnan(ocf0)) and ocf0 > 0
+    vlaggen["roa_gestegen"] = (not math.isnan(roa0)) and (not math.isnan(roa1)) and roa0 > roa1
+    vlaggen["winstkwaliteit"] = (not math.isnan(ocf0)) and (not math.isnan(ni0)) and ocf0 > ni0
+
+    lev0 = ltd0 / ta0 if not math.isnan(ltd0) and not math.isnan(ta0) and ta0 != 0 else float("nan")
+    lev1 = ltd1 / ta1 if not math.isnan(ltd1) and not math.isnan(ta1) and ta1 != 0 else float("nan")
+    vlaggen["hefboom_gedaald"] = (not math.isnan(lev0)) and (not math.isnan(lev1)) and lev0 < lev1
+
+    cr0 = ca0 / cl0 if not math.isnan(ca0) and not math.isnan(cl0) and cl0 != 0 else float("nan")
+    cr1 = ca1 / cl1 if not math.isnan(ca1) and not math.isnan(cl1) and cl1 != 0 else float("nan")
+    vlaggen["liquiditeit_gestegen"] = (not math.isnan(cr0)) and (not math.isnan(cr1)) and cr0 > cr1
+
+    vlaggen["geen_verwatering"] = (not math.isnan(sh0)) and (not math.isnan(sh1)) and sh0 <= sh1
+
+    gm0 = gp0 / rev0 if not math.isnan(gp0) and not math.isnan(rev0) and rev0 != 0 else float("nan")
+    gm1 = gp1 / rev1 if not math.isnan(gp1) and not math.isnan(rev1) and rev1 != 0 else float("nan")
+    vlaggen["marge_gestegen"] = (not math.isnan(gm0)) and (not math.isnan(gm1)) and gm0 > gm1
+
+    at0 = rev0 / ta0 if not math.isnan(rev0) and not math.isnan(ta0) and ta0 != 0 else float("nan")
+    at1 = rev1 / ta1 if not math.isnan(rev1) and not math.isnan(ta1) and ta1 != 0 else float("nan")
+    vlaggen["efficientie_gestegen"] = (not math.isnan(at0)) and (not math.isnan(at1)) and at0 > at1
+
+    score = sum(1 for v in vlaggen.values() if v)
+    kort = {
+        "roa_positief": "ROA", "ocf_positief": "OCF", "roa_gestegen": "ΔROA",
+        "winstkwaliteit": "Accruals", "hefboom_gedaald": "Hefboom", "liquiditeit_gestegen": "Liquid.",
+        "geen_verwatering": "GeenDilutie", "marge_gestegen": "Marge", "efficientie_gestegen": "Efficiëntie",
+    }
+    label = f"{score}/9 (" + " ".join((("✓" if vlaggen[k] else "✗") + kort[k]) for k in kort) + ")"
+    return score, label, vlaggen
+
+
 @dataclass
 class GrahamSignaal:
     ticker:              str
@@ -231,6 +324,8 @@ class GrahamSignaal:
     pe_ratio:            float
     pb_ratio:            float
     graham_number_ok:    bool
+    piotroski_score:     float
+    piotroski_ok:        bool
     marktkap_label:      str
     current_ratio_label: str
     stabiliteit_label:   str
@@ -238,6 +333,7 @@ class GrahamSignaal:
     groei_label:         str
     pe_label:            str
     pb_label:            str
+    piotroski_label:     str
 
 def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
     try:
@@ -331,6 +427,16 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
                 if not math.isnan(graham_multiple) else "✗ onbekend"
             )
 
+        # 8. Piotroski F-Score >= piotroski_min telt als 1 punt (ontbrekende data: geen punt, geen uitsluiting)
+        try:
+            cashflow = tk.cashflow
+        except Exception:
+            cashflow = None
+        piotroski_score, piotroski_label, _piotroski_vlaggen = _piotroski_f_score(tk, cashflow)
+        piotroski_ok = piotroski_score >= cfg["piotroski_min"]
+        if piotroski_ok:
+            score += 1
+
         return GrahamSignaal(
             ticker=ticker, price=round(price, 2), score=score,
             market_cap=round(market_cap, 0) if not math.isnan(market_cap) else 0.0,
@@ -341,9 +447,11 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
             pe_ratio=round(pe_ratio, 1) if not math.isnan(pe_ratio) else 0.0,
             pb_ratio=round(pb_ratio, 2) if not math.isnan(pb_ratio) else 0.0,
             graham_number_ok=graham_number_ok,
+            piotroski_score=piotroski_score, piotroski_ok=piotroski_ok,
             marktkap_label=marktkap_label, current_ratio_label=current_ratio_label,
             stabiliteit_label=stabiliteit_label, dividend_label=dividend_label,
             groei_label=groei_label, pe_label=pe_label, pb_label=pb_label,
+            piotroski_label=piotroski_label,
         )
     except Exception as e:
         print(f"[WARN] {ticker}: fout — {e}")
@@ -355,7 +463,7 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
 # ============================================================
 
 def _score_bar(score: int) -> str:
-    return "█" * score + "░" * (7 - score) + f" {score}/7"
+    return "█" * score + "░" * (8 - score) + f" {score}/8"
 
 def format_bericht(exchange_name: str, signalen: List[GrahamSignaal], alle: List[GrahamSignaal], cfg: dict) -> Optional[str]:
     """Eén bericht per exchange. Lege exchanges -> None."""
@@ -366,7 +474,7 @@ def format_bericht(exchange_name: str, signalen: List[GrahamSignaal], alle: List
     top_n  = cfg["top_n"]
     top_tonen = sorted(alle, key=lambda s: (s.score, -s.pe_ratio if s.pe_ratio > 0 else -999), reverse=True)[:top_n]
     max_sc = max((s.score for s in signalen), default=0) if signalen else 0
-    lbl    = {7: "⭐ PERFECTE SCORE (7/7)", 6: "🟡 STERK (6/7)", 5: "🟠 GOED (5/7)"}.get(max_sc, "📊")
+    lbl    = {8: "⭐ PERFECTE SCORE (8/8)", 7: "🟡 STERK (7/8)", 6: "🟠 GOED (6/8)"}.get(max_sc, "📊")
 
     def sig_regel(s: GrahamSignaal, detail: bool = False) -> str:
         r = (
@@ -378,6 +486,7 @@ def format_bericht(exchange_name: str, signalen: List[GrahamSignaal], alle: List
                 f"\n  {s.marktkap_label} | {s.current_ratio_label}"
                 f"\n  Winst: {s.stabiliteit_label} | Groei: {s.groei_label}"
                 f"\n  Dividend: {s.dividend_label} | Waardering: {s.pb_label}"
+                f"\n  Piotroski F-Score: {s.piotroski_label}"
             )
         return r
 
@@ -398,7 +507,8 @@ def format_bericht(exchange_name: str, signalen: List[GrahamSignaal], alle: List
     delen.append(
         f"⚙️ _marktkap>={cfg['marktkap_min']/1e9:.0f}B | current ratio>={cfg['current_ratio_min']:.1f} | "
         f"winst positief alle jaren | dividend uitkerend | winstgroei>={cfg['winstgroei_min_pct']:.0f}% | "
-        f"P/E<={cfg['pe_max']:.0f}x | P/B<={cfg['pb_max']:.1f} of PExP/B<={cfg['graham_multiple_max']:.1f}_"
+        f"P/E<={cfg['pe_max']:.0f}x | P/B<={cfg['pb_max']:.1f} of PExP/B<={cfg['graham_multiple_max']:.1f} | "
+        f"Piotroski F-Score>={cfg['piotroski_min']:.0f}/9_"
     )
     return "\n\n".join(delen)
 
@@ -438,7 +548,7 @@ def run_live_engine():
             if sig is not None:
                 alle.append(sig)
                 if sig.score >= cfg["min_score"]:
-                    print(f"  ✓ {ticker}: score {sig.score}/7 | P/E={sig.pe_ratio:.1f} | P/B={sig.pb_ratio:.2f}")
+                    print(f"  ✓ {ticker}: score {sig.score}/8 | P/E={sig.pe_ratio:.1f} | P/B={sig.pb_ratio:.2f}")
             time.sleep(cfg["throttle_sec"])  # lichte throttle tegen Yahoo rate-limits
 
         kandidaten = [s for s in alle if s.score >= cfg["min_score"]]
@@ -466,6 +576,8 @@ def run_live_engine():
                     "pe_ratio": s.pe_ratio,
                     "pb_ratio": s.pb_ratio,
                     "graham_number_ok": s.graham_number_ok,
+                    "piotroski_score": s.piotroski_score,
+                    "piotroski_detail": s.piotroski_label,
                     "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                 },
             )
