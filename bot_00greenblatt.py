@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01greenblatt.py  —  JOEL GREENBLATT "MAGIC FORMULA" RANKING ENGINE v1.0
+bot_00greenblatt.py  —  JOEL GREENBLATT "MAGIC FORMULA" RANKING ENGINE v1.0
 
 Implementeert Greenblatts Magic Formula uit The Little Book That Beats the
 Market: GEEN drempel-score zoals bot_01graham/bot_01kasstr, maar een
