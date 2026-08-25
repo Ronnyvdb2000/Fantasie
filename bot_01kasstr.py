@@ -310,7 +310,8 @@ def _piotroski_f_score(tk, cashflow):
     return score, label, vlaggen
 
 
-
+@dataclass
+class FCFSignaal:
     ticker:          str
     price:           float
     score:           int
