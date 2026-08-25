@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_00oshaughnessy.py  —  O'SHAUGHNESSY "TRENDING VALUE" RANKING ENGINE v1.0
+bot_01oshaughnessy.py  —  O'SHAUGHNESSY "TRENDING VALUE" RANKING ENGINE v1.0
 
 Implementeert de "Trending Value"-strategie uit James O'Shaughnessys What
 Works on Wall Street: net als bot_01greenblatt GEEN drempel-score, maar een
@@ -53,6 +53,10 @@ UITSLUITINGEN:
   methodiek zelf, niet iets wat dit script probeert te compenseren.
 
 BEPERKINGEN:
+  - Deduplicatie (v1.1): bevestigd nodig na de eerste live run (2026-08-25) —
+    'ALL' verscheen dubbel in de top 25 (048 Nasdaq/NYSE + 057 NYSE, exact
+    dezelfde VC2/momentum). dedupliceer_op_ticker() houdt enkel de eerst
+    gescande occurrence over, vóór VC2-percentielen berekend worden.
   - EBITDA/FCF/aandelenaantal komen uit het laatste jaarrapport
     (tk.financials / tk.cashflow / tk.balance_sheet), niet TTM.
   - Percentielen worden herberekend bij elke run op het dan gescande
@@ -321,6 +325,20 @@ def analyse_ticker_ruw(ticker: str, exchange: str, cfg: dict) -> Optional[RuweSi
 # STAP 1b — VC2 PERCENTIELEN (universum-breed, via pandas)
 # ============================================================
 
+def dedupliceer_op_ticker(alle: List[RuweSignaal]) -> List[RuweSignaal]:
+    """Zelfde reden als bot_01greenblatt.py: tickerbestanden 041-059 overlappen
+    deels, zonder dit zou een ticker dubbel in de VC2-ranking (en dus mogelijk
+    dubbel in de top N) terechtkomen. Behoudt de eerste occurrence."""
+    gezien = set()
+    resultaat = []
+    for s in alle:
+        if s.ticker in gezien:
+            continue
+        gezien.add(s.ticker)
+        resultaat.append(s)
+    return resultaat
+
+
 def bereken_vc2(alle: List[RuweSignaal], cfg: dict) -> pd.DataFrame:
     """Bouwt een DataFrame met percentielen per VC2-ratio en de VC2-compositescore.
     100 = beste/goedkoopste percentiel op elke ratio. Rijen met minder dan
@@ -458,6 +476,12 @@ def run_live_engine():
     if not alle_ruw:
         print("[ERROR] Geen enkele ticker doorstond de basisfilters.")
         return
+
+    aantal_voor_dedup = len(alle_ruw)
+    alle_ruw = dedupliceer_op_ticker(alle_ruw)
+    if len(alle_ruw) < aantal_voor_dedup:
+        print(f"Deduplicatie: {aantal_voor_dedup - len(alle_ruw)} dubbele ticker(s) verwijderd "
+              f"(overlap tussen beursbestanden) — {len(alle_ruw)} unieke tickers over.")
 
     # --- STAP 1b: VC2-percentielen ---
     df = bereken_vc2(alle_ruw, cfg)
