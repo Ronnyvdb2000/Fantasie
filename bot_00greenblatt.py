@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01greenblatt.py  —  JOEL GREENBLATT "MAGIC FORMULA" RANKING ENGINE v1.0
+bot_00greenblatt.py  —  JOEL GREENBLATT "MAGIC FORMULA" RANKING ENGINE v1.0
 
 Implementeert Greenblatts Magic Formula uit The Little Book That Beats the
-Market: GEEN drempel-score zoals bot_01graham/bot_01kasstr, maar een
+Market: GEEN drempel-score zoals bot_00graham/bot_01kasstr, maar een
 RELATIEVE RANKING van het volledige gescande universum op twee metrics:
 
   - Return on Capital (ROC)   = EBIT / (Net Working Capital + Net Fixed Assets)
@@ -66,15 +66,15 @@ Rapportage: Telegram (globale top N, in blokken van 15 om Telegrams
 berichtlimiet te respecteren) + één samenvattende e-mail. Geen CSV.
 
 Supabase: logt de top N naar de bestaande gedeelde `selecties`-tabel onder
-strategie "bot_01greenblatt". Nieuwe parameters (roc, earnings_yield,
+strategie "bot_00greenblatt". Nieuwe parameters (roc, earnings_yield,
 roc_rank, ey_rank, combined_rank, ebit, invested_capital, enterprise_value,
 sector) moeten aan db_logger.py's _KOLOM_WHITELIST toegevoegd worden —
 vereist de bijhorende migratie, zie migratie_greenblatt_kolommen.sql.
 
 Gebruik:
-  python bot_01greenblatt.py live      # wekelijkse globale ranking
-  python bot_01greenblatt.py backtest  # niet ondersteund (zelfde reden als
-                                          # bot_01graham/bot_01kasstr/bot_01hoogl)
+  python bot_00greenblatt.py live      # wekelijkse globale ranking
+  python bot_00greenblatt.py backtest  # niet ondersteund (zelfde reden als
+                                          # bot_00graham/bot_01kasstr/bot_01hoogl)
 """
 
 import os
@@ -150,12 +150,12 @@ GREENBLATT_CFG = {
     "top_n_global":   30,             # Greenblatts suggestie voor portefeuillegrootte
     "ratio_plafond":  3.0,            # |ROC| of |EY| > 300% wordt uitgesloten (databug-signaal)
     "telegram_chunk": 15,             # kandidaten per Telegram-bericht (berichtlimiet)
-    "strategie":      "bot_01greenblatt",
+    "strategie":      "bot_00greenblatt",
     "throttle_sec":   0.15,
 }
 
 # ============================================================
-# HULPFUNCTIES  (identiek patroon aan bot_01graham.py / bot_01kasstr.py)
+# HULPFUNCTIES  (identiek patroon aan bot_00graham.py / bot_01kasstr.py)
 # ============================================================
 
 def today_str() -> str:
@@ -487,7 +487,7 @@ def run_live_engine():
 
 def run_backtest():
     print(
-        "Backtest wordt niet ondersteund voor bot_01greenblatt: yfinance biedt "
+        "Backtest wordt niet ondersteund voor bot_00greenblatt: yfinance biedt "
         "geen betrouwbare historische reeks van EBIT/balansposten per scandatum "
         "in het verleden, enkel het laatste jaarrapport en de actuele enterprise "
         "value. Gebruik 'live' om het huidige universum te rangschikken."
