@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01graham.py  —  BENJAMIN GRAHAM "DEFENSIVE INVESTOR" SELECTIE ENGINE v1.1
+bot_01graham.py  —  BENJAMIN GRAHAM "DEFENSIVE INVESTOR" SELECTIE ENGINE v1.2
 
 Screent op de klassieke criteria voor de "defensive investor" uit Benjamin
 Grahams The Intelligent Investor, vertaald naar wat via yfinance meetbaar is,
-aangevuld met Joseph Piotroski's F-Score als kwaliteitscheck.
+aangevuld met Joseph Piotroski's F-Score als kwaliteitscheck en Peter Lynch's
+PEG-ratio als groei-versus-waardering-check.
 
-Criteria (score 0-8):
+Criteria (score 0-9):
   1. Adequate omvang       — marketCap >= marktkap_min (groot/gevestigd genoeg,
                               Graham mikte op stabiliteit i.p.v. speculatieve small caps)
   2. Sterke financiële conditie — currentRatio >= current_ratio_min (werkkapitaal-buffer)
@@ -30,6 +31,19 @@ Criteria (score 0-8):
                               telt dit criterium niet mee (geen punt, sluit niet uit) —
                               zelfde behandeling als een onbekende waarde bij de andere
                               criteria hierboven.
+  9. Peter Lynch PEG-ratio — PEG = trailingPE / eps_cagr_pct (jaarlijkse samengestelde
+                              groeivoet, NIET dezelfde grootheid als de totale groei uit
+                              criterium 5 — die is over de hele periode, niet per jaar,
+                              en is dus expliciet herberekend als CAGR voor deze PEG).
+                              PEG < peg_max (Lynch's vuistregel: PEG < 1 is aantrekkelijk)
+                              telt als 1 punt. Ontbreekt de data of is de CAGR <= 0
+                              (krimpende winst), dan telt dit criterium niet mee.
+                              LET OP — overlap met criteria 5 en 6: PEG combineert exact
+                              dezelfde twee grootheden (winstgroei en P/E) die Graham al
+                              apart scoort. Een aandeel dat daar al goed op scoort haalt
+                              dit punt dus vaak automatisch mee — dit criterium voegt
+                              minder onafhankelijke informatie toe dan Piotroski (dat wél
+                              een nieuwe dimensie — balans/kwaliteitstrend — binnenbrengt).
 
 Piotroski F-Score (0-9, hetzelfde patroon/dezelfde negen boolean-criteria als in
 bot_01kasstr.py — winstgevendheid, hefboom/liquiditeit, efficiëntie, telkens dit
@@ -47,6 +61,11 @@ BEPERKINGEN (belangrijk, in tegenstelling tot Grahams oorspronkelijke 10/20-jaar
     verificatie van 20 jaar ononderbroken uitkering.
   - marketCap/koers worden niet omgerekend naar één munt — net als bij de
     andere bots is dit een ruwe grens in de eigen valuta van de ticker.
+  - Deduplicatie (v1.3): de 041-059 bestanden overlappen soms (dezelfde
+    ticker in meerdere lijsten) — enkel de eerst gescande beurs telt mee,
+    latere occurrences van diezelfde ticker worden overgeslagen. Nodig
+    gebleken bij bot_01greenblatt/bot_01oshaughnessy (bv. 'ALL' dubbel in
+    zowel 048 Nasdaq/NYSE als 057 NYSE); hier preventief toegepast.
   - Piotroski F-Score vereist minstens 2 jaar balans + resultatenrekening;
     ontbreekt die data, dan is de score -1 ("n.v.t.") en telt hij niet mee.
 
@@ -65,7 +84,8 @@ bijhorende ALTER TABLE-migratie, zie migratie_graham_kolommen.sql.
 piotroski_score is al gewhitelist (toegevoegd bij bot_01kasstr) — geen
 nieuwe migratie nodig voor die kolom. piotroski_detail (de per-criterium
 breakdown) blijft, net als bij kasstr, enkel in de JSON parameters-kolom
-staan.
+staan. peg_ratio, eps_cagr_pct en peg_ok zijn nieuw in v1.2 — zie
+migratie_graham_kolommen_peg.sql.
 
 Gebruik:
   python bot_01graham.py live      # dagelijks rapport (x-lijsten)
@@ -145,7 +165,8 @@ GRAHAM_CFG = {
     "pb_max":              1.5,
     "graham_multiple_max": 22.5,             # PE x PB vuistregel
     "piotroski_min":       7.0,              # F-Score >= 7/9 telt als 1 extra punt
-    "min_score":           6,                # was 5/7 (~71%) — op 6/8 (75%) vergelijkbaar strikt
+    "peg_max":             1.0,              # Lynch: PEG < 1 = aantrekkelijk
+    "min_score":           7,                # was 6/8 (75%) — op 7/9 (78%) vergelijkbaar strikt
     "top_n":               5,
     "strategie":           "bot_01graham",
     "throttle_sec":        0.15,
@@ -326,6 +347,9 @@ class GrahamSignaal:
     graham_number_ok:    bool
     piotroski_score:     float
     piotroski_ok:        bool
+    eps_cagr_pct:        float
+    peg_ratio:           float
+    peg_ok:              bool
     marktkap_label:      str
     current_ratio_label: str
     stabiliteit_label:   str
@@ -334,6 +358,7 @@ class GrahamSignaal:
     pe_label:            str
     pb_label:            str
     piotroski_label:     str
+    peg_label:           str
 
 def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
     try:
@@ -393,9 +418,17 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
                 groei_label = f"✓ {eps_growth_pct:+.1f}% over {eps_years} jaar"
             else:
                 groei_label = f"✗ {eps_growth_pct:+.1f}% over {eps_years} jaar" if not math.isnan(eps_growth_pct) else "✗ onbekend"
+
+            # CAGR (jaarlijkse samengestelde groeivoet) t.b.v. PEG — bewust NIET
+            # hetzelfde als eps_growth_pct hierboven (dat is totale groei over de hele periode)
+            if oudste > 0 and nieuwste > 0 and eps_years >= 2:
+                eps_cagr_pct = ((nieuwste / oudste) ** (1 / (eps_years - 1)) - 1) * 100
+            else:
+                eps_cagr_pct = float("nan")
         else:
             eps_all_positive = False
             eps_growth_pct = float("nan")
+            eps_cagr_pct = float("nan")
             stabiliteit_label = "✗ onbekend (< 2 jaar resultatenrekening)"
             groei_label = "✗ onbekend (< 2 jaar resultatenrekening)"
 
@@ -437,6 +470,21 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
         if piotroski_ok:
             score += 1
 
+        # 9. Peter Lynch PEG-ratio (PE / jaarlijkse CAGR) — zie module-docstring
+        # voor de kanttekening over overlap met criteria 5 en 6.
+        if not math.isnan(pe_ratio) and pe_ratio > 0 and not math.isnan(eps_cagr_pct) and eps_cagr_pct > 0:
+            peg_ratio = pe_ratio / eps_cagr_pct
+            peg_ok = peg_ratio < cfg["peg_max"]
+            if peg_ok:
+                score += 1
+                peg_label = f"✓ {peg_ratio:.2f} (<{cfg['peg_max']:.1f}, CAGR {eps_cagr_pct:.1f}%/j)"
+            else:
+                peg_label = f"✗ {peg_ratio:.2f} (CAGR {eps_cagr_pct:.1f}%/j)"
+        else:
+            peg_ratio = float("nan")
+            peg_ok = False
+            peg_label = "✗ onbekend (geen positieve CAGR of P/E)"
+
         return GrahamSignaal(
             ticker=ticker, price=round(price, 2), score=score,
             market_cap=round(market_cap, 0) if not math.isnan(market_cap) else 0.0,
@@ -448,10 +496,13 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
             pb_ratio=round(pb_ratio, 2) if not math.isnan(pb_ratio) else 0.0,
             graham_number_ok=graham_number_ok,
             piotroski_score=piotroski_score, piotroski_ok=piotroski_ok,
+            eps_cagr_pct=round(eps_cagr_pct, 1) if not math.isnan(eps_cagr_pct) else 0.0,
+            peg_ratio=round(peg_ratio, 2) if not math.isnan(peg_ratio) else 0.0,
+            peg_ok=peg_ok,
             marktkap_label=marktkap_label, current_ratio_label=current_ratio_label,
             stabiliteit_label=stabiliteit_label, dividend_label=dividend_label,
             groei_label=groei_label, pe_label=pe_label, pb_label=pb_label,
-            piotroski_label=piotroski_label,
+            piotroski_label=piotroski_label, peg_label=peg_label,
         )
     except Exception as e:
         print(f"[WARN] {ticker}: fout — {e}")
@@ -463,7 +514,7 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[GrahamSignaal]:
 # ============================================================
 
 def _score_bar(score: int) -> str:
-    return "█" * score + "░" * (8 - score) + f" {score}/8"
+    return "█" * score + "░" * (9 - score) + f" {score}/9"
 
 def format_bericht(exchange_name: str, signalen: List[GrahamSignaal], alle: List[GrahamSignaal], cfg: dict) -> Optional[str]:
     """Eén bericht per exchange. Lege exchanges -> None."""
@@ -474,7 +525,7 @@ def format_bericht(exchange_name: str, signalen: List[GrahamSignaal], alle: List
     top_n  = cfg["top_n"]
     top_tonen = sorted(alle, key=lambda s: (s.score, -s.pe_ratio if s.pe_ratio > 0 else -999), reverse=True)[:top_n]
     max_sc = max((s.score for s in signalen), default=0) if signalen else 0
-    lbl    = {8: "⭐ PERFECTE SCORE (8/8)", 7: "🟡 STERK (7/8)", 6: "🟠 GOED (6/8)"}.get(max_sc, "📊")
+    lbl    = {9: "⭐ PERFECTE SCORE (9/9)", 8: "🟡 STERK (8/9)", 7: "🟠 GOED (7/9)"}.get(max_sc, "📊")
 
     def sig_regel(s: GrahamSignaal, detail: bool = False) -> str:
         r = (
@@ -487,6 +538,7 @@ def format_bericht(exchange_name: str, signalen: List[GrahamSignaal], alle: List
                 f"\n  Winst: {s.stabiliteit_label} | Groei: {s.groei_label}"
                 f"\n  Dividend: {s.dividend_label} | Waardering: {s.pb_label}"
                 f"\n  Piotroski F-Score: {s.piotroski_label}"
+                f"\n  PEG (Lynch): {s.peg_label}"
             )
         return r
 
@@ -508,7 +560,7 @@ def format_bericht(exchange_name: str, signalen: List[GrahamSignaal], alle: List
         f"⚙️ _marktkap>={cfg['marktkap_min']/1e9:.0f}B | current ratio>={cfg['current_ratio_min']:.1f} | "
         f"winst positief alle jaren | dividend uitkerend | winstgroei>={cfg['winstgroei_min_pct']:.0f}% | "
         f"P/E<={cfg['pe_max']:.0f}x | P/B<={cfg['pb_max']:.1f} of PExP/B<={cfg['graham_multiple_max']:.1f} | "
-        f"Piotroski F-Score>={cfg['piotroski_min']:.0f}/9_"
+        f"Piotroski F-Score>={cfg['piotroski_min']:.0f}/9 | PEG<{cfg['peg_max']:.1f}_"
     )
     return "\n\n".join(delen)
 
@@ -538,17 +590,26 @@ def run_live_engine():
         return
 
     email_delen: List[str] = []
+    reeds_verwerkt: set = set()  # dedupliceert tickers die in meerdere 041-059 bestanden
+                                  # voorkomen (overlap tussen beurslijsten) — zonder dit zou
+                                  # zo'n ticker in twee beurzen se top-5 tegelijk kunnen
+                                  # verschijnen. Eerste beurs waarin de ticker voorkomt wint.
+    totaal_gedupliceerd = 0
 
     for ex_name, tlist in exchange_tickers.items():
         print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
 
         alle: List[GrahamSignaal] = []
         for ticker in tlist:
+            if ticker in reeds_verwerkt:
+                totaal_gedupliceerd += 1
+                continue
+            reeds_verwerkt.add(ticker)
             sig = analyse_ticker(ticker, cfg)
             if sig is not None:
                 alle.append(sig)
                 if sig.score >= cfg["min_score"]:
-                    print(f"  ✓ {ticker}: score {sig.score}/8 | P/E={sig.pe_ratio:.1f} | P/B={sig.pb_ratio:.2f}")
+                    print(f"  ✓ {ticker}: score {sig.score}/9 | P/E={sig.pe_ratio:.1f} | P/B={sig.pb_ratio:.2f}")
             time.sleep(cfg["throttle_sec"])  # lichte throttle tegen Yahoo rate-limits
 
         kandidaten = [s for s in alle if s.score >= cfg["min_score"]]
@@ -578,6 +639,9 @@ def run_live_engine():
                     "graham_number_ok": s.graham_number_ok,
                     "piotroski_score": s.piotroski_score,
                     "piotroski_detail": s.piotroski_label,
+                    "eps_cagr_pct": s.eps_cagr_pct,
+                    "peg_ratio": s.peg_ratio,
+                    "peg_ok": s.peg_ok,
                     "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
                 },
             )
@@ -595,6 +659,11 @@ def run_live_engine():
             f"Graham Defensive Investor rapport {today_str()}",
             "\n\n" + ("=" * 40 + "\n\n").join(email_delen),
         )
+
+    if totaal_gedupliceerd:
+        print(f"\nDeduplicatie: {totaal_gedupliceerd} dubbele ticker-occurrence(s) overgeslagen "
+              f"(overlap tussen beursbestanden) — elke ticker enkel meegeteld in de eerst "
+              f"gescande beurs waarin hij voorkomt.")
 
     print(f"\n{'='*60}")
     print("Klaar.")
