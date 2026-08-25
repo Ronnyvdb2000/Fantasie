@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01fisher.py  —  KENNETH FISHER PRICE-TO-SALES SELECTIE ENGINE v1.0
+bot_00Fisher.py  —  KENNETH FISHER PRICE-TO-SALES SELECTIE ENGINE v1.0
 
 Screent op Kenneth Fishers Price-to-Sales-methodiek uit Super Stocks (1984):
-in tegenstelling tot bot_01graham/bot_01greenblatt/bot_01oshaughnessy vereist
+in tegenstelling tot bot_00graham/bot_00greenblatt/bot_00oshaughnessy vereist
 dit script GEEN positieve winst — P/S werkt ook voor verlieslatende of
 cyclische bedrijven waar P/E, EBIT-gebaseerde ROC en de meeste VC2-factoren
 simpelweg niet te berekenen zijn. Dat is de expliciete niche van deze bot:
@@ -46,8 +46,8 @@ BEPERKINGEN:
     voor de kernscore wordt hier enkel het laatste jaarpaar gebruikt.
   - Debt/Equity komt uit yfinance's `debtToEquity`-veld (indien beschikbaar);
     ontbreekt het, dan telt dit criterium niet mee (geen punt, sluit niet uit).
-  - Deduplicatie (v1.0, vanaf het begin toegepast — geleerd bij bot_01greenblatt/
-    bot_01oshaughnessy): de 041-059 bestanden overlappen soms, een lopende
+  - Deduplicatie (v1.0, vanaf het begin toegepast — geleerd bij bot_00greenblatt/
+    bot_00oshaughnessy): de 041-059 bestanden overlappen soms, een lopende
     "reeds verwerkt"-set voorkomt dat eenzelfde ticker in twee beurzen tegelijk
     verschijnt.
 
@@ -55,17 +55,17 @@ TWEE MODI: enkel 'live' — geen backtest (zelfde reden als de andere bots:
 yfinance biedt geen betrouwbare historische fundamentals per scandatum).
 
 Rapportage: Telegram + email, één bericht per beurs, top 5 per beurs, zelfde
-patroon als bot_01graham.py. Draait WEKELIJKS (niet dagelijks) — Fisher-
+patroon als bot_00graham.py. Draait WEKELIJKS (niet dagelijks) — Fisher-
 kandidaten zijn geen dagelijks signaal, en dit houdt de GitHub Actions-
 looptijd binnen de perken naast de andere wekelijkse bots.
 
 Supabase: logt naar de bestaande gedeelde `selecties`-tabel onder strategie
-"bot_01fisher". Nieuwe kolommen: ps_ratio (al gewhitelist via bot_01oshaughnessy),
+"bot_00Fisher". Nieuwe kolommen: ps_ratio (al gewhitelist via bot_00oshaughnessy),
 sector, revenue_growth_pct, debt_to_equity — zie migratie_fisher_kolommen.sql.
 
 Gebruik:
-  python bot_01fisher.py live
-  python bot_01fisher.py backtest  # niet ondersteund
+  python bot_00Fisher.py live
+  python bot_00Fisher.py backtest  # niet ondersteund
 """
 
 import os
@@ -138,7 +138,7 @@ FISHER_CFG = {
     "current_ratio_min":  1.0,
     "min_score":          4,
     "top_n":              5,
-    "strategie":          "bot_01fisher",
+    "strategie":          "bot_00Fisher",
     "throttle_sec":       0.15,
 }
 
@@ -463,7 +463,7 @@ def run_live_engine():
 
 def run_backtest():
     print(
-        "Backtest wordt niet ondersteund voor bot_01fisher: yfinance biedt "
+        "Backtest wordt niet ondersteund voor bot_00Fisher: yfinance biedt "
         "geen betrouwbare historische reeks van fundamentele data per scandatum "
         "in het verleden. Gebruik 'live' om het huidige universum te screenen."
     )
