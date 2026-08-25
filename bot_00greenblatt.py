@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_00greenblatt.py  —  JOEL GREENBLATT "MAGIC FORMULA" RANKING ENGINE v1.0
+bot_01greenblatt.py  —  JOEL GREENBLATT "MAGIC FORMULA" RANKING ENGINE v1.0
 
 Implementeert Greenblatts Magic Formula uit The Little Book That Beats the
-Market: GEEN drempel-score zoals bot_00graham/bot_01kasstr, maar een
+Market: GEEN drempel-score zoals bot_01graham/bot_01kasstr, maar een
 RELATIEVE RANKING van het volledige gescande universum op twee metrics:
 
   - Return on Capital (ROC)   = EBIT / (Net Working Capital + Net Fixed Assets)
@@ -43,6 +43,10 @@ beurs. Dit script rangschikt dus globaal en stuurt in de plaats daarvan:
   - één samenvattende e-mail met diezelfde lijst + methodologie-notities
 
 BEPERKINGEN:
+  - Deduplicatie (v1.1): de 041-059 tickerbestanden overlappen soms (bv.
+    'ALL' stond zowel in 048 Nasdaq/NYSE als 057 NYSE) — zonder correctie
+    zou zo'n ticker dubbel meetellen in de globale ranking. dedupliceer_op_
+    ticker() houdt enkel de eerst gescande occurrence over, vóór de ranking.
   - EBIT/balansposten komen uit het laatste beschikbare jaarrapport via
     yfinance (tk.financials / tk.balance_sheet), niet TTM-cijfers.
   - Enterprise Value: gebruikt yfinance's `enterpriseValue` uit `info` waar
@@ -319,6 +323,22 @@ def analyse_ticker(ticker: str, exchange: str, cfg: dict) -> Optional[Greenblatt
         return None
 
 
+def dedupliceer_op_ticker(alle: List[GreenblattSignaal]) -> List[GreenblattSignaal]:
+    """Sommige tickerbestanden (041-059) overlappen deels (bv. dezelfde aandelen
+    genoteerd in zowel 048 Nasdaq/NYSE als 057 NYSE) — zonder deduplicatie zou
+    zo'n ticker twee keer meetellen in de globale ranking en dus dubbel in de
+    top N kunnen verschijnen, wat een legitieme andere kandidaat verdringt.
+    Behoudt de EERSTE occurrence (op volgorde van de beursscan) per ticker."""
+    gezien = set()
+    resultaat = []
+    for s in alle:
+        if s.ticker in gezien:
+            continue
+        gezien.add(s.ticker)
+        resultaat.append(s)
+    return resultaat
+
+
 def rangschik_globaal(alle: List[GreenblattSignaal]) -> List[GreenblattSignaal]:
     """Wijst roc_rank, ey_rank en combined_rank toe over het VOLLEDIGE universum
     (alle beurzen samen — zie module-docstring). 1 = beste."""
@@ -415,6 +435,12 @@ def run_live_engine():
     if not alle:
         print("[ERROR] Geen enkele ticker voldoet aan de Magic Formula-basisfilters.")
         return
+
+    aantal_voor_dedup = len(alle)
+    alle = dedupliceer_op_ticker(alle)
+    if len(alle) < aantal_voor_dedup:
+        print(f"Deduplicatie: {aantal_voor_dedup - len(alle)} dubbele ticker(s) verwijderd "
+              f"(overlap tussen beursbestanden) — {len(alle)} unieke tickers over.")
 
     gerangschikt = rangschik_globaal(alle)
     top = gerangschikt[: cfg["top_n_global"]]
