@@ -1,4 +1,4 @@
-name: "Bot 01: Fisher Price-to-Sales — wekelijkse screening"
+name: "Bot 00: DULL scanner (041-059) Fisher wekelijks"
 
 on:
   schedule:
@@ -24,4 +24,4 @@ jobs:
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
           SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
-        run: python bot_01fisher.py live
+        run: python bot_00Fisher.py live
