@@ -4,7 +4,7 @@
 bot_00greenblatt.py  —  JOEL GREENBLATT "MAGIC FORMULA" RANKING ENGINE v1.0
 
 Implementeert Greenblatts Magic Formula uit The Little Book That Beats the
-Market: GEEN drempel-score zoals bot_01graham/bot_01kasstr, maar een
+Market: GEEN drempel-score zoals bot_00graham/bot_01kasstr, maar een
 RELATIEVE RANKING van het volledige gescande universum op twee metrics:
 
   - Return on Capital (ROC)   = EBIT / (Net Working Capital + Net Fixed Assets)
@@ -25,6 +25,13 @@ UITSLUITINGEN (zoals Greenblatt zelf voorschrijft):
     hanteerde oorspronkelijk $50-100M als praktische ondergrens).
   - EBIT <= 0 of Invested Capital (NWC + Net Fixed Assets) <= 0: ROC/EY zijn
     dan niet zinvol interpreteerbaar.
+  - |ROC| of |EY| > 300% (ratio_plafond): een Return on Capital of Earnings
+    Yield van honderden procenten is economisch zo goed als altijd een
+    databug (bv. een foutieve/te kleine noemer door een eenheden- of
+    valuta-mismatch in yfinance bij bepaalde cross-listed tickers), niet
+    een legitiem signaal — zelfde aanpak als bot_01kasstr's |FCF yield|>100%-
+    uitsluiting. Bevestigd nodig na de eerste live run (2026-08-24): PZC.L
+    kwam op #1 met een ROC van 912%, KSPI met een EY van 6492%.
 
 AFWIJKING VAN HET GEBRUIKELIJKE BOT-PATROON (bewust): de andere bots sturen
 één bericht PER BEURS met een top-5 die enkel binnen die beurs concurreert.
@@ -137,6 +144,7 @@ UITGESLOTEN_SECTOREN = {
 GREENBLATT_CFG = {
     "marktkap_min":   50_000_000.0,   # Greenblatts eigen praktische ondergrens ($50-100M)
     "top_n_global":   30,             # Greenblatts suggestie voor portefeuillegrootte
+    "ratio_plafond":  3.0,            # |ROC| of |EY| > 300% wordt uitgesloten (databug-signaal)
     "telegram_chunk": 15,             # kandidaten per Telegram-bericht (berichtlimiet)
     "strategie":      "bot_01greenblatt",
     "throttle_sec":   0.15,
@@ -282,6 +290,10 @@ def analyse_ticker(ticker: str, exchange: str, cfg: dict) -> Optional[Greenblatt
             return None  # ROC niet zinvol interpreteerbaar
 
         roc = ebit / invested_capital
+        if abs(roc) > cfg["ratio_plafond"]:
+            return None  # implausibele ROC (>300%) wijst op een databug (bv. verkeerde
+                         # eenheid/valuta tussen EBIT en balansposten), zelfde aanpak als
+                         # bot_01kasstr's |FCF yield|>100%-uitsluiting
 
         ev = safe_float(info.get("enterpriseValue"))
         if math.isnan(ev) or ev <= 0:
@@ -292,6 +304,9 @@ def analyse_ticker(ticker: str, exchange: str, cfg: dict) -> Optional[Greenblatt
             return None
 
         earnings_yield = ebit / ev
+        if abs(earnings_yield) > cfg["ratio_plafond"]:
+            return None  # zelfde reden — implausibele EY (>300%) wijst op een databug,
+                         # niet op een legitiem signaal
 
         return GreenblattSignaal(
             ticker=ticker, exchange=exchange, price=round(price, 2), sector=sector,
@@ -351,7 +366,8 @@ def bouw_telegram_berichten(top: List[GreenblattSignaal], universum_grootte: int
             regels.append(
                 "⚙️ _Rang = optelsom van ROC-rang + Earnings Yield-rang binnen het volledige "
                 "universum (laagste som = beste). Uitgesloten: financiële sector, nutsbedrijven, "
-                f"marketCap < {cfg['marktkap_min']/1e6:.0f}M, EBIT<=0 of Invested Capital<=0._"
+                f"marketCap < {cfg['marktkap_min']/1e6:.0f}M, EBIT<=0 of Invested Capital<=0, "
+                f"|ROC| of |EY| > {cfg['ratio_plafond']*100:.0f}% (databug-filter)._"
             )
         berichten.append("\n".join(regels))
     return berichten
