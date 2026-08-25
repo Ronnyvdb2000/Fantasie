@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01oshaughnessy.py  —  O'SHAUGHNESSY "TRENDING VALUE" RANKING ENGINE v1.0
+bot_00oshaughnessy.py  —  O'SHAUGHNESSY "TRENDING VALUE" RANKING ENGINE v1.0
 
 Implementeert de "Trending Value"-strategie uit James O'Shaughnessys What
-Works on Wall Street: net als bot_01greenblatt GEEN drempel-score, maar een
+Works on Wall Street: net als bot_00greenblatt GEEN drempel-score, maar een
 tweetrapse GLOBALE RANKING over het volledige gescande universum:
 
   STAP 1 — VALUE COMPOSITE TWO (VC2): elk aandeel krijgt op elk van de
@@ -33,7 +33,7 @@ tweetrapse GLOBALE RANKING over het volledige gescande universum:
   aantal yfinance-calls beheersbaar te houden.
 
 AFWIJKING VAN HET GEBRUIKELIJKE PER-BEURS-PATROON (bewust, zelfde reden als
-bot_01greenblatt): dit is een globale cross-market ranking, geen per-beurs
+bot_00greenblatt): dit is een globale cross-market ranking, geen per-beurs
 top-5. Percentielen zijn per definitie universum-breed (een percentiel
 binnen slechts 40 tickers van 1 beurs betekent iets anders dan binnen 1900
 tickers), dus rapportage gebeurt in de plaats via één (opgesplitst)
@@ -44,7 +44,7 @@ UITSLUITINGEN:
     benadering van zijn "All Stocks"-universum in het boek).
   - Minder dan 4 van de 6 VC2-ratio's beschikbaar/zinvol (bv. negatieve
     EBITDA of FCF maakt die ratio onbruikbaar als "goedkoop"-signaal).
-  GEEN sector-uitsluiting (in tegenstelling tot bot_01greenblatt) —
+  GEEN sector-uitsluiting (in tegenstelling tot bot_00greenblatt) —
   O'Shaughnessys eigen tests in het boek sluiten financials niet
   systematisch uit voor de Value Composite; dit is een bewuste
   methodologische keuze, geen omissie. Let op: EV/EBITDA en P/B kunnen
@@ -66,14 +66,14 @@ Rapportage: Telegram (globale top N, in blokken van 15) + samenvattende
 e-mail. Geen CSV.
 
 Supabase: logt de top N naar de bestaande gedeelde `selecties`-tabel onder
-strategie "bot_01oshaughnessy". pe_ratio en pb_ratio zijn al gewhitelist
-(bot_01graham) — enkel ps_ratio, ev_ebitda, ev_fcf, shareholder_yield,
+strategie "bot_00oshaughnessy". pe_ratio en pb_ratio zijn al gewhitelist
+(bot_00graham) — enkel ps_ratio, ev_ebitda, ev_fcf, shareholder_yield,
 vc2_score en momentum_6m_pct zijn nieuw, zie migratie_oshaughnessy_kolommen.sql.
 
 Gebruik:
-  python bot_01oshaughnessy.py live      # wekelijkse globale ranking
-  python bot_01oshaughnessy.py backtest  # niet ondersteund (zelfde reden
-                                            # als bot_01greenblatt/bot_01graham)
+  python bot_00oshaughnessy.py live      # wekelijkse globale ranking
+  python bot_00oshaughnessy.py backtest  # niet ondersteund (zelfde reden
+                                            # als bot_00greenblatt/bot_00graham)
 """
 
 import os
@@ -146,7 +146,7 @@ OSHAUGHNESSY_CFG = {
     "momentum_maanden":     6,              # O'Shaughnessys eigen keuze voor Trending Value
     "top_n_global":         25,             # O'Shaughnessys portefeuillegrootte voor Trending Value
     "telegram_chunk":       15,
-    "strategie":            "bot_01oshaughnessy",
+    "strategie":            "bot_00oshaughnessy",
     "throttle_sec":         0.15,
 }
 
@@ -326,7 +326,7 @@ def analyse_ticker_ruw(ticker: str, exchange: str, cfg: dict) -> Optional[RuweSi
 # ============================================================
 
 def dedupliceer_op_ticker(alle: List[RuweSignaal]) -> List[RuweSignaal]:
-    """Zelfde reden als bot_01greenblatt.py: tickerbestanden 041-059 overlappen
+    """Zelfde reden als bot_00greenblatt.py: tickerbestanden 041-059 overlappen
     deels, zonder dit zou een ticker dubbel in de VC2-ranking (en dus mogelijk
     dubbel in de top N) terechtkomen. Behoudt de eerste occurrence."""
     gezien = set()
@@ -560,7 +560,7 @@ def run_live_engine():
 
 def run_backtest():
     print(
-        "Backtest wordt niet ondersteund voor bot_01oshaughnessy: yfinance biedt "
+        "Backtest wordt niet ondersteund voor bot_00oshaughnessy: yfinance biedt "
         "geen betrouwbare historische reeks van fundamentele ratio's per scandatum "
         "in het verleden. Gebruik 'live' om het huidige universum te rangschikken."
     )
