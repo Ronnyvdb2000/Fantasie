@@ -1,0 +1,27 @@
+name: "Bot 01: O'Shaughnessy Trending Value — wekelijkse globale ranking"
+
+on:
+  schedule:
+    - cron: "0 9 * * 0"
+  workflow_dispatch:
+
+jobs:
+  bot-01oshaughnessy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install yfinance pandas numpy requests python-dotenv psycopg2-binary
+      - name: Run bot_01oshaughnessy
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
+          SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
+        run: python bot_01oshaughnessy.py live
