@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01graham.py  —  BENJAMIN GRAHAM "DEFENSIVE INVESTOR" SELECTIE ENGINE v1.2
+bot_00graham.py  —  BENJAMIN GRAHAM "DEFENSIVE INVESTOR" SELECTIE ENGINE v1.2
 
 Screent op de klassieke criteria voor de "defensive investor" uit Benjamin
 Grahams The Intelligent Investor, vertaald naar wat via yfinance meetbaar is,
@@ -64,7 +64,7 @@ BEPERKINGEN (belangrijk, in tegenstelling tot Grahams oorspronkelijke 10/20-jaar
   - Deduplicatie (v1.3): de 041-059 bestanden overlappen soms (dezelfde
     ticker in meerdere lijsten) — enkel de eerst gescande beurs telt mee,
     latere occurrences van diezelfde ticker worden overgeslagen. Nodig
-    gebleken bij bot_01greenblatt/bot_01oshaughnessy (bv. 'ALL' dubbel in
+    gebleken bij bot_00greenblatt/bot_00oshaughnessy (bv. 'ALL' dubbel in
     zowel 048 Nasdaq/NYSE als 057 NYSE); hier preventief toegepast.
   - Piotroski F-Score vereist minstens 2 jaar balans + resultatenrekening;
     ontbreekt die data, dan is de score -1 ("n.v.t.") en telt hij niet mee.
@@ -77,7 +77,7 @@ Rapportage: Telegram + email, één bericht per beurs, top 5 per beurs,
 lege beurzen worden overgeslagen.
 
 Supabase: logt naar de bestaande gedeelde `selecties`-tabel (db_logger.py)
-onder strategie "bot_01graham". Parameters current_ratio, eps_years,
+onder strategie "bot_00graham". Parameters current_ratio, eps_years,
 eps_all_positive, eps_growth_pct, pe_ratio, pb_ratio en graham_number_ok
 moeten aan db_logger.py's _KOLOM_WHITELIST toegevoegd worden — vereist de
 bijhorende ALTER TABLE-migratie, zie migratie_graham_kolommen.sql.
@@ -88,8 +88,8 @@ staan. peg_ratio, eps_cagr_pct en peg_ok zijn nieuw in v1.2 — zie
 migratie_graham_kolommen_peg.sql.
 
 Gebruik:
-  python bot_01graham.py live      # dagelijks rapport (x-lijsten)
-  python bot_01graham.py backtest  # niet ondersteund (idem bot_01kasstr/bot_01hoogl:
+  python bot_00graham.py live      # dagelijks rapport (x-lijsten)
+  python bot_00graham.py backtest  # niet ondersteund (idem bot_01kasstr/bot_01hoogl:
                                      # geen bruikbare historische fundamentals-reeks
                                      # per scandatum via yfinance) — print uitleg en stopt
 """
@@ -168,7 +168,7 @@ GRAHAM_CFG = {
     "peg_max":             1.0,              # Lynch: PEG < 1 = aantrekkelijk
     "min_score":           7,                # was 6/8 (75%) — op 7/9 (78%) vergelijkbaar strikt
     "top_n":               5,
-    "strategie":           "bot_01graham",
+    "strategie":           "bot_00graham",
     "throttle_sec":        0.15,
 }
 
@@ -671,7 +671,7 @@ def run_live_engine():
 
 def run_backtest():
     print(
-        "Backtest wordt niet ondersteund voor bot_01graham: yfinance biedt geen "
+        "Backtest wordt niet ondersteund voor bot_00graham: yfinance biedt geen "
         "betrouwbare historische reeks van fundamentele data (current ratio, "
         "winstreeks, P/E, P/B) per scandatum in het verleden, enkel de laatste "
         "~4 jaarrapporten en de actuele ratio's. Gebruik 'live' om het huidige "
