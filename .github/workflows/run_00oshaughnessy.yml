@@ -1,4 +1,4 @@
-name: "Bot 01: O'Shaughnessy Trending Value — wekelijkse globale ranking"
+name: "Bot 00: FULL scanner (041-059) O'Shaughnessy - wekelijks"
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  bot-01oshaughnessy:
+  bot-00oshaughnessy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install yfinance pandas numpy requests python-dotenv psycopg2-binary
-      - name: Run bot_01oshaughnessy
+      - name: Run bot_00oshaughnessy
         env:
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -24,4 +24,4 @@ jobs:
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
           SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
-        run: python bot_01oshaughnessy.py live
+        run: python bot_00oshaughnessy.py live
