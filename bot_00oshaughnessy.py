@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01oshaughnessy.py  —  O'SHAUGHNESSY "TRENDING VALUE" RANKING ENGINE v1.0
+bot_00oshaughnessy.py  —  O'SHAUGHNESSY "TRENDING VALUE" RANKING ENGINE v1.0
 
 Implementeert de "Trending Value"-strategie uit James O'Shaughnessys What
 Works on Wall Street: net als bot_01greenblatt GEEN drempel-score, maar een
