@@ -13,7 +13,7 @@ Ranking-logica:
 
 Aantal aankopen wordt afgeleid van BESCHIKBAAR_KAPITAAL / TRANSACTIE_BEDRAG
 (bv. €7500 beschikbaar / €2500 per transactie = top 3 signalen). Stuurt die
-resultaten opvallend naar Telegram (Markdown, emojis) en naar e-mail (HTML,
+resultaten opvallend naar Telegram (HTML, emojis) en naar e-mail (HTML,
 uitgelicht blok voor het topsignaal), inclusief een kosteninschatting per
 positie (vaste kost + variabele kost + TOB).
 
@@ -30,6 +30,7 @@ Env vars (zelfde secrets als de rest van de Fantasie-repo):
 
 import os
 import sys
+import html
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
@@ -169,10 +170,15 @@ def bereken_kosten(bedrag: float):
 # --------------------------------------------------------------------------
 # Berichten opbouwen
 # --------------------------------------------------------------------------
+def _esc(s):
+    """Escaped voor Telegram HTML parse_mode (&, <, > moeten geëscaped)."""
+    return html.escape(str(s))
+
+
 def maak_telegram_bericht(ranking, lookback_days):
     if not ranking:
         return (
-            f"⚠️ *Beste Signaal Bot*\n"
+            f"⚠️ <b>Beste Signaal Bot</b>\n"
             f"Geen selecties gevonden in de laatste {lookback_days} dagen."
         )
 
@@ -181,21 +187,22 @@ def maak_telegram_bericht(ranking, lookback_days):
     kost, kost_pct = bereken_kosten(TRANSACTIE_BEDRAG)
 
     medailles = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+    strategieen_str = _esc(", ".join(beste["strategieen"]))
     lijnen = [
-        "🚨🚨🚨 *BESTE SIGNAAL* 🚨🚨🚨",
-        f"_Analyse van laatste {lookback_days} dagen, {sum(r['overlap'] for r in ranking)} selecties totaal_",
-        f"_Budget: €{BESCHIKBAAR_KAPITAAL:,.0f} → {TOP_N} positie(s) van €{TRANSACTIE_BEDRAG:,.0f}_",
+        "🚨🚨🚨 <b>BESTE SIGNAAL</b> 🚨🚨🚨",
+        f"<i>Analyse van laatste {lookback_days} dagen, {sum(r['overlap'] for r in ranking)} selecties totaal</i>",
+        f"<i>Budget: €{BESCHIKBAAR_KAPITAAL:,.0f} → {TOP_N} positie(s) van €{TRANSACTIE_BEDRAG:,.0f}</i>",
         "",
-        f"{medailles[0]} *{beste['ticker']}* ({beste['beurs']})",
-        f"✅ Overlap: *{beste['overlap']}/7* strategieën — {', '.join(beste['strategieen'])}",
+        f"{medailles[0]} <b>{_esc(beste['ticker'])}</b> ({_esc(beste['beurs'])})",
+        f"✅ Overlap: <b>{beste['overlap']}/7</b> strategieën — {strategieen_str}",
     ]
     if beste["avg_score"]:
-        lijnen.append(f"📊 Gem. score: *{beste['avg_score']:.2f}*")
+        lijnen.append(f"📊 Gem. score: <b>{beste['avg_score']:.2f}</b>")
     if beste["koers"] is not None:
-        lijnen.append(f"💶 Laatste koers: {beste['koers']}")
+        lijnen.append(f"💶 Laatste koers: {_esc(beste['koers'])}")
     lijnen.append(f"💸 Kost bij €{TRANSACTIE_BEDRAG:,.0f}: ~€{kost:.2f} ({kost_pct:.2f}%)")
     if beste["grafiek"]:
-        lijnen.append(f"📈 [Grafiek]({beste['grafiek']})")
+        lijnen.append(f'📈 <a href="{_esc(beste["grafiek"])}">Grafiek</a>')
 
     if len(top) > 1:
         lijnen.append("")
@@ -203,7 +210,7 @@ def maak_telegram_bericht(ranking, lookback_days):
         for i, r in enumerate(top[1:], start=1):
             medaille = medailles[i] if i < len(medailles) else "▫️"
             lijnen.append(
-                f"{medaille} {r['ticker']} ({r['beurs']}) — overlap {r['overlap']}/7, "
+                f"{medaille} {_esc(r['ticker'])} ({_esc(r['beurs'])}) — overlap {r['overlap']}/7, "
                 f"score {r['avg_score']:.2f}"
             )
 
@@ -278,7 +285,7 @@ def stuur_telegram(tekst: str):
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": tekst,
-        "parse_mode": "Markdown",
+        "parse_mode": "HTML",
         "disable_web_page_preview": False,
     }
     resp = requests.post(url, json=payload, timeout=30)
