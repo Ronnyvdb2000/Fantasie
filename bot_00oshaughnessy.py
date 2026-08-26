@@ -4,16 +4,22 @@
 bot_00oshaughnessy.py  —  O'SHAUGHNESSY "TRENDING VALUE" RANKING ENGINE v1.0
 
 Implementeert de "Trending Value"-strategie uit James O'Shaughnessys What
-Works on Wall Street: net als bot_00greenblatt GEEN drempel-score, maar een
+Works on Wall Street: net als bot_01greenblatt GEEN drempel-score, maar een
 tweetrapse GLOBALE RANKING over het volledige gescande universum:
 
   STAP 1 — VALUE COMPOSITE TWO (VC2): elk aandeel krijgt op elk van de
-  onderstaande 6 ratio's een PERCENTIEL binnen het volledige universum
+  onderstaande 7 ratio's een PERCENTIEL binnen het volledige universum
   (100 = goedkoopst/beste, 0 = duurst/slechtste). VC2 = gemiddelde van de
-  beschikbare percentielen (minstens 4 van de 6 vereist, anders uitgesloten):
+  beschikbare percentielen (minstens 5 van de 7 vereist, anders uitgesloten):
     - P/E            (trailingPE)                          — lager = beter
     - P/B            (priceToBook)                          — lager = beter
     - P/S            (priceToSalesTrailing12Months)          — lager = beter
+    - P/CF           (marketCap / Operating Cash Flow)       — lager = beter
+      (toegevoegd na een vraag over David Dremans contrarian-methodiek —
+      Dreman rangschikt op de laagste P/E-, P/B- of P/CF-deciles van de
+      markt; P/E en P/B zaten al in VC2, P/CF ontbrak nog en is hier
+      toegevoegd als 7de factor i.p.v. een aparte Dreman-bot, aangezien
+      een losstaande bot grotendeels dezelfde aandelen zou opleveren)
     - EV/EBITDA      (enterpriseValue / EBITDA)              — lager = beter
     - EV/FCF         (enterpriseValue / Free Cash Flow)      — lager = beter
     - Shareholder Yield = dividendYield + buyback-yield      — hoger = beter
@@ -33,7 +39,7 @@ tweetrapse GLOBALE RANKING over het volledige gescande universum:
   aantal yfinance-calls beheersbaar te houden.
 
 AFWIJKING VAN HET GEBRUIKELIJKE PER-BEURS-PATROON (bewust, zelfde reden als
-bot_00greenblatt): dit is een globale cross-market ranking, geen per-beurs
+bot_01greenblatt): dit is een globale cross-market ranking, geen per-beurs
 top-5. Percentielen zijn per definitie universum-breed (een percentiel
 binnen slechts 40 tickers van 1 beurs betekent iets anders dan binnen 1900
 tickers), dus rapportage gebeurt in de plaats via één (opgesplitst)
@@ -44,7 +50,7 @@ UITSLUITINGEN:
     benadering van zijn "All Stocks"-universum in het boek).
   - Minder dan 4 van de 6 VC2-ratio's beschikbaar/zinvol (bv. negatieve
     EBITDA of FCF maakt die ratio onbruikbaar als "goedkoop"-signaal).
-  GEEN sector-uitsluiting (in tegenstelling tot bot_00greenblatt) —
+  GEEN sector-uitsluiting (in tegenstelling tot bot_01greenblatt) —
   O'Shaughnessys eigen tests in het boek sluiten financials niet
   systematisch uit voor de Value Composite; dit is een bewuste
   methodologische keuze, geen omissie. Let op: EV/EBITDA en P/B kunnen
@@ -66,14 +72,15 @@ Rapportage: Telegram (globale top N, in blokken van 15) + samenvattende
 e-mail. Geen CSV.
 
 Supabase: logt de top N naar de bestaande gedeelde `selecties`-tabel onder
-strategie "bot_00oshaughnessy". pe_ratio en pb_ratio zijn al gewhitelist
-(bot_00graham) — enkel ps_ratio, ev_ebitda, ev_fcf, shareholder_yield,
-vc2_score en momentum_6m_pct zijn nieuw, zie migratie_oshaughnessy_kolommen.sql.
+strategie "bot_01oshaughnessy". pe_ratio en pb_ratio zijn al gewhitelist
+(bot_01graham) — ps_ratio, ev_ebitda, ev_fcf, shareholder_yield, vc2_score
+en momentum_6m_pct via migratie_oshaughnessy_kolommen.sql; pcf_ratio (v1.1,
+de Dreman-factor) via migratie_oshaughnessy_kolommen_pcf.sql.
 
 Gebruik:
-  python bot_00oshaughnessy.py live      # wekelijkse globale ranking
-  python bot_00oshaughnessy.py backtest  # niet ondersteund (zelfde reden
-                                            # als bot_00greenblatt/bot_00graham)
+  python bot_01oshaughnessy.py live      # wekelijkse globale ranking
+  python bot_01oshaughnessy.py backtest  # niet ondersteund (zelfde reden
+                                            # als bot_01greenblatt/bot_01graham)
 """
 
 import os
@@ -141,12 +148,12 @@ def label_voor(f_name: str) -> str:
 
 OSHAUGHNESSY_CFG = {
     "marktkap_min":         200_000_000.0,  # O'Shaughnessys "All Stocks"-benadering
-    "min_vc2_ratios":       4,              # minstens 4 van de 6 VC2-ratio's nodig
+    "min_vc2_ratios":       5,              # minstens 5 van de 7 VC2-ratio's nodig
     "value_percentile_min": 90.0,           # goedkoopste decile gaat door naar stap 2
     "momentum_maanden":     6,              # O'Shaughnessys eigen keuze voor Trending Value
     "top_n_global":         25,             # O'Shaughnessys portefeuillegrootte voor Trending Value
     "telegram_chunk":       15,
-    "strategie":            "bot_00oshaughnessy",
+    "strategie":            "bot_01oshaughnessy",
     "throttle_sec":         0.15,
 }
 
@@ -233,6 +240,7 @@ class RuweSignaal:
     pe:                float  # nan toegestaan (ontbrekend)
     pb:                float
     ps:                float
+    pcf:               float
     ev_ebitda:         float
     ev_fcf:            float
     shareholder_yield: float
@@ -291,6 +299,9 @@ def analyse_ticker_ruw(ticker: str, exchange: str, cfg: dict) -> Optional[RuweSi
         else:
             ev_fcf = float("nan")
 
+        # P/CF: marketCap / Operating Cash Flow (Dreman-factor, hergebruikt dezelfde OCF als EV/FCF)
+        pcf = market_cap / ocf if not math.isnan(ocf) and ocf > 0 and not math.isnan(market_cap) else float("nan")
+
         # P/S fallback via financials als yfinance's eigen veld ontbreekt
         if math.isnan(ps) or ps <= 0:
             rev_row = _row(inc, ["Total Revenue"]) if inc is not None else None
@@ -312,6 +323,7 @@ def analyse_ticker_ruw(ticker: str, exchange: str, cfg: dict) -> Optional[RuweSi
             pe=pe if not math.isnan(pe) and pe > 0 else float("nan"),
             pb=pb if not math.isnan(pb) and pb > 0 else float("nan"),
             ps=ps if not math.isnan(ps) and ps > 0 else float("nan"),
+            pcf=pcf if not math.isnan(pcf) and pcf > 0 else float("nan"),
             ev_ebitda=ev_ebitda if not math.isnan(ev_ebitda) and ev_ebitda > 0 else float("nan"),
             ev_fcf=ev_fcf if not math.isnan(ev_fcf) and ev_fcf > 0 else float("nan"),
             shareholder_yield=round(shareholder_yield, 2),
@@ -326,7 +338,7 @@ def analyse_ticker_ruw(ticker: str, exchange: str, cfg: dict) -> Optional[RuweSi
 # ============================================================
 
 def dedupliceer_op_ticker(alle: List[RuweSignaal]) -> List[RuweSignaal]:
-    """Zelfde reden als bot_00greenblatt.py: tickerbestanden 041-059 overlappen
+    """Zelfde reden als bot_01greenblatt.py: tickerbestanden 041-059 overlappen
     deels, zonder dit zou een ticker dubbel in de VC2-ranking (en dus mogelijk
     dubbel in de top N) terechtkomen. Behoudt de eerste occurrence."""
     gezien = set()
@@ -345,11 +357,11 @@ def bereken_vc2(alle: List[RuweSignaal], cfg: dict) -> pd.DataFrame:
     min_vc2_ratios geldige ratio's worden verwijderd."""
     df = pd.DataFrame([{
         "ticker": s.ticker, "exchange": s.exchange, "price": s.price,
-        "pe": s.pe, "pb": s.pb, "ps": s.ps, "ev_ebitda": s.ev_ebitda,
+        "pe": s.pe, "pb": s.pb, "ps": s.ps, "pcf": s.pcf, "ev_ebitda": s.ev_ebitda,
         "ev_fcf": s.ev_fcf, "shareholder_yield": s.shareholder_yield,
     } for s in alle])
 
-    goedkoop_lager_is_beter = ["pe", "pb", "ps", "ev_ebitda", "ev_fcf"]
+    goedkoop_lager_is_beter = ["pe", "pb", "ps", "pcf", "ev_ebitda", "ev_fcf"]
     for kol in goedkoop_lager_is_beter:
         df[f"pct_{kol}"] = df[kol].rank(pct=True, ascending=False) * 100
     df["pct_shareholder_yield"] = df["shareholder_yield"].rank(pct=True, ascending=True) * 100
@@ -387,6 +399,7 @@ class TrendingValueSignaal:
     pe:                float
     pb:                float
     ps:                float
+    pcf:               float
     ev_ebitda:         float
     ev_fcf:            float
     shareholder_yield: float
@@ -403,7 +416,7 @@ def _sig_regel(s: TrendingValueSignaal, rank: int) -> str:
         return f"{v:.1f}" if not math.isnan(v) else "n/b"
     return (
         f"{rank}. `{s.ticker}` ({s.exchange}) | VC2:{s.vc2_score:.0f} | Mom6m:{s.momentum_pct:+.1f}% | "
-        f"PE:{fmt(s.pe)} PB:{fmt(s.pb)} PS:{fmt(s.ps)} EV/EBITDA:{fmt(s.ev_ebitda)} EV/FCF:{fmt(s.ev_fcf)} "
+        f"PE:{fmt(s.pe)} PB:{fmt(s.pb)} PS:{fmt(s.ps)} PCF:{fmt(s.pcf)} EV/EBITDA:{fmt(s.ev_ebitda)} EV/FCF:{fmt(s.ev_fcf)} "
         f"SY:{s.shareholder_yield:.1f}% | EUR{s.price:.2f} | {_yahoo_link(s.ticker)}"
     )
 
@@ -424,7 +437,7 @@ def bouw_telegram_berichten(top: List[TrendingValueSignaal], universum_grootte: 
         if idx == len(blokken):
             regels.append("─────────────────────────────")
             regels.append(
-                "⚙️ _VC2 = gemiddeld percentiel over P/E, P/B, P/S, EV/EBITDA, EV/FCF (lager=beter) "
+                "⚙️ _VC2 = gemiddeld percentiel over P/E, P/B, P/S, P/CF, EV/EBITDA, EV/FCF (lager=beter) "
                 "en Shareholder Yield (hoger=beter), 100=beste. Enkel de goedkoopste "
                 f"{100 - cfg['value_percentile_min']:.0f}% VAN DEZE RUN (relatieve rang, geen absolute "
                 f"VC2-drempel) gaat door naar de {cfg['momentum_maanden']}-maands momentumranking. "
@@ -485,7 +498,7 @@ def run_live_engine():
 
     # --- STAP 1b: VC2-percentielen ---
     df = bereken_vc2(alle_ruw, cfg)
-    print(f"\nVC2 berekend voor {len(df)}/{len(alle_ruw)} tickers (>= {cfg['min_vc2_ratios']}/6 ratio's geldig)")
+    print(f"\nVC2 berekend voor {len(df)}/{len(alle_ruw)} tickers (>= {cfg['min_vc2_ratios']}/7 ratio's geldig)")
 
     drempel = df["vc2_score"].quantile(cfg["value_percentile_min"] / 100.0)
     waarde_decile = df[df["vc2_score"] >= drempel].copy()
@@ -507,7 +520,8 @@ def run_live_engine():
             continue
         trending.append(TrendingValueSignaal(
             ticker=rij["ticker"], exchange=rij["exchange"], price=rij["price"],
-            pe=rij["pe"], pb=rij["pb"], ps=rij["ps"], ev_ebitda=rij["ev_ebitda"], ev_fcf=rij["ev_fcf"],
+            pe=rij["pe"], pb=rij["pb"], ps=rij["ps"], pcf=rij["pcf"],
+            ev_ebitda=rij["ev_ebitda"], ev_fcf=rij["ev_fcf"],
             shareholder_yield=rij["shareholder_yield"], vc2_score=round(rij["vc2_score"], 1),
             momentum_pct=round(mom, 1),
         ))
@@ -538,6 +552,7 @@ def run_live_engine():
                 "pe_ratio": None if math.isnan(s.pe) else s.pe,
                 "pb_ratio": None if math.isnan(s.pb) else s.pb,
                 "ps_ratio": None if math.isnan(s.ps) else s.ps,
+                "pcf_ratio": None if math.isnan(s.pcf) else s.pcf,
                 "ev_ebitda": None if math.isnan(s.ev_ebitda) else s.ev_ebitda,
                 "ev_fcf": None if math.isnan(s.ev_fcf) else s.ev_fcf,
                 "shareholder_yield": s.shareholder_yield,
@@ -560,7 +575,7 @@ def run_live_engine():
 
 def run_backtest():
     print(
-        "Backtest wordt niet ondersteund voor bot_00oshaughnessy: yfinance biedt "
+        "Backtest wordt niet ondersteund voor bot_01oshaughnessy: yfinance biedt "
         "geen betrouwbare historische reeks van fundamentele ratio's per scandatum "
         "in het verleden. Gebruik 'live' om het huidige universum te rangschikken."
     )
