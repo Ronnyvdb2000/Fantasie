@@ -1,4 +1,4 @@
-name: Correlatie-analyse Weekly Toppers
+name: "analyse correlatie Weekly Toppers"
 
 # Bewust GEEN 'schedule' -- dit script is pas zinvol na een aantal weken
 # accumulatie van data in weekly_toppers/weekly_topper_parameters. Draai
