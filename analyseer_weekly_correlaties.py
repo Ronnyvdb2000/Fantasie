@@ -38,6 +38,9 @@ analyse_correlaties.yml wanneer er genoeg data verzameld is.
 
 import os
 import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 import numpy as np
 import pandas as pd
@@ -53,6 +56,9 @@ logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 
 MIN_N = 30        # minimum aantal geldige (niet-NaN) paren vooraleer een correlatie berekend wordt
 FDR_ALPHA = 0.05  # zelfde drempel als bot_01repititief
@@ -73,19 +79,50 @@ GROEP_BC_KOLOMMEN = [
     "piotroski_score", "combined_rank", "roc_rank", "ey_rank", "vc2_score", "total_score",
 ]
 
+# Families waarvoor een significant resultaat ook effectief betekenisvol is
+# (dus expliciet UITGESLOTEN: "evolutie (delta binnen de week)", want die
+# correleert mechanisch bijna altijd sterk met week_perf zelf -- zie de
+# module-docstring. Die familie blijft wel in het volledige CSV-rapport
+# staan, maar wordt niet apart uitgelicht in Telegram/e-mail.)
+NOEMENSWAARDIGE_FAMILIES = ["startniveau (dag 1, voorspellend)", "fundamenteel/rank"]
+
 
 def stuur_telegram(bericht):
     if not TOKEN or not CHAT_ID:
         logger.info("Telegram-secrets ontbreken, overslaan.")
         return
     try:
-        requests.post(
+        resp = requests.post(
             f"https://api.telegram.org/bot{TOKEN}/sendMessage",
             data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "HTML"},
             timeout=30,
         )
+        if not resp.ok:
+            # Dit ontbrak eerder: zonder deze check faalt een Telegram-fout
+            # (bv. verkeerde chat_id, ongeldige HTML-entity) volledig stil --
+            # geen exception, geen log, gewoon geen bericht dat aankomt.
+            logger.error("Telegram-fout: %s %s", resp.status_code, resp.text)
     except Exception as exc:
-        logger.error("Telegram-fout: %s", exc)
+        logger.error("Telegram-fout (exception): %s", exc)
+
+
+def stuur_email(html_body: str, onderwerp: str):
+    if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
+        logger.info("Email-secrets ontbreken, overslaan.")
+        return
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = onderwerp
+        msg["From"] = EMAIL_USER
+        msg["To"] = EMAIL_RECEIVER
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.sendmail(EMAIL_USER, EMAIL_RECEIVER, msg.as_string())
+    except Exception as exc:
+        logger.error("Email-fout: %s", exc)
 
 
 def haal_data():
@@ -216,6 +253,47 @@ def analyseer_familie(df, kolomnamen, familienaam):
     return resultaten
 
 
+def bouw_html_rapport(rapport: pd.DataFrame, aantal_weken: int) -> str:
+    """Bouwt de volledige tabel als HTML e-mailbody (alle rijen, alle families)."""
+    def fmt(v, decimalen=3):
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            return "-"
+        return f"{v:.{decimalen}f}"
+
+    rijen_html = []
+    for r in rapport.itertuples():
+        stijl = "font-weight:bold;background:#eaffea;" if r.significant else ""
+        rijen_html.append(
+            f"<tr style='{stijl}'>"
+            f"<td>{r.familie}</td><td>{r.parameter}</td><td>{r.n}</td>"
+            f"<td>{fmt(r.rho)}</td><td>{fmt(r.p_waarde, 5)}</td>"
+            f"<td>{fmt(r.p_aangepast, 5)}</td><td>{'JA' if r.significant else ''}</td>"
+            f"</tr>"
+        )
+
+    return f"""
+    <html><body style="font-family:Arial,sans-serif;font-size:13px;">
+    <h2>📊 Correlatie-analyse Weekly Toppers</h2>
+    <p>{aantal_weken} ticker-weken geanalyseerd. FDR-correctie (Benjamini-Hochberg,
+    alpha={FDR_ALPHA}) toegepast per familie afzonderlijk.</p>
+    <p><b>Let op:</b> de familie "evolutie (delta binnen de week)" correleert
+    voor prijs-afgeleide parameters bijna altijd mechanisch sterk met
+    week_perf zelf (delta close IS de teller van week_perf) -- significantie
+    daar is verwacht en weinig informatief op zich. De families
+    "startniveau (dag 1, voorspellend)" en "fundamenteel/rank" zijn de
+    families waar een significant resultaat effectief iets zou kunnen
+    betekenen.</p>
+    <table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;">
+    <tr style="background:#ddd;">
+        <th>Familie</th><th>Parameter</th><th>n</th><th>rho</th>
+        <th>p-waarde</th><th>p (aangepast)</th><th>Significant</th>
+    </tr>
+    {"".join(rijen_html)}
+    </table>
+    </body></html>
+    """
+
+
 def main():
     logger.info("Data ophalen uit weekly_toppers en weekly_topper_parameters...")
     df_toppers, df_params = haal_data()
@@ -226,6 +304,10 @@ def main():
         stuur_telegram(
             "📊 Correlatie-analyse: nog geen data beschikbaar in "
             "weekly_toppers/weekly_topper_parameters."
+        )
+        stuur_email(
+            "<p>Nog geen data beschikbaar in weekly_toppers/weekly_topper_parameters.</p>",
+            "Correlatie-analyse — geen data",
         )
         return
 
@@ -251,21 +333,43 @@ def main():
     rapport.to_csv(output_pad, index=False)
     logger.info("Volledig rapport weggeschreven naar %s", output_pad)
 
-    significante = rapport[rapport["significant"] == True]
-    if significante.empty:
-        stuur_telegram(
+    # Telegram: kort en enkel de NOEMENSWAARDIGE families (evolutie-familie
+    # is bijna altijd (bijna) volledig significant om mechanische redenen --
+    # dat zou het bericht enkel vervuilen, zie module-docstring).
+    noemenswaardig = rapport[
+        (rapport["significant"] == True) & (rapport["familie"].isin(NOEMENSWAARDIGE_FAMILIES))
+    ]
+    aantal_evolutie_sig = int(
+        (rapport["significant"] & (rapport["familie"] == "evolutie (delta binnen de week)")).sum()
+    )
+
+    if noemenswaardig.empty:
+        telegram_bericht = (
             f"📊 <b>Correlatie-analyse</b> ({len(df)} ticker-weken)\n"
-            f"Geen enkele parameter haalt significantie na FDR-correctie (alpha={FDR_ALPHA})."
+            f"Geen significante bevindingen in de betekenisvolle families "
+            f"(startniveau/fundamenteel) na FDR-correctie."
         )
     else:
         regels = "\n".join(
             f"• {r.familie} — {r.parameter}: rho={r.rho:.3f}, p_adj={r.p_aangepast:.4f}, n={r.n}"
-            for r in significante.itertuples()
+            for r in noemenswaardig.itertuples()
         )
-        stuur_telegram(
+        telegram_bericht = (
             f"📊 <b>Correlatie-analyse</b> ({len(df)} ticker-weken)\n"
-            f"{len(significante)} significante parameter(s) na FDR-correctie:\n{regels}"
+            f"{len(noemenswaardig)} noemenswaardige bevinding(en) na FDR-correctie:\n{regels}"
         )
+    if aantal_evolutie_sig:
+        telegram_bericht += (
+            f"\n\n(+{aantal_evolutie_sig} significant in 'evolutie' -- "
+            f"grotendeels verwacht/mechanisch, zie volledig rapport)"
+        )
+    telegram_bericht += "\n\nVolledig rapport: zie e-mail of de CSV-artifact van deze run."
+
+    stuur_telegram(telegram_bericht)
+    stuur_email(
+        bouw_html_rapport(rapport, len(df)),
+        f"Correlatie-analyse Weekly Toppers ({len(df)} ticker-weken)",
+    )
 
 
 if __name__ == "__main__":
