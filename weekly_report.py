@@ -105,11 +105,11 @@ BEURS_NAMEN = {
     "tickers_052a.txt": "052 Oslo",
     "tickers_053a.txt": "053 Kopenhagen",
     "tickers_054a.txt": "054 Helsinki",
-    "tickers_055a.txt": "054 CBoe", 
-    "tickers_056a.txt": "054 NYSE int", 
-    "tickers_057a.txt": "054 NYSE", 
-    "tickers_058a.txt": "054 TSXV", 
-    "tickers_059a.txt": "054 Osstenrijk Slovenie Slovakije",   
+    "tickers_055a.txt": "055 CBoe", 
+    "tickers_056a.txt": "056 NYSE int", 
+    "tickers_057a.txt": "057 NYSE", 
+    "tickers_058a.txt": "058 TSXV", 
+    "tickers_059a.txt": "059 Oostenrijk/Slovenië/Slowakije",   
 }
 
 for _nr, _naam in SECTOR_NAMEN.items():
