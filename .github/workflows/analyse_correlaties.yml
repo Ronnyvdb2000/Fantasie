@@ -1,0 +1,33 @@
+name: Correlatie-analyse Weekly Toppers
+
+# Bewust GEEN 'schedule' -- dit script is pas zinvol na een aantal weken
+# accumulatie van data in weekly_toppers/weekly_topper_parameters. Draai
+# handmatig via de "Run workflow"-knop in de GitHub Actions-tab wanneer er
+# genoeg data verzameld is.
+on:
+  workflow_dispatch:
+
+jobs:
+  correlatie-analyse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install pandas numpy scipy requests python-dotenv psycopg2-binary
+      - name: Run Correlatie-analyse
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: python analyseer_weekly_correlaties.py
+      - name: Upload volledig rapport als artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: correlatie-rapport
+          path: correlatie_rapport.csv
+          if-no-files-found: ignore
