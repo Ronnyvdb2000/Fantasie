@@ -1,0 +1,38 @@
+name: Weekly Report X
+
+on:
+  schedule:
+    - cron: '10 21 * * 5'   # Elke vrijdag om 21:10 UTC -- 10 min na Weekly Report, onafhankelijke runner, geen conflict
+  workflow_dispatch:
+
+jobs:
+  report-x:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install yfinance pandas requests python-dotenv
+      - name: Run Report X
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python weekly_report_x.py
+      - name: Opslaan laatste_toppers_x.json
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -f laatste_toppers_x.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Geen wijzigingen gevonden."
+          else
+            git commit -m "Weekly toppers X update $(date +%Y-%m-%d)"
+            git pull --rebase=false -X ours origin main
+            git push
+          fi
