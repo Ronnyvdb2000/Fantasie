@@ -1,15 +1,15 @@
 # MASTERLIJST 059 — Oostenrijk Slovenie Slovakije
-# Laatste update: 23/08/2026
+# Laatste update: 30/08/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-FACC.VI          | opname:2026-08-23 | ROE:10.7% | Debt:107.5 | Marge:2.6% | Vol:47.2% | Omzet:829,229 | actief
-STR.VI           | opname:2026-08-22 | ROE:17.2% | Debt:14.6 | Marge:4.9% | Vol:34.9% | Omzet:3,713,132 | actief
-VIG.VI           | opname:2026-08-22 | ROE:12.4% | Debt:32.9 | Marge:6.1% | Vol:30.9% | Omzet:2,961,233 | actief
-VOE.VI           | opname:2026-08-23 | ROE:6.6% | Debt:25.4 | Marge:3.4% | Vol:37.9% | Omzet:11,901,476 | actief
-ANDR.VI          | opname:2026-08-22 | ROE:20.2% | Debt:25.4 | Marge:5.8% | Vol:29.2% | Omzet:5,993,481 | zwakker | weken_buiten:1
+FACC.VI          | opname:2026-08-23 | ROE:10.7% | Debt:107.5 | Marge:2.6% | Vol:46.9% | Omzet:828,421 | actief
+STR.VI           | opname:2026-08-22 | ROE:18.3% | Debt:17.0 | Marge:4.7% | Vol:34.4% | Omzet:3,769,053 | actief
+VIG.VI           | opname:2026-08-22 | ROE:12.9% | Debt:33.2 | Marge:6.2% | Vol:30.5% | Omzet:2,976,300 | actief
+VOE.VI           | opname:2026-08-23 | ROE:6.6% | Debt:25.4 | Marge:3.4% | Vol:38.1% | Omzet:11,927,811 | actief
+ANDR.VI          | opname:2026-08-22 | ROE:20.2% | Debt:25.4 | Marge:5.8% | Vol:29.1% | Omzet:6,061,143 | zwakker | weken_buiten:2
 EVN.VI           | opname:2026-08-22 | ROE:8.1% | Debt:17.5 | Marge:16.1% | Vol:21.0% | Omzet:1,285,801 | zwakker | weken_buiten:1
-OMV.VI           | opname:2026-08-22 | ROE:8.8% | Debt:37.6 | Marge:10.6% | Vol:22.5% | Omzet:18,372,416 | zwakker | weken_buiten:1
-TKA.VI           | opname:2026-08-22 | ROE:12.6% | Debt:47.7 | Marge:11.7% | Vol:21.8% | Omzet:513,799 | zwakker | weken_buiten:1
-UQA.VI           | opname:2026-08-22 | ROE:13.7% | Debt:52.7 | Marge:5.7% | Vol:24.3% | Omzet:2,190,097 | zwakker | weken_buiten:1
-VER.VI           | opname:2026-08-22 | ROE:12.8% | Debt:31.1 | Marge:15.9% | Vol:25.8% | Omzet:8,932,345 | zwakker | weken_buiten:1
+OMV.VI           | opname:2026-08-22 | ROE:8.8% | Debt:37.6 | Marge:10.6% | Vol:22.4% | Omzet:18,297,519 | zwakker | weken_buiten:2
+TKA.VI           | opname:2026-08-22 | ROE:12.6% | Debt:47.7 | Marge:11.7% | Vol:21.8% | Omzet:512,057 | zwakker | weken_buiten:2
+UQA.VI           | opname:2026-08-22 | ROE:13.7% | Debt:52.7 | Marge:5.7% | Vol:24.1% | Omzet:2,170,411 | zwakker | weken_buiten:2
+VER.VI           | opname:2026-08-22 | ROE:12.8% | Debt:31.1 | Marge:15.9% | Vol:25.7% | Omzet:8,913,893 | zwakker | weken_buiten:2

@@ -1,5 +1,5 @@
 # MASTERLIJST 051 — Warschau
-# Laatste update: 23/08/2026
+# Laatste update: 30/08/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
@@ -33,4 +33,4 @@ QRS.WA           | opname:2026-07-26 | ROE:45.0% | Debt:2.8 | Marge:30.1% | Vol:
 TOA.WA           | opname:2026-07-19 | ROE:15.6% | Debt:9.2 | Marge:9.2% | Vol:30.0% | Omzet:711,403 | zwakker | weken_buiten:1
 TPE.WA           | opname:2026-07-26 | ROE:15.5% | Debt:58.9 | Marge:9.2% | Vol:45.6% | Omzet:31,583,086 | zwakker | weken_buiten:2
 TRK.WA           | opname:2026-07-26 | ROE:20.4% | Debt:39.2 | Marge:3.7% | Vol:44.6% | Omzet:837,345 | zwakker | weken_buiten:2
-VRG.WA           | opname:2026-08-22 | ROE:8.3% | Debt:47.6 | Marge:5.9% | Vol:26.2% | Omzet:311,862 | zwakker | weken_buiten:1
+VRG.WA           | opname:2026-08-22 | ROE:9.4% | Debt:39.9 | Marge:6.7% | Vol:26.6% | Omzet:291,803 | zwakker | weken_buiten:2
