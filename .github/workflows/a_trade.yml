@@ -3,7 +3,7 @@ name: "A trade - Beste Signaal"
 on:
   schedule:
     # elke weekdag om 20:15 UTC, na de andere bots (19:30-20:10 UTC)
-    - cron: '15 19 * * 1-5'
+    - cron: '15 17 * * 1-6'
   workflow_dispatch: {}
 
 jobs:
