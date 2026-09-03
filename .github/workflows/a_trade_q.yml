@@ -1,0 +1,36 @@
+name: Vers Signaal Bot
+
+on:
+  schedule:
+    # elke dag om 20:20 UTC, 5 min na a_trade.py
+    - cron: '20 19 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  vers-signaal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installeer dependencies
+        run: pip install psycopg2-binary requests
+
+      - name: Draai vers_signaal.py
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          LOOKBACK_DAYS: '3'
+          BESCHIKBAAR_KAPITAAL: '2500'
+          TRANSACTIE_BEDRAG: '2500'
+          AANTAL_PICKS: '5'
+        run: python vers_signaal.py;
