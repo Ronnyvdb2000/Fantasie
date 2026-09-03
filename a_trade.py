@@ -11,11 +11,12 @@ Ranking-logica:
   2. Gemiddelde score binnen die overlap, als tiebreaker.
   3. Meest recente datum, als laatste tiebreaker.
 
-Aantal aankopen wordt afgeleid van BESCHIKBAAR_KAPITAAL / TRANSACTIE_BEDRAG
-(bv. €7500 beschikbaar / €2500 per transactie = top 3 signalen). Stuurt die
-resultaten opvallend naar Telegram (HTML, emojis) en naar e-mail (HTML,
-uitgelicht blok voor het topsignaal), inclusief een kosteninschatting per
-positie (vaste kost + variabele kost + TOB).
+Aantal getoonde picks wordt bepaald door AANTAL_PICKS, los van het budget.
+BESCHIKBAAR_KAPITAAL/TRANSACTIE_BEDRAG worden enkel nog gebruikt om de
+kosteninschatting per positie te berekenen. Stuurt de resultaten opvallend
+naar Telegram (HTML, emojis) en naar e-mail (HTML, uitgelicht blok voor het
+topsignaal), inclusief een kosteninschatting per positie (vaste kost +
+variabele kost + TOB).
 
 Env vars (zelfde secrets als de rest van de Fantasie-repo):
   SUPABASE_DB_URL     - Postgres connectiestring naar Supabase
@@ -26,6 +27,8 @@ Env vars (zelfde secrets als de rest van de Fantasie-repo):
   EMAIL_RECEIVER
   BESCHIKBAAR_KAPITAAL - totaal beschikbaar bedrag in euro (default 2500)
   TRANSACTIE_BEDRAG    - bedrag per aankoop in euro (default 2500)
+  AANTAL_PICKS         - aantal picks dat getoond wordt, los van budget
+                         (default 5)
 """
 
 import os
@@ -48,9 +51,11 @@ LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "3"))
 
 BESCHIKBAAR_KAPITAAL = float(os.environ.get("BESCHIKBAAR_KAPITAAL", "2500"))
 TRANSACTIE_BEDRAG = float(os.environ.get("TRANSACTIE_BEDRAG", "2500"))
-# Aantal aankopen dat binnen het budget past (minstens 1, zodat er altijd
-# een topsignaal getoond wordt, ook als het kapitaal krap is).
-TOP_N = max(1, int(BESCHIKBAAR_KAPITAAL // TRANSACTIE_BEDRAG))
+# Aantal getoonde picks is losgekoppeld van het budget -- het budget wordt
+# enkel nog gebruikt om de kost per positie te berekenen, niet meer om het
+# aantal picks te beperken.
+AANTAL_PICKS = max(1, int(os.environ.get("AANTAL_PICKS", "5")))
+TOP_N = AANTAL_PICKS
 
 # Fiscale/kostenparameters (zelfde als de rest van de Fantasie-repo)
 VASTE_KOST = 15.0
@@ -191,7 +196,7 @@ def maak_telegram_bericht(ranking, lookback_days):
     lijnen = [
         "🚨🚨🚨 <b>BESTE SIGNAAL</b> 🚨🚨🚨",
         f"<i>Analyse van laatste {lookback_days} dagen, {sum(r['overlap'] for r in ranking)} selecties totaal</i>",
-        f"<i>Budget: €{BESCHIKBAAR_KAPITAAL:,.0f} → {TOP_N} positie(s) van €{TRANSACTIE_BEDRAG:,.0f}</i>",
+        f"<i>Aantal picks: {TOP_N} (van €{TRANSACTIE_BEDRAG:,.0f} elk)</i>",
         "",
         f"{medailles[0]} <b>{_esc(beste['ticker'])}</b> ({_esc(beste['beurs'])})",
         f"✅ Overlap: <b>{beste['overlap']}/7</b> strategieën — {strategieen_str}",
@@ -257,8 +262,7 @@ def maak_email_html(ranking, lookback_days):
           <h1 style="color:#e65100; margin-top:0;">🚨 BESTE SIGNAAL 🚨</h1>
           <p style="color:#555;">Analyse van de laatste {lookback_days} dagen
              ({sum(r['overlap'] for r in ranking)} selecties totaal)</p>
-          <p style="color:#555;">Budget: €{BESCHIKBAAR_KAPITAAL:,.0f} →
-             <b>{TOP_N} positie(s)</b> van €{TRANSACTIE_BEDRAG:,.0f}</p>
+          <p style="color:#555;">Aantal picks: <b>{TOP_N}</b> (van €{TRANSACTIE_BEDRAG:,.0f} elk)</p>
           <h2 style="font-size:28px; margin-bottom:5px;">🥇 {beste['ticker']} ({beste['beurs']})</h2>
           <p style="font-size:18px;">✅ Overlap: <b>{beste['overlap']}/7 strategieën</b>
              — {strategieen_html}</p>
