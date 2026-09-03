@@ -204,45 +204,39 @@ def _esc(s):
 
 
 def maak_telegram_bericht(ranking, lookback_days):
+    vandaag = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
     if not ranking:
         return (
-            f"⚠️ <b>Vers Signaal Bot</b>\n"
+            f"⚠️ <b>Vers Signaal Bot — {vandaag}</b>\n"
             f"Geen verse overlap (2+ strategieën, zelfde dag) gevonden "
             f"binnen de laatste {lookback_days} dagen."
         )
 
     top = ranking[:TOP_N]
-    beste = top[0]
     kost, kost_pct = bereken_kosten(TRANSACTIE_BEDRAG)
-
     medailles = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
-    strategieen_str = _esc(", ".join(beste["strategieen"]))
-    lijnen = [
-        "🌱🌱🌱 <b>VERS SIGNAAL</b> 🌱🌱🌱",
-        f"<i>Overlap geteld op {_esc(beste['laatste_datum'])} zelf, niet over meerdere dagen</i>",
-        f"<i>Aantal picks: {TOP_N} (van €{TRANSACTIE_BEDRAG:,.0f} elk)</i>",
-        "",
-        f"{medailles[0]} <b>{_esc(beste['ticker'])}</b> ({_esc(beste['beurs'])})",
-        f"✅ Overlap vandaag: <b>{beste['overlap']}</b> strategieën — {strategieen_str}",
-        f"ℹ️ Cumulatieve overlap venster: {beste['overlap_totaal']}",
-    ]
-    if beste["avg_score"]:
-        lijnen.append(f"📊 Gem. score: <b>{beste['avg_score']:.2f}</b>")
-    if beste["koers"] is not None:
-        lijnen.append(f"💶 Laatste koers: {_esc(beste['koers'])}")
-    lijnen.append(f"💸 Kost bij €{TRANSACTIE_BEDRAG:,.0f}: ~€{kost:.2f} ({kost_pct:.2f}%)")
-    if beste["grafiek"]:
-        lijnen.append(f'📈 <a href="{_esc(beste["grafiek"])}">Grafiek</a>')
 
-    if len(top) > 1:
+    lijnen = [
+        f"🌱🌱🌱 <b>VERS SIGNAAL — {vandaag}</b> 🌱🌱🌱",
+        f"<i>Overlap telkens geteld op de meest recente datum per ticker, niet over meerdere dagen</i>",
+        f"<i>Aantal picks: {TOP_N} (van €{TRANSACTIE_BEDRAG:,.0f} elk)</i>",
+    ]
+
+    for i, r in enumerate(top):
+        medaille = medailles[i] if i < len(medailles) else "▫️"
+        strategieen_str = _esc(", ".join(r["strategieen"]))
         lijnen.append("")
-        lijnen.append(f"Overige kanshebbers (elk €{TRANSACTIE_BEDRAG:,.0f}):")
-        for i, r in enumerate(top[1:], start=1):
-            medaille = medailles[i] if i < len(medailles) else "▫️"
-            lijnen.append(
-                f"{medaille} {_esc(r['ticker'])} ({_esc(r['beurs'])}) — overlap vandaag {r['overlap']}, "
-                f"score {r['avg_score']:.2f}"
-            )
+        lijnen.append(f"{medaille} <b>{_esc(r['ticker'])}</b> ({_esc(r['beurs'])}) — {_esc(r['laatste_datum'])}")
+        lijnen.append(f"✅ Overlap vandaag: <b>{r['overlap']}</b> strategieën — {strategieen_str}")
+        lijnen.append(f"ℹ️ Cumulatieve overlap venster: {r['overlap_totaal']}")
+        if r["avg_score"]:
+            lijnen.append(f"📊 Gem. score: <b>{r['avg_score']:.2f}</b>")
+        if r["koers"] is not None:
+            lijnen.append(f"💶 Laatste koers: {_esc(r['koers'])}")
+        lijnen.append(f"💸 Kost bij €{TRANSACTIE_BEDRAG:,.0f}: ~€{kost:.2f} ({kost_pct:.2f}%)")
+        if r["grafiek"]:
+            lijnen.append(f'📈 <a href="{_esc(r["grafiek"])}">Grafiek</a>')
 
     return "\n".join(lijnen)
 
