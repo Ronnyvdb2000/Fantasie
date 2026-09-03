@@ -1,4 +1,4 @@
-name: Vers Signaal Bot
+name: A trade Q - Beste Signaal
 
 on:
   schedule:
@@ -33,4 +33,4 @@ jobs:
           BESCHIKBAAR_KAPITAAL: '2500'
           TRANSACTIE_BEDRAG: '2500'
           AANTAL_PICKS: '5'
-        run: python vers_signaal.py;
+        run: python a_trade_q.py;
