@@ -1,4 +1,4 @@
-name: "A trade volatiel: gewogen kwaliteitsscore (6 bewezen strategieën) x volatiliteit (x-lijsten)"
+name: "A trade volatiel: Q score x volatiliteit"
 
 on:
   schedule:
