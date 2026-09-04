@@ -1,4 +1,4 @@
-name: "A trade volatiel: gewogen kwaliteitsscore (6 bewezen strategieën) x volatiliteit (x-lijsten) — wekelijks"
+name: "A trade volatiel: gewogen kwaliteitsscore (6 bewezen strategieën) x volatiliteit (x-lijsten) —
 
 on:
   schedule:
@@ -16,8 +16,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install yfinance pandas numpy requests python-dotenv psycopg2-binary
-      - name: Run bot a_trade_volatiel
+      - run: pip install yfinance pandas numpy scipy requests python-dotenv psycopg2-binary
+      - name: Run a_trade_volatiel
         env:
           TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
