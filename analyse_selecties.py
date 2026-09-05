@@ -22,6 +22,14 @@ Gebruik:
     python analyse_selecties.py --telegram                # stuur beknopte samenvatting via Telegram
     python analyse_selecties.py --email                   # stuur beknopte samenvatting via e-mail
     python analyse_selecties.py --check-duplicates         # zoek dubbele (ticker, strategie, datum) records en stop
+
+Wijziging (2026-09-05): NaN-guard toegevoegd in bereken_rendementen(). Als
+yfinance een niet-lege maar deels corrupte DataFrame teruggeeft (bv. door
+een tijdelijke storing of rate limiting), bevatten koers_start/koers_nu
+soms NaN terwijl hist.empty toch False is. Zonder guard telde zo'n NaN-rij
+als een "verlies" mee in de win-rate (NaN > 0 is False) en maakte hij
+gemiddelde/mediaan van de hele groep NaN. Nu wordt zo'n rij overgeslagen
+in plaats van als valse loss meegeteld.
 """
 
 import argparse
@@ -75,6 +83,7 @@ def bereken_rendementen(df: pd.DataFrame) -> pd.DataFrame:
 
     vroegste_datum = df["datum"].min()
     hist_cache = {}
+    overgeslagen_nan = 0
     for i, ticker in enumerate(tickers, 1):
         try:
             hist = yf.download(
@@ -112,7 +121,12 @@ def bereken_rendementen(df: pd.DataFrame) -> pd.DataFrame:
             laatste_koers_cache[ticker] = float(hist["Close"].iloc[-1])
         koers_nu = laatste_koers_cache[ticker]
 
-        if koers_start <= 0:
+        # NaN-guard: yfinance geeft soms een niet-lege maar deels corrupte
+        # DataFrame terug (tijdelijke storing/rate limiting). Zonder deze
+        # check telt zo'n rij als valse "loss" mee in de win-rate en maakt
+        # hij het groepsgemiddelde NaN.
+        if pd.isna(koers_start) or pd.isna(koers_nu) or koers_start <= 0:
+            overgeslagen_nan += 1
             continue
 
         rendement_pct = (koers_nu - koers_start) / koers_start * 100
@@ -127,6 +141,9 @@ def bereken_rendementen(df: pd.DataFrame) -> pd.DataFrame:
                 "rendement_pct": rendement_pct,
             }
         )
+
+    if overgeslagen_nan:
+        print(f"  waarschuwing: {overgeslagen_nan} rijen overgeslagen wegens NaN/ongeldige koersdata")
 
     return pd.DataFrame(resultaten)
 
