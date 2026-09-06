@@ -1,74 +1,56 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_combi_volatiel.py — GEWOGEN KWALITEITSSCORE x VOLATILITEIT  (v3)
+bot_combi_volatiel.py — GEWOGEN KWALITEITSSCORE x VOLATILITEIT  (v4)
 
-Herzien op basis van de Selecties-analyse van 2026-09-06 (tweede meting,
-eerste was 2026-08-31):
+Herzien op basis van de workflow-log van de run van 2026-09-06: die run
+kreeg 5.693 "Too Many Requests"-fouten van Yahoo Finance. Oorzaak
+(bevestigd via de log, niet gegokt): bot_01kasstr, bot_00Fisher en
+bot_01hoogl doen elk honderden tot duizenden LOSSE live
+`yf.Ticker(ticker).info`-calls — de meest rate-limit-gevoelige
+Yahoo-endpoint. Los draaien deze bots prima (elk in hun eigen
+GitHub Actions-job, op een ander moment). In deze combi-bot draaien ze
+na elkaar in dezelfde sessie, dus hun verzoeken stapelen zich op tegen
+dezelfde IP-limiet — die werd binnen enkele minuten bereikt en bleef de
+rest van de run (~25 min) actief.
 
-  bot_00kr is VOLLEDIG UIT DE STEMMING gehaald. Bij de eerste meting had
-  het de hoogste getrimde edge (+1,2%, n=1332, wr55%) en dus het hoogste
-  gewicht in v2. Bij de tweede meting (6 dagen later, n=1456) is dat
-  volledig omgeslagen naar −0,5% met wr41% — en cruciaal: zelfs de
-  MEDIAAN sloeg om (+0,5% → −0,7%). Een mediaan is ongevoelig voor
-  uitschieters, dus een omslag daarin wijst op een structurele
-  verslechtering, niet op een paar tegenvallers. Met n>1300 op beide
-  metingen is dit bovendien geen ruis door een kleine steekproef — het is
-  een betekenisvolle omslag. bot_00kr wordt daarom niet langer als
-  stemmende strategie gebruikt, maar blijft wél geïmporteerd omdat zijn
-  ATR-berekening (voor het volatiliteitsfilter) hergebruikt wordt, los
-  van zijn eigen (nu niet-vertrouwde) score.
+TWEE MAATREGELEN in v4 (samen, op vraag van de gebruiker):
 
-  De overige 5 strategieën met op BEIDE metingen een positieve getrimde
-  edge blijven erin, met als gewicht het GEMIDDELDE van de twee metingen
-  (dempt week-op-week ruis t.o.v. één momentopname):
+  1) TRECHTER — kasstr/fisher/hoogl draaien niet langer op het volledige
+     x-universum per beurs, maar enkel nog op de tickers die al
+     minstens 1 stem hebben van de goedkope, bulk-gebaseerde strategieën
+     (bot_00kr's ATR-check op "heeft ATR% berekend", bot_00vcp,
+     bot_01repititief — alle drie via bulk yf.download(), niet per-ticker
+     live calls, en dus veel minder rate-limit-gevoelig). Dit verlaagt
+     het live-fetch-volume typisch met >90% (in de log van 06/09 vond
+     vcp bv. maar 31 van de ~180 Nasdaq/NYSE x-tickers interessant).
+     Consequentie: kasstr/fisher/hoogl worden effectief gebruikt als
+     BEVESTIGING bovenop een technisch/seizoensgebonden signaal, niet
+     meer als volledig onafhankelijke full-universe screener. Gegeven de
+     externe rate-limit-beperking is dit een bewuste, uitgelegde
+     trade-off — geen stille wijziging.
 
-    strategie          31/08   06/09   gewicht (gemiddelde)
-    bot_01kasstr       +1.2%   +0.5%   0.85
-    bot_00Fisher       +0.7%   +0.4%   0.55
-    bot_00vcp          +0.6%   +0.5%   0.55
-    bot_01hoogl        +0.4%   +0.6%   0.50
-    bot_01repititief   +0.6%   −0.3%   0.15
+  2) RETRY-MET-BACKOFF — elke resterende live-fetch-call (op de kleinere
+     shortlist) krijgt tot 3 pogingen met oplopende wachttijd (8s, 16s,
+     32s) bij een "Too Many Requests"-fout, i.p.v. meteen opgeven.
 
-  bot_01repititief is de enige twijfelgeval: omgeslagen naar negatief bij
-  de tweede meting, maar minder uitgesproken dan kr (mediaan bleef
-  nagenoeg vlak: +0,1% → +0,0%, wat eerder op een handvol tegenvallers
-  wijst dan op een structurele kentering). Blijft daarom voorlopig mee,
-  maar met een sterk gereduceerd gewicht (0.15) dat de onzekerheid
-  weerspiegelt — niet weggegooid, niet vertrouwd.
+Gewichten, uitsluitingen en volatiliteitsfilter ongewijzigd t.o.v. v3
+(zie die docstring-geschiedenis in Git voor de volledige onderbouwing):
 
-BEWUST NIET meegenomen (ongewijzigd t.o.v. v2, bevestigd door de tweede
-meting):
-  - bot_00cs, bot_00ms → eerste meting negatief; bot_00ms is intussen wel
-    verbeterd naar +0,2% maar met bescheiden n=262 en zwakke edge, nog
-    niet overtuigend genoeg om op te nemen.
-  - bot_01marktsent → nog steeds negatief op beide metingen (−0,4% / −0,5%).
-  - bot_00db → n=18.950 (61% van alle selecties), maar nu ronduit
-    negatief (−0,2%, was al maar +0,2%). Bevestigt: hoge vuurfrequentie
-    zonder edge, hoe meer data resolveert hoe duidelijker.
-  - bot_00graham → substantieel verbeterd (n=552, wr49%, +0,4%) maar dit
-    is pas de EERSTE meting onder de huidige (F-Score) code — nog geen
-    tweede bevestiging, dus nog niet opgenomen. Kandidaat voor een
-    volgende herziening als dit stand houdt.
-  - bot_00oshaughnessy → veelbelovend (n=25, wr84%, +2,0%) maar n=25 is
-    te klein om al te vertrouwen (zie hoe bot_01greenblatt met evenveel
-    n=30 in 6 dagen omsloeg van +0,1% naar −0,4% zonder dat de strategie
-    veranderde — pure rijpings-ruis op dat niveau).
-  - bot_00dm, bot_01cointegr, bot_00mr, bot_01xgboostMeta → ongewijzigd
-    (geen trackrecord resp. structureel niet passend, zie v1/v2).
+    bot_01kasstr       0.85
+    bot_00Fisher       0.55
+    bot_00vcp          0.55
+    bot_01hoogl        0.50
+    bot_01repititief   0.15
+    bot_00kr           niet in de stemming, enkel voor ATR%-berekening
 
 Score per ticker = som van de gewichten van elke strategie die de ticker
 vandaag zou selecteren via haar eigen, ongewijzigde analyse_ticker-functie
 en eigen score-drempel — geen scoringslogica is herschreven.
 
-Volatiliteitsfilter ongewijzigd t.o.v. v2: ATR% (14-daagse ATR/koers×100)
-via bot_00kr's eigen ATR-berekening (los van bot_00kr's eigen — nu
-genegeerde — score), standaard 4%-25% ("vrij tot sterk volatiel").
-
-Rapportage: enkel tickers met gewogen score > 0 EN binnen de ATR%-range,
-top N per beurs, gesorteerd op gewogen score. Zelfde architectuur: één
-Telegram-bericht per beurs, één samenvattende e-mail, db_logger onder
-strategie "bot_combi_volatiel", geen CSV.
+Rapportage ongewijzigd: enkel tickers met gewogen score > 0 EN binnen de
+ATR%-range (4%-25%), top N per beurs. Eén Telegram-bericht per beurs, één
+samenvattende e-mail, db_logger onder strategie "bot_combi_volatiel".
 """
 
 import os
@@ -91,9 +73,11 @@ MIN_ATR_PCT = float(os.getenv("MIN_ATR_PCT", "4.0"))
 MAX_ATR_PCT = float(os.getenv("MAX_ATR_PCT", "25.0"))
 TOP_N       = int(os.getenv("TOP_N", "10"))
 
+RETRY_POGINGEN     = int(os.getenv("RETRY_POGINGEN", "3"))
+RETRY_BASIS_WACHT  = float(os.getenv("RETRY_BASIS_WACHT", "8"))  # seconden, verdubbelt per poging
+
 # Gewicht = gemiddelde van de getrimde gemiddelde-return (%) over de
-# metingen van 2026-08-31 en 2026-09-06. bot_00kr bewust NIET opgenomen
-# (zie module-docstring — significante omslag naar negatief, incl. mediaan).
+# metingen van 2026-08-31 en 2026-09-06. bot_00kr bewust NIET opgenomen.
 GEWICHTEN = {
     "kasstr":     0.85,
     "fisher":     0.55,
@@ -106,6 +90,11 @@ STRATEGIE_LABELS = {
     "kasstr": "bot_01kasstr", "fisher": "bot_00Fisher",
     "vcp": "bot_00vcp", "hoogl": "bot_01hoogl", "repititief": "bot_01repititief",
 }
+
+# Enkel deze strategieën doen live per-ticker .info-calls en worden dus
+# getrechterd tot de shortlist. vcp/repititief blijven op het volledige
+# universum draaien (bulk yf.download(), veel minder rate-limit-gevoelig).
+LIVE_FETCH_STRATEGIEEN = {"kasstr", "fisher", "hoogl"}
 
 
 # ============================================================
@@ -130,9 +119,29 @@ def _yahoo_link(ticker: str) -> str:
     return kr._yahoo_link(ticker)
 
 
+def met_retry(fn, ticker: str, label: str):
+    """Voert fn() uit; bij 'Too Many Requests' tot RETRY_POGINGEN keer
+    opnieuw proberen met oplopende wachttijd. Geeft None terug bij
+    definitieve mislukking (ticker wordt dan overgeslagen, zoals voorheen)."""
+    for poging in range(RETRY_POGINGEN):
+        try:
+            return fn()
+        except Exception as e:
+            is_rate_limit = "Too Many Requests" in str(e) or "Rate limited" in str(e)
+            laatste_poging = poging == RETRY_POGINGEN - 1
+            if is_rate_limit and not laatste_poging:
+                wacht = RETRY_BASIS_WACHT * (2 ** poging)
+                print(f"  [retry] {label} {ticker}: rate limited, wacht {wacht:.0f}s (poging {poging+1}/{RETRY_POGINGEN})...")
+                time.sleep(wacht)
+                continue
+            if not is_rate_limit:
+                print(f"  [WARN] {label} {ticker}: fout — {e}")
+            return None
+    return None
+
+
 # ============================================================
-# ATR% — uitsluitend voor het volatiliteitsfilter, los van bot_00kr's
-# eigen (niet langer vertrouwde) score/selectie
+# STAP 1 — bulk-strategieën (goedkoop, volledig universum)
 # ============================================================
 
 def compute_atr_pct(exchange_tickers, all_tickers) -> Dict[str, float]:
@@ -148,39 +157,6 @@ def compute_atr_pct(exchange_tickers, all_tickers) -> Dict[str, float]:
             if sig is not None and sig.price and sig.price > 0:
                 atr_pct[ticker] = round(sig.atr / sig.price * 100, 2)
     return atr_pct
-
-
-# ============================================================
-# STAP 1 — per bevestigde strategie: welke tickers selecteert ze vandaag?
-# ============================================================
-
-def selecties_kasstr(exchange_tickers) -> Dict[str, Set[str]]:
-    print("[kasstr] Fundamentals per ticker (live yfinance-calls)...")
-    result: Dict[str, Set[str]] = {}
-    for ex_name, tlist in exchange_tickers.items():
-        geselecteerd = set()
-        for ticker in tlist:
-            sig = kasstr.analyse_ticker(ticker)
-            if sig is not None and sig.score >= kasstr.FCF_CFG["min_score"]:
-                geselecteerd.add(ticker)
-            time.sleep(0.15)
-        result[ex_name] = geselecteerd
-    return result
-
-
-def selecties_fisher(exchange_tickers) -> Dict[str, Set[str]]:
-    print("[fisher] Fundamentals per ticker (live yfinance-calls)...")
-    cfg = fisher.FISHER_CFG
-    result: Dict[str, Set[str]] = {}
-    for ex_name, tlist in exchange_tickers.items():
-        geselecteerd = set()
-        for ticker in tlist:
-            sig = fisher.analyse_ticker(ticker, cfg)
-            if sig is not None and sig.score >= cfg["min_score"]:
-                geselecteerd.add(ticker)
-            time.sleep(cfg["throttle_sec"])
-        result[ex_name] = geselecteerd
-    return result
 
 
 def selecties_repititief(exchange_tickers, all_tickers) -> Dict[str, Set[str]]:
@@ -218,14 +194,50 @@ def selecties_vcp(exchange_tickers, all_tickers) -> Dict[str, Set[str]]:
     return result
 
 
-def selecties_hoogl(exchange_tickers) -> Dict[str, Set[str]]:
-    print("[hoogl] Fundamentals per ticker (live yfinance-calls)...")
+# ============================================================
+# STAP 2 — live-fetch-strategieën (duur, enkel op de shortlist)
+# ============================================================
+
+def selecties_kasstr(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
+    totaal = sum(len(s) for s in shortlist_per_beurs.values())
+    print(f"[kasstr] Fundamentals per ticker (live yfinance-calls) — {totaal} tickers op shortlist...")
+    result: Dict[str, Set[str]] = {}
+    for ex_name, shortlist in shortlist_per_beurs.items():
+        geselecteerd = set()
+        for ticker in shortlist:
+            sig = met_retry(lambda t=ticker: kasstr.analyse_ticker(t), ticker, "kasstr")
+            if sig is not None and sig.score >= kasstr.FCF_CFG["min_score"]:
+                geselecteerd.add(ticker)
+            time.sleep(0.15)
+        result[ex_name] = geselecteerd
+    return result
+
+
+def selecties_fisher(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
+    totaal = sum(len(s) for s in shortlist_per_beurs.values())
+    print(f"[fisher] Fundamentals per ticker (live yfinance-calls) — {totaal} tickers op shortlist...")
+    cfg = fisher.FISHER_CFG
+    result: Dict[str, Set[str]] = {}
+    for ex_name, shortlist in shortlist_per_beurs.items():
+        geselecteerd = set()
+        for ticker in shortlist:
+            sig = met_retry(lambda t=ticker: fisher.analyse_ticker(t, cfg), ticker, "fisher")
+            if sig is not None and sig.score >= cfg["min_score"]:
+                geselecteerd.add(ticker)
+            time.sleep(cfg["throttle_sec"])
+        result[ex_name] = geselecteerd
+    return result
+
+
+def selecties_hoogl(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
+    totaal = sum(len(s) for s in shortlist_per_beurs.values())
+    print(f"[hoogl] Fundamentals per ticker (live yfinance-calls) — {totaal} tickers op shortlist...")
     cfg = hoogl.MODUS_CFG["live"]
     result: Dict[str, Set[str]] = {}
-    for ex_name, tlist in exchange_tickers.items():
+    for ex_name, shortlist in shortlist_per_beurs.items():
         geselecteerd = set()
-        for ticker in tlist:
-            sig = hoogl.analyse_ticker(ticker, cfg)
+        for ticker in shortlist:
+            sig = met_retry(lambda t=ticker: hoogl.analyse_ticker(t, cfg), ticker, "hoogl")
             if sig is not None and sig.score >= cfg["min_score"]:
                 geselecteerd.add(ticker)
             time.sleep(cfg["throttle_sec"])
@@ -234,12 +246,12 @@ def selecties_hoogl(exchange_tickers) -> Dict[str, Set[str]]:
 
 
 # ============================================================
-# STAP 2 — combineren (gewogen), filteren op volatiliteit, rapporteren
+# STAP 3 — combineren (gewogen), filteren op volatiliteit, rapporteren
 # ============================================================
 
 def run_live_engine():
     print(f"{'='*60}")
-    print(f"COMBI-SELECTIE VOLATIEL v3 (gewogen, kr uit stemming)  {kr.today_str()}")
+    print(f"COMBI-SELECTIE VOLATIEL v4 (trechter + retry-backoff)  {kr.today_str()}")
     print(f"  ATR% tussen {MIN_ATR_PCT} en {MAX_ATR_PCT} | gewichten: {GEWICHTEN}")
     print(f"{'='*60}")
 
@@ -249,14 +261,28 @@ def run_live_engine():
         return
     print(f"Totaal universum: {len(all_tickers)} unieke tickers over {len(exchange_tickers)} beurzen\n")
 
+    # --- bulk-strategieën, volledig universum ---
     atr_pct = compute_atr_pct(exchange_tickers, all_tickers)
 
     per_strategie: Dict[str, Dict[str, Set[str]]] = {}
-    per_strategie["kasstr"] = selecties_kasstr(exchange_tickers)
-    per_strategie["fisher"] = selecties_fisher(exchange_tickers)
     per_strategie["repititief"] = selecties_repititief(exchange_tickers, all_tickers)
     per_strategie["vcp"] = selecties_vcp(exchange_tickers, all_tickers)
-    per_strategie["hoogl"] = selecties_hoogl(exchange_tickers)
+
+    # --- shortlist opbouwen: unie van tickers met >=1 stem uit de bulk-strategieën ---
+    shortlist_per_beurs: Dict[str, Set[str]] = {}
+    for ex_name in exchange_tickers:
+        shortlist = set()
+        for strat_key in ("repititief", "vcp"):
+            shortlist |= per_strategie[strat_key].get(ex_name, set())
+        shortlist_per_beurs[ex_name] = shortlist
+    totaal_shortlist = sum(len(s) for s in shortlist_per_beurs.values())
+    print(f"\n[trechter] {totaal_shortlist} tickers op de shortlist (van {len(all_tickers)} in het volledige universum) "
+          f"voor de live-fetch-strategieën\n")
+
+    # --- live-fetch-strategieën, enkel op de shortlist ---
+    per_strategie["kasstr"] = selecties_kasstr(shortlist_per_beurs)
+    per_strategie["fisher"] = selecties_fisher(shortlist_per_beurs)
+    per_strategie["hoogl"] = selecties_hoogl(shortlist_per_beurs)
 
     email_delen: List[str] = []
 
