@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_combi_volatiel.py — GEWOGEN KWALITEITSSCORE x VOLATILITEIT  (v4)
+bot_combi_volatiel.py — GEWOGEN KWALITEITSSCORE x VOLATILITEIT  (v5)
 
 Herzien op basis van de workflow-log van de run van 2026-09-06: die run
 kreeg 5.693 "Too Many Requests"-fouten van Yahoo Finance. Oorzaak
@@ -51,6 +51,23 @@ en eigen score-drempel — geen scoringslogica is herschreven.
 Rapportage ongewijzigd: enkel tickers met gewogen score > 0 EN binnen de
 ATR%-range (4%-25%), top N per beurs. Eén Telegram-bericht per beurs, één
 samenvattende e-mail, db_logger onder strategie "bot_combi_volatiel".
+
+v5-toevoeging (na een run op 2026-09-06 waarbij zelfs de BULK-downloads
+van kr/vcp/repititief vrijwel volledig faalden — 1028 van 1117 resp. 1026
+van 1117 tickers — met "Crumb fetch rate-limited" meldingen al bij de
+allereerste calls): Yahoo blokkeerde deze sessie dus al vóór de trechter
+of de per-ticker retry-backoff (v4) ook maar de kans kregen om iets uit
+te richten. Trechter en retry-backoff blijven behouden (ze helpen zodra
+Yahoo wél bereikbaar is), maar er komt nu een OPWARM-STAP vooraan de run:
+een klein testdownload (1 ticker, 5 dagen) met lange wachttijden (default
+6 pogingen x 60s = tot 5 minuten) vóórdat de echte, zware downloads
+starten. Als de yfinance-sessie/crumb daardoor eenmaal tot stand komt,
+blijft die meestal geldig voor de rest van de run. Als de opwarm-stap na
+alle pogingen nog steeds niets oplevert, gaat de run gewoon door (de
+daaropvolgende downloads zullen dan waarschijnlijk ook falen, maar we
+willen de run niet onbeperkt laten hangen) — in dat geval wijst dit op
+een bredere, aanhoudende blokkade van het GitHub Actions IP-bereik door
+Yahoo, iets dat buiten wat deze bot zelf kan oplossen ligt.
 """
 
 import os
@@ -75,6 +92,9 @@ TOP_N       = int(os.getenv("TOP_N", "10"))
 
 RETRY_POGINGEN     = int(os.getenv("RETRY_POGINGEN", "3"))
 RETRY_BASIS_WACHT  = float(os.getenv("RETRY_BASIS_WACHT", "8"))  # seconden, verdubbelt per poging
+
+WARMUP_POGINGEN    = int(os.getenv("WARMUP_POGINGEN", "6"))
+WARMUP_WACHT       = float(os.getenv("WARMUP_WACHT", "60"))  # seconden tussen opwarm-pogingen
 
 # Gewicht = gemiddelde van de getrimde gemiddelde-return (%) over de
 # metingen van 2026-08-31 en 2026-09-06. bot_00kr bewust NIET opgenomen.
@@ -138,6 +158,27 @@ def met_retry(fn, ticker: str, label: str):
                 print(f"  [WARN] {label} {ticker}: fout — {e}")
             return None
     return None
+
+
+def warm_up_yfinance() -> bool:
+    """Doet een klein testdownload (1 ticker, 5 dagen) om de
+    yfinance-sessie/crumb op te warmen vóór de zware downloads starten,
+    met lange wachttijden tussen pogingen. Geeft True terug zodra er
+    data binnenkomt; False als dat na alle pogingen niet lukt (de run
+    gaat dan gewoon door — geen oneindige wachttijd)."""
+    for poging in range(WARMUP_POGINGEN):
+        try:
+            test = kr.download_history(["AAPL"], period="5d")
+            if test is not None and not test.empty:
+                print(f"[opwarm] Yahoo-sessie actief na poging {poging+1}/{WARMUP_POGINGEN}")
+                return True
+        except Exception as e:
+            print(f"[opwarm] poging {poging+1}/{WARMUP_POGINGEN} gaf fout: {e}")
+        if poging < WARMUP_POGINGEN - 1:
+            print(f"[opwarm] geen data, wacht {WARMUP_WACHT:.0f}s voor volgende poging...")
+            time.sleep(WARMUP_WACHT)
+    print("[opwarm] Yahoo blijft ontoegankelijk na alle opwarm-pogingen — run gaat toch door.")
+    return False
 
 
 # ============================================================
@@ -251,7 +292,7 @@ def selecties_hoogl(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[s
 
 def run_live_engine():
     print(f"{'='*60}")
-    print(f"COMBI-SELECTIE VOLATIEL v4 (trechter + retry-backoff)  {kr.today_str()}")
+    print(f"COMBI-SELECTIE VOLATIEL v5 (opwarm-retry + trechter + retry-backoff)  {kr.today_str()}")
     print(f"  ATR% tussen {MIN_ATR_PCT} en {MAX_ATR_PCT} | gewichten: {GEWICHTEN}")
     print(f"{'='*60}")
 
@@ -260,6 +301,9 @@ def run_live_engine():
         print("[ERROR] Geen ticker bestanden gevonden.")
         return
     print(f"Totaal universum: {len(all_tickers)} unieke tickers over {len(exchange_tickers)} beurzen\n")
+
+    # --- opwarm-stap, vóór de zware downloads ---
+    warm_up_yfinance()
 
     # --- bulk-strategieën, volledig universum ---
     atr_pct = compute_atr_pct(exchange_tickers, all_tickers)
