@@ -1,68 +1,81 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_combi_volatiel.py — GEWOGEN KWALITEITSSCORE x VOLATILITEIT  (v2)
+bot_combi_volatiel.py — GEWOGEN KWALITEITSSCORE x VOLATILITEIT  (v3)
 
-Herzien op basis van de Selecties-analyse van 2026-08-31: i.p.v. alle 11
-strategieën gelijk te tellen (v1), gebruikt deze versie enkel de strategieën
-met een BEWEZEN positieve getrimde gemiddelde-return op hun eigen huidige
-code (zelfde bestandsnaam/strategie-label als in de performance-analyse —
-geverifieerd via de GitHub-commit-historie, geen aannames):
+Herzien op basis van de Selecties-analyse van 2026-09-06 (tweede meting,
+eerste was 2026-08-31):
 
-    strategie      getrimd gem.   n      win-rate   gewicht
-    bot_00kr           +1.2%     1332      55%        1.2
-    bot_01kasstr        +1.2%      744      58%        1.2
-    bot_00Fisher        +0.7%       88      61%        0.7
-    bot_01repititief    +0.6%      306      51%        0.6
-    bot_00vcp           +0.6%     1767      50%        0.6
-    bot_01hoogl         +0.4%      431      46%        0.4
+  bot_00kr is VOLLEDIG UIT DE STEMMING gehaald. Bij de eerste meting had
+  het de hoogste getrimde edge (+1,2%, n=1332, wr55%) en dus het hoogste
+  gewicht in v2. Bij de tweede meting (6 dagen later, n=1456) is dat
+  volledig omgeslagen naar −0,5% met wr41% — en cruciaal: zelfs de
+  MEDIAAN sloeg om (+0,5% → −0,7%). Een mediaan is ongevoelig voor
+  uitschieters, dus een omslag daarin wijst op een structurele
+  verslechtering, niet op een paar tegenvallers. Met n>1300 op beide
+  metingen is dit bovendien geen ruis door een kleine steekproef — het is
+  een betekenisvolle omslag. bot_00kr wordt daarom niet langer als
+  stemmende strategie gebruikt, maar blijft wél geïmporteerd omdat zijn
+  ATR-berekening (voor het volatiliteitsfilter) hergebruikt wordt, los
+  van zijn eigen (nu niet-vertrouwde) score.
 
-BEWUST NIET meegenomen, met reden:
-  - bot_00cs, bot_00ms, bot_01marktsent  → aantoonbaar NEGATIEVE getrimde
-    edge (−0.6%, −0.8%, −0.4%) op hun huidige code. Meestemmen zou het
-    signaal verzwakken, niet versterken.
-  - bot_00db  → n=12.853 (59% van alle selecties in de hele dataset) tegen
-    amper +0.2% getrimd edge. Zo'n hoge vuurfrequentie met verwaarloosbare
-    edge zou "overlap" bijna altijd laten kloppen zonder er iets aan toe
-    te voegen — verdunt het signaal i.p.v. het te versterken.
-  - bot_00graham, bot_00oshaughnessy, bot_00greenblatt → de GOEDE cijfers
-    in de analyse ("bot_01graham" +0.4%/wr57%, "bot_01oshaughnessy"
-    +0.5%/wr60%, "bot_01greenblatt" +0.1%/wr47%) horen bij oudere versies
-    van deze scripts die intussen herschreven/hernoemd zijn (bevestigd via
-    GitHub-commits van 24-25/08/2026). bot_00graham (de HUIDIGE code) heeft
-    zelf een apart, veel zwakker trackrecord: wr 24%, getrimd +0.0%. Voor
-    bot_00oshaughnessy/bot_00greenblatt bestaat er nog geen trackrecord
-    onder hun huidige naam. De code die goed presteerde bestaat dus niet
-    meer in de huidige vorm — parameters overnemen zou op een aanname
-    berusten, niet op bewijs.
-  - bot_00dm, bot_01cointegr, bot_01xgboostMeta, bot_00mr → niet in de
-    performance-analyse opgenomen (geen trackrecord om op te wegen) resp.
-    structureel niet passend (mr = apart portfoliosysteem, xgboostMeta =
-    forex i.p.v. aandelen).
+  De overige 5 strategieën met op BEIDE metingen een positieve getrimde
+  edge blijven erin, met als gewicht het GEMIDDELDE van de twee metingen
+  (dempt week-op-week ruis t.o.v. één momentopname):
 
-Score per ticker = som van de gewichten van elke strategie (uit bovenstaande
-tabel) die de ticker VANDAAG zou selecteren via haar eigen, ongewijzigde
-analyse_ticker-functie en eigen score-drempel — geen enkele scoringslogica
-is herschreven, enkel geïmporteerd en aangeroepen.
+    strategie          31/08   06/09   gewicht (gemiddelde)
+    bot_01kasstr       +1.2%   +0.5%   0.85
+    bot_00Fisher       +0.7%   +0.4%   0.55
+    bot_00vcp          +0.6%   +0.5%   0.55
+    bot_01hoogl        +0.4%   +0.6%   0.50
+    bot_01repititief   +0.6%   −0.3%   0.15
 
-Volatiliteitsfilter: ATR% (14-daagse ATR/koers×100) via bot_00kr's eigen
-ATR-berekening, los van bot_00kr's eigen score. Standaard 4%-25% ("vrij tot
-sterk volatiel" — de bovengrens is enkel om de bekende yfinance
-databug-uitschieters (foutieve valutaomrekening) uit te sluiten, niet om
-sterke volatiliteit te beperken).
+  bot_01repititief is de enige twijfelgeval: omgeslagen naar negatief bij
+  de tweede meting, maar minder uitgesproken dan kr (mediaan bleef
+  nagenoeg vlak: +0,1% → +0,0%, wat eerder op een handvol tegenvallers
+  wijst dan op een structurele kentering). Blijft daarom voorlopig mee,
+  maar met een sterk gereduceerd gewicht (0.15) dat de onzekerheid
+  weerspiegelt — niet weggegooid, niet vertrouwd.
 
-Rapportage: enkel tickers met gewogen score > 0 (dus geselecteerd door
-minstens 1 van de 6 bewezen strategieën) EN binnen de ATR%-range, top N
-per beurs, gesorteerd op gewogen score. Zelfde architectuur als de andere
-bots: één Telegram-bericht per beurs, één samenvattende e-mail, db_logger
-onder strategie "bot_combi_volatiel", geen CSV.
+BEWUST NIET meegenomen (ongewijzigd t.o.v. v2, bevestigd door de tweede
+meting):
+  - bot_00cs, bot_00ms → eerste meting negatief; bot_00ms is intussen wel
+    verbeterd naar +0,2% maar met bescheiden n=262 en zwakke edge, nog
+    niet overtuigend genoeg om op te nemen.
+  - bot_01marktsent → nog steeds negatief op beide metingen (−0,4% / −0,5%).
+  - bot_00db → n=18.950 (61% van alle selecties), maar nu ronduit
+    negatief (−0,2%, was al maar +0,2%). Bevestigt: hoge vuurfrequentie
+    zonder edge, hoe meer data resolveert hoe duidelijker.
+  - bot_00graham → substantieel verbeterd (n=552, wr49%, +0,4%) maar dit
+    is pas de EERSTE meting onder de huidige (F-Score) code — nog geen
+    tweede bevestiging, dus nog niet opgenomen. Kandidaat voor een
+    volgende herziening als dit stand houdt.
+  - bot_00oshaughnessy → veelbelovend (n=25, wr84%, +2,0%) maar n=25 is
+    te klein om al te vertrouwen (zie hoe bot_01greenblatt met evenveel
+    n=30 in 6 dagen omsloeg van +0,1% naar −0,4% zonder dat de strategie
+    veranderde — pure rijpings-ruis op dat niveau).
+  - bot_00dm, bot_01cointegr, bot_00mr, bot_01xgboostMeta → ongewijzigd
+    (geen trackrecord resp. structureel niet passend, zie v1/v2).
+
+Score per ticker = som van de gewichten van elke strategie die de ticker
+vandaag zou selecteren via haar eigen, ongewijzigde analyse_ticker-functie
+en eigen score-drempel — geen scoringslogica is herschreven.
+
+Volatiliteitsfilter ongewijzigd t.o.v. v2: ATR% (14-daagse ATR/koers×100)
+via bot_00kr's eigen ATR-berekening (los van bot_00kr's eigen — nu
+genegeerde — score), standaard 4%-25% ("vrij tot sterk volatiel").
+
+Rapportage: enkel tickers met gewogen score > 0 EN binnen de ATR%-range,
+top N per beurs, gesorteerd op gewogen score. Zelfde architectuur: één
+Telegram-bericht per beurs, één samenvattende e-mail, db_logger onder
+strategie "bot_combi_volatiel", geen CSV.
 """
 
 import os
 import time
 from typing import Dict, List, Set, Tuple
 
-import bot_00kr as kr
+import bot_00kr as kr                 # enkel voor ATR%-berekening + gedeelde hulpfuncties
 import bot_01kasstr as kasstr
 import bot_00Fisher as fisher
 import bot_01repititief as repititief
@@ -74,24 +87,24 @@ import db_logger
 # CONFIG
 # ============================================================
 
-MIN_ATR_PCT = float(os.getenv("MIN_ATR_PCT", "4.0"))    # "vrij" volatiel ondergrens
-MAX_ATR_PCT = float(os.getenv("MAX_ATR_PCT", "25.0"))   # "sterk" toegelaten, outliers eruit
+MIN_ATR_PCT = float(os.getenv("MIN_ATR_PCT", "4.0"))
+MAX_ATR_PCT = float(os.getenv("MAX_ATR_PCT", "25.0"))
 TOP_N       = int(os.getenv("TOP_N", "10"))
 
-# Gewicht = getrimd gemiddelde (%) uit de Selecties-analyse van 2026-08-31,
-# enkel strategieën met bewezen positieve edge op hun HUIDIGE code.
+# Gewicht = gemiddelde van de getrimde gemiddelde-return (%) over de
+# metingen van 2026-08-31 en 2026-09-06. bot_00kr bewust NIET opgenomen
+# (zie module-docstring — significante omslag naar negatief, incl. mediaan).
 GEWICHTEN = {
-    "kr":         1.2,
-    "kasstr":     1.2,
-    "fisher":     0.7,
-    "repititief": 0.6,
-    "vcp":        0.6,
-    "hoogl":      0.4,
+    "kasstr":     0.85,
+    "fisher":     0.55,
+    "vcp":        0.55,
+    "hoogl":      0.50,
+    "repititief": 0.15,
 }
 
 STRATEGIE_LABELS = {
-    "kr": "bot_00kr", "kasstr": "bot_01kasstr", "fisher": "bot_00Fisher",
-    "repititief": "bot_01repititief", "vcp": "bot_00vcp", "hoogl": "bot_01hoogl",
+    "kasstr": "bot_01kasstr", "fisher": "bot_00Fisher",
+    "vcp": "bot_00vcp", "hoogl": "bot_01hoogl", "repititief": "bot_01repititief",
 }
 
 
@@ -118,31 +131,28 @@ def _yahoo_link(ticker: str) -> str:
 
 
 # ============================================================
-# STAP 1 — per bewezen strategie: welke tickers selecteert ze vandaag?
+# ATR% — uitsluitend voor het volatiliteitsfilter, los van bot_00kr's
+# eigen (niet langer vertrouwde) score/selectie
 # ============================================================
 
-def kr_data_en_selecties(exchange_tickers, all_tickers):
-    """Geeft selecties én ATR%-waarden terug (voor het volatiliteitsfilter)."""
-    print("[kr] Koersdata (3y)...")
+def compute_atr_pct(exchange_tickers, all_tickers) -> Dict[str, float]:
+    print("[atr] Koersdata (3y) via bot_00kr's ATR-berekening...")
     df = kr.download_history(all_tickers, period="3y")
     if df.empty:
-        return {}, {}
-    result: Dict[str, Set[str]] = {}
+        return {}
     atr_pct: Dict[str, float] = {}
     for ex_name, tlist in exchange_tickers.items():
         df_ex = df[df["Ticker"].isin(tlist)]
-        geselecteerd = set()
         for ticker, group in df_ex.groupby("Ticker", sort=False):
             sig = kr.analyse_ticker(ticker, group)
-            if sig is None:
-                continue
-            if sig.price and sig.price > 0:
+            if sig is not None and sig.price and sig.price > 0:
                 atr_pct[ticker] = round(sig.atr / sig.price * 100, 2)
-            if sig.score >= kr.KS_CFG["min_score"]:
-                geselecteerd.add(ticker)
-        result[ex_name] = geselecteerd
-    return result, atr_pct
+    return atr_pct
 
+
+# ============================================================
+# STAP 1 — per bevestigde strategie: welke tickers selecteert ze vandaag?
+# ============================================================
 
 def selecties_kasstr(exchange_tickers) -> Dict[str, Set[str]]:
     print("[kasstr] Fundamentals per ticker (live yfinance-calls)...")
@@ -229,7 +239,7 @@ def selecties_hoogl(exchange_tickers) -> Dict[str, Set[str]]:
 
 def run_live_engine():
     print(f"{'='*60}")
-    print(f"COMBI-SELECTIE VOLATIEL v2 (gewogen)  {kr.today_str()}")
+    print(f"COMBI-SELECTIE VOLATIEL v3 (gewogen, kr uit stemming)  {kr.today_str()}")
     print(f"  ATR% tussen {MIN_ATR_PCT} en {MAX_ATR_PCT} | gewichten: {GEWICHTEN}")
     print(f"{'='*60}")
 
@@ -239,8 +249,9 @@ def run_live_engine():
         return
     print(f"Totaal universum: {len(all_tickers)} unieke tickers over {len(exchange_tickers)} beurzen\n")
 
+    atr_pct = compute_atr_pct(exchange_tickers, all_tickers)
+
     per_strategie: Dict[str, Dict[str, Set[str]]] = {}
-    per_strategie["kr"], atr_pct = kr_data_en_selecties(exchange_tickers, all_tickers)
     per_strategie["kasstr"] = selecties_kasstr(exchange_tickers)
     per_strategie["fisher"] = selecties_fisher(exchange_tickers)
     per_strategie["repititief"] = selecties_repititief(exchange_tickers, all_tickers)
@@ -292,13 +303,13 @@ def run_live_engine():
 
         delen = [
             f"🎯 *Combi-Selectie Volatiel — {ex_name}*",
-            f"_{kr.today_str()} | gewogen score (kr/kasstr=1.2, fisher=0.7, repititief/vcp=0.6, hoogl=0.4) "
+            f"_{kr.today_str()} | gewogen score (kasstr=0.85, fisher/vcp=0.55, hoogl=0.5, repititief=0.15) "
             f"| ATR% {MIN_ATR_PCT}-{MAX_ATR_PCT}%_",
             "─────────────────────────────",
         ]
         for ticker, score, atr, strategieen in top:
             delen.append(
-                f"• `{ticker}` — score {score:.1f} | ATR {atr:.1f}% "
+                f"• `{ticker}` — score {score:.2f} | ATR {atr:.1f}% "
                 f"{_yahoo_link(ticker)}\n"
                 f"  {', '.join(sorted(strategieen))}"
             )
