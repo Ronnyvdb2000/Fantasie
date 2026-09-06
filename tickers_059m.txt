@@ -1,5 +1,5 @@
 # MASTERLIJST 059 — Oostenrijk Slovenie Slovakije
-# Laatste update: 30/08/2026
+# Laatste update: 06/09/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------

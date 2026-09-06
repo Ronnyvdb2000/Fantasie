@@ -1,142 +1,142 @@
 # MASTERLIJST 049 — Stockholm
-# Laatste update: 30/08/2026
+# Laatste update: 06/09/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-8TRA.ST          | opname:2026-07-19 | ROE:9.7% | Debt:149.4 | Marge:4.0% | Vol:30.6% | Omzet:42,979,133 | actief
-ALIF-B.ST        | opname:2026-07-19 | ROE:10.9% | Debt:88.1 | Marge:5.7% | Vol:35.7% | Omzet:20,394,107 | actief
-ALLEI.ST         | opname:2026-07-19 | ROE:5.5% | Debt:6.3 | Marge:5.0% | Vol:33.6% | Omzet:34,071,856 | actief
-ALLIGO-B.ST      | opname:2026-07-19 | ROE:12.8% | Debt:87.6 | Marge:3.4% | Vol:35.8% | Omzet:3,074,998 | actief
-BIOA-B.ST        | opname:2026-08-30 | ROE:5.2% | Debt:4.5 | Marge:10.5% | Vol:44.5% | Omzet:66,094,869 | actief
-BMAX.ST          | opname:2026-07-19 | ROE:9.5% | Debt:76.1 | Marge:3.8% | Vol:30.4% | Omzet:9,463,806 | actief
-BOL.ST           | opname:2026-07-19 | ROE:16.8% | Debt:28.2 | Marge:12.2% | Vol:44.6% | Omzet:619,951,561 | actief
-BONEX.ST         | opname:2026-08-22 | ROE:24.5% | Debt:106.7 | Marge:16.6% | Vol:49.2% | Omzet:58,029,138 | actief
-BOOZT.ST         | opname:2026-07-19 | ROE:11.1% | Debt:28.5 | Marge:3.5% | Vol:35.2% | Omzet:19,389,754 | actief
-BRAV.ST          | opname:2026-07-19 | ROE:16.0% | Debt:43.7 | Marge:4.8% | Vol:30.9% | Omzet:46,150,979 | actief
-BTS-B.ST         | opname:2026-07-19 | ROE:6.3% | Debt:40.2 | Marge:3.5% | Vol:50.3% | Omzet:3,941,250 | actief
-BUFAB.ST         | opname:2026-07-19 | ROE:17.3% | Debt:88.9 | Marge:8.4% | Vol:30.4% | Omzet:17,934,710 | actief
-BURE.ST          | opname:2026-08-22 | ROE:21.8% | Debt:0.8 | Marge:98.3% | Vol:32.2% | Omzet:29,025,284 | actief
-CAMX.ST          | opname:2026-07-19 | ROE:15.9% | Debt:2.3 | Marge:29.9% | Vol:48.1% | Omzet:69,069,178 | actief
-CEVI.ST          | opname:2026-07-19 | ROE:15.1% | Debt:5.9 | Marge:17.5% | Vol:42.5% | Omzet:5,176,559 | actief
-CLAS-B.ST        | opname:2026-07-19 | ROE:42.1% | Debt:60.2 | Marge:9.3% | Vol:37.2% | Omzet:33,916,095 | actief
-CRAD-B.ST        | opname:2026-07-19 | ROE:14.1% | Debt:2.5 | Marge:11.2% | Vol:41.3% | Omzet:996,789 | actief
-DEDI.ST          | opname:2026-07-19 | ROE:13.1% | Debt:10.4 | Marge:2.6% | Vol:31.1% | Omzet:598,168 | actief
-ENRO.ST          | opname:2026-07-19 | ROE:10.2% | Debt:12.6 | Marge:3.1% | Vol:57.4% | Omzet:530,422 | actief
-EPEN.ST          | opname:2026-07-19 | ROE:10.3% | Debt:42.9 | Marge:7.1% | Vol:38.4% | Omzet:1,933,115 | actief
-EPI-A.ST         | opname:2026-07-26 | ROE:21.2% | Debt:42.1 | Marge:14.2% | Vol:30.6% | Omzet:371,258,084 | actief
-EQT.ST           | opname:2026-07-19 | ROE:13.9% | Debt:34.0 | Marge:35.2% | Vol:34.9% | Omzet:527,599,861 | actief
-FMM-B.ST         | opname:2026-07-19 | ROE:12.6% | Debt:7.7 | Marge:6.8% | Vol:57.0% | Omzet:1,585,876 | actief
-HANZA.ST         | opname:2026-08-30 | ROE:11.5% | Debt:66.0 | Marge:4.0% | Vol:54.5% | Omzet:19,736,021 | actief
-HEXA-B.ST        | opname:2026-08-09 | ROE:27.3% | Debt:46.9 | Marge:10.0% | Vol:39.9% | Omzet:400,489,936 | actief
-HMS.ST           | opname:2026-07-19 | ROE:15.8% | Debt:59.2 | Marge:14.5% | Vol:35.2% | Omzet:21,967,183 | actief
-HOFI.ST          | opname:2026-07-19 | ROE:20.8% | Debt:134.2 | Marge:30.2% | Vol:44.4% | Omzet:18,804,022 | actief
-INDT.ST          | opname:2026-07-19 | ROE:15.7% | Debt:60.8 | Marge:8.1% | Vol:37.1% | Omzet:96,477,428 | actief
-INSTAL.ST        | opname:2026-07-19 | ROE:12.3% | Debt:95.8 | Marge:2.9% | Vol:45.7% | Omzet:17,057,590 | actief
-INWI.ST          | opname:2026-07-19 | ROE:10.6% | Debt:63.2 | Marge:5.6% | Vol:34.0% | Omzet:25,055,241 | actief
-IPCO.ST          | opname:2026-08-16 | ROE:2.3% | Debt:56.9 | Marge:3.1% | Vol:41.5% | Omzet:43,752,396 | actief
-KABE-B.ST        | opname:2026-08-22 | ROE:7.3% | Debt:7.0 | Marge:4.1% | Vol:30.3% | Omzet:568,271 | actief
-KAR.ST           | opname:2026-08-22 | ROE:39.5% | Debt:82.9 | Marge:38.3% | Vol:42.7% | Omzet:18,591,371 | actief
-LAGR-B.ST        | opname:2026-08-09 | ROE:28.5% | Debt:104.1 | Marge:11.3% | Vol:32.6% | Omzet:57,337,047 | actief
-LIME.ST          | opname:2026-08-16 | ROE:35.2% | Debt:45.9 | Marge:15.3% | Vol:48.5% | Omzet:12,746,252 | actief
-LUG.ST           | opname:2026-08-22 | ROE:101.2% | Debt:4.8 | Marge:46.3% | Vol:54.4% | Omzet:168,446,765 | actief
-LUMI.ST          | opname:2026-07-19 | ROE:24.3% | Debt:4.7 | Marge:32.5% | Vol:52.6% | Omzet:139,738,768 | actief
-MCAP.ST          | opname:2026-07-26 | ROE:16.4% | Debt:28.8 | Marge:10.7% | Vol:34.8% | Omzet:9,374,440 | actief
-MILDEF.ST        | opname:2026-07-19 | ROE:17.6% | Debt:41.8 | Marge:10.0% | Vol:66.8% | Omzet:55,701,977 | actief
-MIPS.ST          | opname:2026-07-19 | ROE:29.4% | Debt:53.3 | Marge:24.8% | Vol:55.2% | Omzet:28,345,464 | actief
-MMGR-B.ST        | opname:2026-07-19 | ROE:24.5% | Debt:91.5 | Marge:6.2% | Vol:35.1% | Omzet:6,029,158 | actief
-MSAB-B.ST        | opname:2026-07-19 | ROE:59.6% | Debt:51.4 | Marge:13.7% | Vol:47.6% | Omzet:1,329,519 | actief
-MYCR.ST          | opname:2026-07-19 | ROE:23.7% | Debt:5.3 | Marge:20.1% | Vol:40.0% | Omzet:61,740,320 | actief
-NCAB.ST          | opname:2026-07-19 | ROE:18.9% | Debt:87.7 | Marge:6.7% | Vol:48.1% | Omzet:18,670,429 | actief
-NIBE-B.ST        | opname:2026-08-02 | ROE:8.5% | Debt:72.2 | Marge:6.4% | Vol:39.3% | Omzet:289,270,624 | actief
+8TRA.ST          | opname:2026-07-19 | ROE:9.7% | Debt:149.4 | Marge:4.0% | Vol:30.6% | Omzet:43,202,760 | actief
+ALIF-B.ST        | opname:2026-07-19 | ROE:10.9% | Debt:88.1 | Marge:5.7% | Vol:35.6% | Omzet:20,928,866 | actief
+ALLEI.ST         | opname:2026-07-19 | ROE:5.5% | Debt:6.3 | Marge:5.0% | Vol:33.7% | Omzet:34,391,328 | actief
+ALLIGO-B.ST      | opname:2026-07-19 | ROE:12.8% | Debt:87.6 | Marge:3.4% | Vol:35.5% | Omzet:2,703,550 | actief
+BIOA-B.ST        | opname:2026-08-30 | ROE:5.2% | Debt:4.5 | Marge:10.5% | Vol:44.0% | Omzet:62,777,425 | actief
+BMAX.ST          | opname:2026-07-19 | ROE:9.5% | Debt:76.1 | Marge:3.8% | Vol:30.4% | Omzet:9,488,271 | actief
+BOL.ST           | opname:2026-07-19 | ROE:16.8% | Debt:28.2 | Marge:12.2% | Vol:44.4% | Omzet:626,652,526 | actief
+BONEX.ST         | opname:2026-08-22 | ROE:24.5% | Debt:106.7 | Marge:16.6% | Vol:49.5% | Omzet:58,381,347 | actief
+BOOZT.ST         | opname:2026-07-19 | ROE:11.1% | Debt:28.5 | Marge:3.5% | Vol:34.7% | Omzet:19,619,128 | actief
+BRAV.ST          | opname:2026-07-19 | ROE:16.0% | Debt:43.7 | Marge:4.8% | Vol:30.9% | Omzet:47,594,265 | actief
+BTS-B.ST         | opname:2026-07-19 | ROE:6.3% | Debt:40.2 | Marge:3.5% | Vol:50.8% | Omzet:4,044,922 | actief
+BUFAB.ST         | opname:2026-07-19 | ROE:17.3% | Debt:88.9 | Marge:8.4% | Vol:30.3% | Omzet:18,549,315 | actief
+BURE.ST          | opname:2026-08-22 | ROE:21.8% | Debt:0.8 | Marge:98.3% | Vol:32.5% | Omzet:29,804,818 | actief
+CEVI.ST          | opname:2026-07-19 | ROE:15.1% | Debt:5.9 | Marge:17.5% | Vol:42.2% | Omzet:5,208,506 | actief
+CLAS-B.ST        | opname:2026-07-19 | ROE:41.3% | Debt:53.4 | Marge:9.7% | Vol:38.3% | Omzet:34,933,021 | actief
+CRAD-B.ST        | opname:2026-07-19 | ROE:14.1% | Debt:2.5 | Marge:11.2% | Vol:41.3% | Omzet:1,015,075 | actief
+DEDI.ST          | opname:2026-07-19 | ROE:13.1% | Debt:10.4 | Marge:2.6% | Vol:31.6% | Omzet:599,968 | actief
+ENGCON-B.ST      | opname:2026-08-22 | ROE:38.8% | Debt:29.8 | Marge:12.2% | Vol:38.7% | Omzet:12,055,258 | actief
+ENRO.ST          | opname:2026-07-19 | ROE:10.2% | Debt:12.6 | Marge:3.1% | Vol:57.5% | Omzet:531,638 | actief
+EPEN.ST          | opname:2026-07-19 | ROE:10.3% | Debt:42.9 | Marge:7.1% | Vol:37.9% | Omzet:1,879,557 | actief
+EPI-A.ST         | opname:2026-07-26 | ROE:21.2% | Debt:42.1 | Marge:14.2% | Vol:30.7% | Omzet:375,244,429 | actief
+EQT.ST           | opname:2026-07-19 | ROE:13.9% | Debt:34.0 | Marge:35.2% | Vol:35.0% | Omzet:532,730,070 | actief
+FMM-B.ST         | opname:2026-07-19 | ROE:12.6% | Debt:7.7 | Marge:6.8% | Vol:57.0% | Omzet:1,624,440 | actief
+HANZA.ST         | opname:2026-08-30 | ROE:11.5% | Debt:66.0 | Marge:4.0% | Vol:54.4% | Omzet:19,869,103 | actief
+HEXA-B.ST        | opname:2026-08-09 | ROE:27.3% | Debt:46.9 | Marge:10.0% | Vol:39.8% | Omzet:404,041,811 | actief
+HMS.ST           | opname:2026-07-19 | ROE:15.8% | Debt:59.2 | Marge:14.5% | Vol:35.3% | Omzet:21,907,808 | actief
+HOFI.ST          | opname:2026-07-19 | ROE:20.8% | Debt:134.2 | Marge:30.2% | Vol:44.3% | Omzet:19,464,538 | actief
+INDT.ST          | opname:2026-07-19 | ROE:15.7% | Debt:60.8 | Marge:8.1% | Vol:37.0% | Omzet:95,107,809 | actief
+INSTAL.ST        | opname:2026-07-19 | ROE:12.3% | Debt:95.8 | Marge:2.9% | Vol:45.8% | Omzet:16,805,980 | actief
+INWI.ST          | opname:2026-07-19 | ROE:10.6% | Debt:63.2 | Marge:5.6% | Vol:34.2% | Omzet:25,084,649 | actief
+IPCO.ST          | opname:2026-08-16 | ROE:2.3% | Debt:56.9 | Marge:3.1% | Vol:41.6% | Omzet:44,213,311 | actief
+KABE-B.ST        | opname:2026-08-22 | ROE:7.3% | Debt:7.0 | Marge:4.1% | Vol:30.7% | Omzet:606,923 | actief
+LIME.ST          | opname:2026-08-16 | ROE:35.2% | Debt:45.9 | Marge:15.3% | Vol:48.3% | Omzet:12,796,355 | actief
+LUG.ST           | opname:2026-08-22 | ROE:101.2% | Debt:4.8 | Marge:46.3% | Vol:54.4% | Omzet:168,084,745 | actief
+LUMI.ST          | opname:2026-07-19 | ROE:24.3% | Debt:4.7 | Marge:32.5% | Vol:52.9% | Omzet:141,583,165 | actief
+MCAP.ST          | opname:2026-07-26 | ROE:16.4% | Debt:28.8 | Marge:10.7% | Vol:35.1% | Omzet:9,264,061 | actief
+MILDEF.ST        | opname:2026-07-19 | ROE:17.6% | Debt:41.8 | Marge:10.0% | Vol:66.9% | Omzet:56,307,315 | actief
+MIPS.ST          | opname:2026-07-19 | ROE:29.4% | Debt:53.3 | Marge:24.8% | Vol:55.2% | Omzet:28,900,515 | actief
+MMGR-B.ST        | opname:2026-07-19 | ROE:24.5% | Debt:91.5 | Marge:6.2% | Vol:35.3% | Omzet:6,035,173 | actief
+MSAB-B.ST        | opname:2026-07-19 | ROE:59.6% | Debt:51.4 | Marge:13.7% | Vol:47.3% | Omzet:1,359,950 | actief
+MYCR.ST          | opname:2026-07-19 | ROE:23.7% | Debt:5.3 | Marge:20.1% | Vol:40.4% | Omzet:63,321,750 | actief
+NCAB.ST          | opname:2026-07-19 | ROE:18.9% | Debt:87.7 | Marge:6.7% | Vol:47.6% | Omzet:19,027,619 | actief
+NIBE-B.ST        | opname:2026-08-02 | ROE:8.5% | Debt:72.2 | Marge:6.4% | Vol:39.2% | Omzet:290,984,036 | actief
 NIL-B.ST         | opname:2026-07-19 | ROE:13.3% | Debt:19.8 | Marge:5.1% | Vol:72.2% | Omzet:1,724,004 | actief
-OEM-B.ST         | opname:2026-07-19 | ROE:25.0% | Debt:5.1 | Marge:11.8% | Vol:32.4% | Omzet:12,460,374 | actief
-PACT.ST          | opname:2026-07-19 | ROE:17.3% | Debt:54.8 | Marge:4.0% | Vol:32.5% | Omzet:6,239,184 | actief
-PRIC-B.ST        | opname:2026-07-19 | ROE:6.4% | Debt:30.8 | Marge:3.2% | Vol:58.1% | Omzet:1,300,559 | actief
-SAAB-B.ST        | opname:2026-07-19 | ROE:15.9% | Debt:28.6 | Marge:8.0% | Vol:41.2% | Omzet:1,129,878,503 | actief
-SECT-B.ST        | opname:2026-07-19 | ROE:27.8% | Debt:3.6 | Marge:15.5% | Vol:32.3% | Omzet:42,657,865 | actief
-SSAB-A.ST        | opname:2026-07-19 | ROE:8.1% | Debt:15.3 | Marge:5.7% | Vol:36.6% | Omzet:75,905,358 | actief
-SSAB-B.ST        | opname:2026-07-19 | ROE:8.1% | Debt:15.3 | Marge:5.7% | Vol:36.3% | Omzet:251,836,187 | actief
-STOR-B.ST        | opname:2026-07-26 | ROE:6.1% | Debt:53.3 | Marge:3.4% | Vol:36.3% | Omzet:33,225,226 | actief
-TIETOS.ST        | opname:2026-08-02 | ROE:21.1% | Debt:64.4 | Marge:6.7% | Vol:34.9% | Omzet:2,427,422 | actief
-TRUE-B.ST        | opname:2026-08-09 | ROE:22.4% | Debt:4.2 | Marge:14.8% | Vol:66.6% | Omzet:40,712,896 | actief
-VIT-B.ST         | opname:2026-08-22 | ROE:9.4% | Debt:74.7 | Marge:12.1% | Vol:40.8% | Omzet:30,582,617 | actief
-XVIVO.ST         | opname:2026-07-19 | ROE:4.1% | Debt:5.5 | Marge:9.9% | Vol:48.7% | Omzet:26,509,778 | actief
-AAK.ST           | opname:2026-08-22 | ROE:18.7% | Debt:28.5 | Marge:7.9% | Vol:25.6% | Omzet:120,056,594 | zwakker | weken_buiten:2
-ABB.ST           | opname:2026-08-22 | ROE:32.6% | Debt:55.8 | Marge:14.1% | Vol:26.0% | Omzet:376,993,333 | zwakker | weken_buiten:2
-ADDT-B.ST        | opname:2026-08-22 | ROE:26.9% | Debt:74.5 | Marge:9.6% | Vol:26.1% | Omzet:117,608,674 | zwakker | weken_buiten:2
-ALFA.ST          | opname:2026-08-22 | ROE:19.1% | Debt:45.8 | Marge:11.6% | Vol:21.3% | Omzet:286,749,887 | zwakker | weken_buiten:2
-ALIG.ST          | opname:2026-08-22 | ROE:7.5% | Debt:44.8 | Marge:8.1% | Vol:26.4% | Omzet:16,689,718 | zwakker | weken_buiten:2
-ALIV-SDB.ST      | opname:2026-07-19 | ROE:25.9% | Debt:87.5 | Marge:5.8% | Vol:26.8% | Omzet:74,859,678 | zwakker | weken_buiten:2
-ANOD-B.ST        | opname:2026-08-22 | ROE:12.3% | Debt:110.8 | Marge:5.5% | Vol:46.0% | Omzet:18,921,557 | zwakker | weken_buiten:2
-ARPL.ST          | opname:2026-08-22 | ROE:10.7% | Debt:19.1 | Marge:5.4% | Vol:34.0% | Omzet:1,113,710 | zwakker | weken_buiten:2
-ASSA-B.ST        | opname:2026-08-22 | ROE:15.6% | Debt:64.1 | Marge:10.8% | Vol:21.3% | Omzet:568,340,136 | zwakker | weken_buiten:2
-ATCO-A.ST        | opname:2026-08-22 | ROE:25.7% | Debt:33.7 | Marge:15.7% | Vol:28.3% | Omzet:809,788,005 | zwakker | weken_buiten:2
-ATCO-B.ST        | opname:2026-08-22 | ROE:25.7% | Debt:33.7 | Marge:15.7% | Vol:26.6% | Omzet:234,936,742 | zwakker | weken_buiten:2
-AZA.ST           | opname:2026-07-19 | ROE:39.1% | Debt:4.3 | Marge:53.0% | Vol:25.8% | Omzet:103,462,763 | zwakker | weken_buiten:2
-AZN.ST           | opname:2026-08-22 | ROE:22.0% | Debt:64.2 | Marge:17.0% | Vol:27.3% | Omzet:567,511,068 | zwakker | weken_buiten:2
-BEIA-B.ST        | opname:2026-08-22 | ROE:16.8% | Debt:70.9 | Marge:9.5% | Vol:27.6% | Omzet:13,511,287 | zwakker | weken_buiten:2
-BEIJ-B.ST        | opname:2026-08-22 | ROE:10.5% | Debt:59.6 | Marge:6.3% | Vol:26.9% | Omzet:116,524,154 | zwakker | weken_buiten:2
-BERG-B.ST        | opname:2026-08-22 | ROE:11.7% | Debt:71.9 | Marge:4.6% | Vol:27.6% | Omzet:6,121,982 | zwakker | weken_buiten:2
-BETS-B.ST        | opname:2026-08-22 | ROE:16.9% | Debt:23.7 | Marge:11.2% | Vol:35.5% | Omzet:57,593,243 | zwakker | weken_buiten:2
-BORG.ST          | opname:2026-08-09 | ROE:28.6% | Debt:30.2 | Marge:9.4% | Vol:30.6% | Omzet:1,104,959 | zwakker | weken_buiten:2
-CATE.ST          | opname:2026-08-22 | ROE:8.5% | Debt:93.1 | Marge:75.0% | Vol:23.6% | Omzet:30,042,096 | zwakker | weken_buiten:2
-CLA-B.ST         | opname:2026-08-22 | ROE:15.1% | Debt:30.1 | Marge:9.9% | Vol:28.8% | Omzet:17,373,938 | zwakker | weken_buiten:2
-CNCJO-B.ST       | opname:2026-08-22 | ROE:26.1% | Debt:5.0 | Marge:37.8% | Vol:32.6% | Omzet:181,436 | zwakker | weken_buiten:2
-CRED-A.ST        | opname:2026-08-22 | ROE:19.9% | Debt:5.4 | Marge:94.2% | Vol:25.3% | Omzet:10,028,612 | zwakker | weken_buiten:2
-CTT.ST           | opname:2026-08-22 | ROE:14.9% | Debt:18.8 | Marge:13.3% | Vol:50.4% | Omzet:2,342,674 | zwakker | weken_buiten:2
-ENGCON-B.ST      | opname:2026-08-22 | ROE:38.8% | Debt:29.8 | Marge:12.2% | Vol:38.4% | Omzet:11,782,439 | zwakker | weken_buiten:2
-EPI-B.ST         | opname:2026-07-26 | ROE:21.2% | Debt:42.1 | Marge:14.2% | Vol:29.5% | Omzet:80,392,297 | zwakker | weken_buiten:2
-EPRO-B.ST        | opname:2026-08-22 | ROE:12.5% | Debt:43.4 | Marge:6.0% | Vol:29.3% | Omzet:21,129,811 | zwakker | weken_buiten:2
-ERIC-A.ST        | opname:2026-08-22 | ROE:26.1% | Debt:37.7 | Marge:10.8% | Vol:34.6% | Omzet:3,131,425 | zwakker | weken_buiten:2
-ERIC-B.ST        | opname:2026-08-22 | ROE:26.1% | Debt:37.7 | Marge:10.8% | Vol:34.9% | Omzet:762,659,989 | zwakker | weken_buiten:2
-ESSITY-A.ST      | opname:2026-08-22 | ROE:14.0% | Debt:45.7 | Marge:8.8% | Vol:18.4% | Omzet:3,615,360 | zwakker | weken_buiten:2
-ESSITY-B.ST      | opname:2026-08-22 | ROE:14.0% | Debt:45.7 | Marge:8.8% | Vol:18.9% | Omzet:356,982,489 | zwakker | weken_buiten:2
-EVO.ST           | opname:2026-08-22 | ROE:26.7% | Debt:2.1 | Marge:51.8% | Vol:28.5% | Omzet:438,179,062 | zwakker | weken_buiten:2
-GETI-B.ST        | opname:2026-08-22 | ROE:8.9% | Debt:35.8 | Marge:7.8% | Vol:24.0% | Omzet:115,586,598 | zwakker | weken_buiten:2
-HEM.ST           | opname:2026-08-22 | ROE:39.6% | Debt:102.2 | Marge:29.6% | Vol:55.5% | Omzet:62,881,858 | zwakker | weken_buiten:2
-HPOL-B.ST        | opname:2026-08-16 | ROE:13.0% | Debt:37.3 | Marge:9.6% | Vol:28.7% | Omzet:40,410,353 | zwakker | weken_buiten:2
-INDU-A.ST        | opname:2026-08-22 | ROE:32.3% | Debt:2.8 | Marge:99.3% | Vol:20.4% | Omzet:63,438,719 | zwakker | weken_buiten:2
-INDU-C.ST        | opname:2026-08-22 | ROE:32.3% | Debt:2.8 | Marge:99.3% | Vol:19.5% | Omzet:201,794,349 | zwakker | weken_buiten:2
-IVSO.ST          | opname:2026-08-22 | ROE:22.5% | Debt:6.3 | Marge:13.0% | Vol:50.0% | Omzet:26,615,299 | zwakker | weken_buiten:2
-JOMA.ST          | opname:2026-08-22 | ROE:8.3% | Debt:119.5 | Marge:78.2% | Vol:19.8% | Omzet:2,805,652 | zwakker | weken_buiten:2
-LATO-B.ST        | opname:2026-08-22 | ROE:15.6% | Debt:42.2 | Marge:23.7% | Vol:24.7% | Omzet:72,581,713 | zwakker | weken_buiten:2
-LIAB.ST          | opname:2026-08-22 | ROE:9.6% | Debt:65.7 | Marge:5.4% | Vol:34.0% | Omzet:18,506,538 | zwakker | weken_buiten:2
-LIFCO-B.ST       | opname:2026-08-22 | ROE:20.2% | Debt:57.9 | Marge:13.2% | Vol:26.0% | Omzet:129,748,225 | zwakker | weken_buiten:2
-LOGI-B.ST        | opname:2026-08-22 | ROE:10.3% | Debt:113.0 | Marge:69.2% | Vol:24.8% | Omzet:15,271,052 | zwakker | weken_buiten:2
-LUND-B.ST        | opname:2026-08-22 | ROE:11.5% | Debt:13.3 | Marge:42.1% | Vol:18.3% | Omzet:63,758,209 | zwakker | weken_buiten:2
-MTRS.ST          | opname:2026-07-26 | ROE:9.9% | Debt:148.5 | Marge:3.3% | Vol:54.9% | Omzet:84,738,536 | zwakker | weken_buiten:1
-NEWA-B.ST        | opname:2026-08-22 | ROE:11.8% | Debt:57.3 | Marge:7.7% | Vol:23.1% | Omzet:22,804,363 | zwakker | weken_buiten:2
-NIVI-B.ST        | opname:2026-08-22 | ROE:7.1% | Debt:129.3 | Marge:47.5% | Vol:30.9% | Omzet:2,206,968 | zwakker | weken_buiten:2
-NMAN.ST          | opname:2026-08-22 | ROE:9.7% | Debt:103.1 | Marge:4.4% | Vol:27.1% | Omzet:3,911,039 | zwakker | weken_buiten:2
-NOLA-B.ST        | opname:2026-08-22 | ROE:13.1% | Debt:31.0 | Marge:7.6% | Vol:27.8% | Omzet:13,515,410 | zwakker | weken_buiten:2
-NOTE.ST          | opname:2026-08-22 | ROE:14.8% | Debt:97.6 | Marge:6.3% | Vol:32.7% | Omzet:11,632,655 | zwakker | weken_buiten:2
-NTEK-B.ST        | opname:2026-08-22 | ROE:17.5% | Debt:42.2 | Marge:7.2% | Vol:61.4% | Omzet:478,579 | zwakker | weken_buiten:2
-ORES.ST          | opname:2026-08-22 | ROE:13.0% | Debt:16.8 | Marge:96.7% | Vol:19.5% | Omzet:6,363,677 | zwakker | weken_buiten:2
-OVZON.ST         | opname:2026-08-22 | ROE:13.0% | Debt:14.4 | Marge:23.2% | Vol:55.9% | Omzet:25,558,269 | zwakker | weken_buiten:2
-PREV-B.ST        | opname:2026-08-22 | ROE:9.9% | Debt:39.1 | Marge:4.0% | Vol:37.8% | Omzet:2,003,771 | zwakker | weken_buiten:2
-PROF-B.ST        | opname:2026-08-22 | ROE:19.4% | Debt:14.7 | Marge:5.0% | Vol:42.0% | Omzet:296,718 | zwakker | weken_buiten:2
-RAY-B.ST         | opname:2026-08-22 | ROE:26.0% | Debt:45.6 | Marge:16.8% | Vol:48.9% | Omzet:33,945,721 | zwakker | weken_buiten:2
-RVRC.ST          | opname:2026-07-19 | ROE:26.8% | Debt:125.9 | Marge:16.6% | Vol:40.5% | Omzet:20,475,704 | zwakker | weken_buiten:2
-SAFETY-B.ST      | opname:2026-07-19 | ROE:26.1% | Debt:55.8 | Marge:8.8% | Vol:34.9% | Omzet:519,083 | zwakker | weken_buiten:2
-SAGA-A.ST        | opname:2026-08-22 | ROE:12.5% | Debt:93.3 | Marge:98.3% | Vol:29.3% | Omzet:294,989 | zwakker | weken_buiten:2
-SAGA-B.ST        | opname:2026-08-22 | ROE:12.5% | Debt:93.3 | Marge:98.3% | Vol:26.7% | Omzet:72,706,819 | zwakker | weken_buiten:2
-SAND.ST          | opname:2026-08-22 | ROE:17.9% | Debt:42.9 | Marge:13.1% | Vol:29.9% | Omzet:696,144,897 | zwakker | weken_buiten:2
-SKF-A.ST         | opname:2026-08-22 | ROE:8.3% | Debt:34.4 | Marge:5.0% | Vol:28.2% | Omzet:1,592,180 | zwakker | weken_buiten:2
-SKF-B.ST         | opname:2026-08-22 | ROE:8.3% | Debt:34.4 | Marge:5.0% | Vol:27.9% | Omzet:295,418,287 | zwakker | weken_buiten:2
-SKIS-B.ST        | opname:2026-08-22 | ROE:13.3% | Debt:65.9 | Marge:11.9% | Vol:21.8% | Omzet:9,570,729 | zwakker | weken_buiten:2
-SLP-B.ST         | opname:2026-08-22 | ROE:9.3% | Debt:110.7 | Marge:66.1% | Vol:24.5% | Omzet:12,974,780 | zwakker | weken_buiten:2
-SOF-B.ST         | opname:2026-08-22 | ROE:29.0% | Debt:26.5 | Marge:7.6% | Vol:20.3% | Omzet:628,919 | zwakker | weken_buiten:2
-SVED-B.ST        | opname:2026-08-22 | ROE:13.5% | Debt:77.4 | Marge:9.5% | Vol:33.7% | Omzet:3,798,629 | zwakker | weken_buiten:2
-SWEC-A.ST        | opname:2026-08-22 | ROE:18.8% | Debt:56.5 | Marge:7.0% | Vol:33.2% | Omzet:213,518 | zwakker | weken_buiten:2
-SWEC-B.ST        | opname:2026-08-22 | ROE:18.8% | Debt:56.5 | Marge:7.0% | Vol:25.8% | Omzet:44,845,972 | zwakker | weken_buiten:2
-SYSR.ST          | opname:2026-07-19 | ROE:12.9% | Debt:23.8 | Marge:6.3% | Vol:29.6% | Omzet:11,107,091 | zwakker | weken_buiten:1
-THULE.ST         | opname:2026-08-22 | ROE:15.8% | Debt:59.0 | Marge:11.2% | Vol:34.6% | Omzet:60,866,098 | zwakker | weken_buiten:2
-TREL-B.ST        | opname:2026-07-19 | ROE:10.2% | Debt:32.2 | Marge:10.9% | Vol:24.7% | Omzet:121,611,480 | zwakker | weken_buiten:2
-VBG-B.ST         | opname:2026-08-22 | ROE:10.2% | Debt:47.4 | Marge:7.4% | Vol:32.2% | Omzet:7,746,063 | zwakker | weken_buiten:2
-VEFAB.ST         | opname:2026-08-22 | ROE:8.3% | Debt:6.1 | Marge:75.3% | Vol:33.8% | Omzet:2,724,788 | zwakker | weken_buiten:2
-WALL-B.ST        | opname:2026-08-22 | ROE:8.4% | Debt:107.5 | Marge:80.8% | Vol:22.2% | Omzet:26,901,920 | zwakker | weken_buiten:2
-XANO-B.ST        | opname:2026-08-22 | ROE:9.0% | Debt:101.8 | Marge:5.0% | Vol:58.9% | Omzet:1,506,994 | zwakker | weken_buiten:2
-CTEK.ST          | opname:2026-07-26 | ROE:5.6% | Debt:45.2 | Marge:5.1% | Vol:29.2% | Omzet:1,243,953 | verwijderd | verwijderd:2026-08-30
-G5EN.ST          | opname:2026-08-09 | ROE:5.4% | Debt:14.9 | Marge:2.9% | Vol:45.3% | Omzet:1,699,235 | verwijderd | verwijderd:2026-08-23
-MSON-B.ST        | opname:2026-07-19 | ROE:3.7% | Debt:19.5 | Marge:3.1% | Vol:42.3% | Omzet:1,947,131 | verwijderd | verwijderd:2026-08-30
-STE-R.ST         | opname:2026-07-19 | ROE:5.4% | Debt:36.4 | Marge:6.2% | Vol:29.4% | Omzet:35,539,699 | verwijderd | verwijderd:2026-08-22
+NOTE.ST          | opname:2026-08-22 | ROE:14.8% | Debt:97.6 | Marge:6.3% | Vol:33.2% | Omzet:11,665,166 | actief
+OEM-B.ST         | opname:2026-07-19 | ROE:25.0% | Debt:5.1 | Marge:11.8% | Vol:32.5% | Omzet:12,648,434 | actief
+PACT.ST          | opname:2026-07-19 | ROE:17.3% | Debt:54.8 | Marge:4.0% | Vol:32.6% | Omzet:6,349,180 | actief
+PRIC-B.ST        | opname:2026-07-19 | ROE:6.4% | Debt:30.8 | Marge:3.2% | Vol:57.8% | Omzet:1,302,712 | actief
+SAAB-B.ST        | opname:2026-07-19 | ROE:15.9% | Debt:28.6 | Marge:8.0% | Vol:41.0% | Omzet:1,125,596,443 | actief
+SAND.ST          | opname:2026-08-22 | ROE:17.9% | Debt:42.9 | Marge:13.1% | Vol:30.3% | Omzet:705,223,556 | actief
+SECT-B.ST        | opname:2026-07-19 | ROE:28.3% | Debt:5.5 | Marge:16.5% | Vol:32.4% | Omzet:43,435,631 | actief
+SSAB-A.ST        | opname:2026-07-19 | ROE:8.1% | Debt:15.3 | Marge:5.7% | Vol:36.7% | Omzet:76,207,192 | actief
+SSAB-B.ST        | opname:2026-07-19 | ROE:8.1% | Debt:15.3 | Marge:5.7% | Vol:36.3% | Omzet:254,183,430 | actief
+STOR-B.ST        | opname:2026-07-26 | ROE:6.1% | Debt:53.3 | Marge:3.4% | Vol:36.2% | Omzet:33,210,192 | actief
+TIETOS.ST        | opname:2026-08-02 | ROE:21.1% | Debt:64.4 | Marge:6.7% | Vol:35.0% | Omzet:2,409,358 | actief
+TRUE-B.ST        | opname:2026-08-09 | ROE:22.4% | Debt:4.2 | Marge:14.8% | Vol:66.7% | Omzet:40,599,633 | actief
+VIT-B.ST         | opname:2026-08-22 | ROE:9.4% | Debt:74.7 | Marge:12.1% | Vol:40.6% | Omzet:30,775,211 | actief
+XVIVO.ST         | opname:2026-07-19 | ROE:4.1% | Debt:5.5 | Marge:9.9% | Vol:48.3% | Omzet:25,767,975 | actief
+CAMX.ST          | opname:2026-07-19 | ROE:15.9% | Debt:2.3 | Marge:29.9% | Vol:48.3% | Omzet:69,037,623 | zwakker | weken_buiten:1
+KAR.ST           | opname:2026-08-22 | ROE:39.5% | Debt:82.9 | Marge:38.3% | Vol:42.7% | Omzet:18,601,849 | zwakker | weken_buiten:1
+LAGR-B.ST        | opname:2026-08-09 | ROE:28.5% | Debt:104.1 | Marge:11.3% | Vol:32.6% | Omzet:58,019,690 | zwakker | weken_buiten:1
+MTRS.ST          | opname:2026-07-26 | ROE:9.9% | Debt:148.5 | Marge:3.3% | Vol:54.8% | Omzet:85,915,289 | zwakker | weken_buiten:2
+SYSR.ST          | opname:2026-07-19 | ROE:12.9% | Debt:23.8 | Marge:6.3% | Vol:29.6% | Omzet:10,418,913 | zwakker | weken_buiten:2
+AAK.ST           | opname:2026-08-22 | ROE:18.7% | Debt:28.5 | Marge:7.9% | Vol:25.7% | Omzet:120,878,309 | verwijderd | verwijderd:2026-09-06
+ABB.ST           | opname:2026-08-22 | ROE:32.6% | Debt:55.8 | Marge:14.1% | Vol:25.8% | Omzet:382,019,877 | verwijderd | verwijderd:2026-09-06
+ADDT-B.ST        | opname:2026-08-22 | ROE:26.9% | Debt:74.5 | Marge:9.6% | Vol:26.0% | Omzet:118,895,613 | verwijderd | verwijderd:2026-09-06
+ALFA.ST          | opname:2026-08-22 | ROE:19.1% | Debt:45.8 | Marge:11.6% | Vol:21.3% | Omzet:290,130,473 | verwijderd | verwijderd:2026-09-06
+ALIG.ST          | opname:2026-08-22 | ROE:7.5% | Debt:44.8 | Marge:8.1% | Vol:26.5% | Omzet:16,719,525 | verwijderd | verwijderd:2026-09-06
+ALIV-SDB.ST      | opname:2026-07-19 | ROE:25.9% | Debt:87.5 | Marge:5.8% | Vol:27.0% | Omzet:74,932,031 | verwijderd | verwijderd:2026-09-06
+ANOD-B.ST        | opname:2026-08-22 | ROE:12.3% | Debt:110.8 | Marge:5.5% | Vol:46.0% | Omzet:19,977,728 | verwijderd | verwijderd:2026-09-06
+ARPL.ST          | opname:2026-08-22 | ROE:10.7% | Debt:19.1 | Marge:5.4% | Vol:33.7% | Omzet:1,087,648 | verwijderd | verwijderd:2026-09-06
+ASSA-B.ST        | opname:2026-08-22 | ROE:15.6% | Debt:64.1 | Marge:10.8% | Vol:21.1% | Omzet:571,897,201 | verwijderd | verwijderd:2026-09-06
+ATCO-A.ST        | opname:2026-08-22 | ROE:25.7% | Debt:33.7 | Marge:15.7% | Vol:28.2% | Omzet:815,637,280 | verwijderd | verwijderd:2026-09-06
+ATCO-B.ST        | opname:2026-08-22 | ROE:25.7% | Debt:33.7 | Marge:15.7% | Vol:26.6% | Omzet:236,189,248 | verwijderd | verwijderd:2026-09-06
+AZA.ST           | opname:2026-07-19 | ROE:39.1% | Debt:4.3 | Marge:53.0% | Vol:25.8% | Omzet:104,413,296 | verwijderd | verwijderd:2026-09-06
+AZN.ST           | opname:2026-08-22 | ROE:22.0% | Debt:64.2 | Marge:17.0% | Vol:27.3% | Omzet:578,182,840 | verwijderd | verwijderd:2026-09-06
+BEIA-B.ST        | opname:2026-08-22 | ROE:16.8% | Debt:70.9 | Marge:9.5% | Vol:27.6% | Omzet:13,567,951 | verwijderd | verwijderd:2026-09-06
+BEIJ-B.ST        | opname:2026-08-22 | ROE:10.5% | Debt:59.6 | Marge:6.3% | Vol:26.9% | Omzet:117,558,095 | verwijderd | verwijderd:2026-09-06
+BERG-B.ST        | opname:2026-08-22 | ROE:11.7% | Debt:71.9 | Marge:4.6% | Vol:27.8% | Omzet:6,143,372 | verwijderd | verwijderd:2026-09-06
+BETS-B.ST        | opname:2026-08-22 | ROE:16.9% | Debt:23.7 | Marge:11.2% | Vol:35.5% | Omzet:57,291,757 | verwijderd | verwijderd:2026-09-06
+BORG.ST          | opname:2026-08-09 | ROE:28.6% | Debt:30.2 | Marge:9.4% | Vol:30.5% | Omzet:1,096,883 | verwijderd | verwijderd:2026-09-06
+CATE.ST          | opname:2026-08-22 | ROE:8.5% | Debt:93.1 | Marge:75.0% | Vol:23.6% | Omzet:30,018,447 | verwijderd | verwijderd:2026-09-06
+CLA-B.ST         | opname:2026-08-22 | ROE:15.1% | Debt:30.1 | Marge:9.9% | Vol:28.9% | Omzet:17,441,338 | verwijderd | verwijderd:2026-09-06
+CNCJO-B.ST       | opname:2026-08-22 | ROE:19.3% | Debt:7.9 | Marge:33.7% | Vol:32.3% | Omzet:178,871 | verwijderd | verwijderd:2026-09-06
+CRED-A.ST        | opname:2026-08-22 | ROE:19.9% | Debt:5.4 | Marge:94.2% | Vol:25.4% | Omzet:10,128,676 | verwijderd | verwijderd:2026-09-06
+CTEK.ST          | opname:2026-07-26 | ROE:5.6% | Debt:45.2 | Marge:5.1% | Vol:29.1% | Omzet:1,164,957 | verwijderd | verwijderd:2026-08-30
+CTT.ST           | opname:2026-08-22 | ROE:14.9% | Debt:18.8 | Marge:13.3% | Vol:50.8% | Omzet:2,341,480 | verwijderd | verwijderd:2026-09-06
+EPI-B.ST         | opname:2026-07-26 | ROE:21.2% | Debt:42.1 | Marge:14.2% | Vol:29.6% | Omzet:80,672,771 | verwijderd | verwijderd:2026-09-06
+EPRO-B.ST        | opname:2026-08-22 | ROE:12.5% | Debt:43.4 | Marge:6.0% | Vol:29.4% | Omzet:21,353,439 | verwijderd | verwijderd:2026-09-06
+ERIC-A.ST        | opname:2026-08-22 | ROE:26.1% | Debt:37.7 | Marge:10.8% | Vol:34.5% | Omzet:3,132,907 | verwijderd | verwijderd:2026-09-06
+ERIC-B.ST        | opname:2026-08-22 | ROE:26.1% | Debt:37.7 | Marge:10.8% | Vol:34.8% | Omzet:770,687,179 | verwijderd | verwijderd:2026-09-06
+ESSITY-A.ST      | opname:2026-08-22 | ROE:14.0% | Debt:45.7 | Marge:8.8% | Vol:18.4% | Omzet:3,620,828 | verwijderd | verwijderd:2026-09-06
+ESSITY-B.ST      | opname:2026-08-22 | ROE:14.0% | Debt:45.7 | Marge:8.8% | Vol:19.0% | Omzet:359,346,481 | verwijderd | verwijderd:2026-09-06
+EVO.ST           | opname:2026-08-22 | ROE:26.7% | Debt:2.1 | Marge:51.8% | Vol:28.2% | Omzet:439,771,387 | verwijderd | verwijderd:2026-09-06
+G5EN.ST          | opname:2026-08-09 | ROE:5.4% | Debt:14.9 | Marge:2.9% | Vol:45.4% | Omzet:1,666,294 | verwijderd | verwijderd:2026-08-23
+GETI-B.ST        | opname:2026-08-22 | ROE:8.9% | Debt:35.8 | Marge:7.8% | Vol:23.8% | Omzet:116,209,330 | verwijderd | verwijderd:2026-09-06
+HEM.ST           | opname:2026-08-22 | ROE:39.6% | Debt:102.2 | Marge:29.6% | Vol:55.3% | Omzet:61,784,057 | verwijderd | verwijderd:2026-09-06
+HPOL-B.ST        | opname:2026-08-16 | ROE:13.0% | Debt:37.3 | Marge:9.6% | Vol:28.6% | Omzet:40,959,946 | verwijderd | verwijderd:2026-09-06
+INDU-A.ST        | opname:2026-08-22 | ROE:32.3% | Debt:2.8 | Marge:99.3% | Vol:20.3% | Omzet:63,865,111 | verwijderd | verwijderd:2026-09-06
+INDU-C.ST        | opname:2026-08-22 | ROE:32.3% | Debt:2.8 | Marge:99.3% | Vol:19.5% | Omzet:203,804,510 | verwijderd | verwijderd:2026-09-06
+IVSO.ST          | opname:2026-08-22 | ROE:22.5% | Debt:6.3 | Marge:13.0% | Vol:50.2% | Omzet:26,445,340 | verwijderd | verwijderd:2026-09-06
+JOMA.ST          | opname:2026-08-22 | ROE:8.3% | Debt:119.5 | Marge:78.2% | Vol:19.9% | Omzet:2,786,690 | verwijderd | verwijderd:2026-09-06
+LATO-B.ST        | opname:2026-08-22 | ROE:15.6% | Debt:42.2 | Marge:23.7% | Vol:24.8% | Omzet:83,822,389 | verwijderd | verwijderd:2026-09-06
+LIAB.ST          | opname:2026-08-22 | ROE:9.6% | Debt:65.7 | Marge:5.4% | Vol:33.9% | Omzet:18,358,566 | verwijderd | verwijderd:2026-09-06
+LIFCO-B.ST       | opname:2026-08-22 | ROE:20.2% | Debt:57.9 | Marge:13.2% | Vol:26.0% | Omzet:130,237,875 | verwijderd | verwijderd:2026-09-06
+LOGI-B.ST        | opname:2026-08-22 | ROE:10.3% | Debt:113.0 | Marge:69.2% | Vol:24.6% | Omzet:15,338,332 | verwijderd | verwijderd:2026-09-06
+LUND-B.ST        | opname:2026-08-22 | ROE:11.5% | Debt:13.3 | Marge:42.1% | Vol:18.1% | Omzet:64,599,569 | verwijderd | verwijderd:2026-09-06
+MSON-B.ST        | opname:2026-07-19 | ROE:3.7% | Debt:19.5 | Marge:3.1% | Vol:42.4% | Omzet:1,971,201 | verwijderd | verwijderd:2026-08-30
+NEWA-B.ST        | opname:2026-08-22 | ROE:11.8% | Debt:57.3 | Marge:7.7% | Vol:23.2% | Omzet:23,343,689 | verwijderd | verwijderd:2026-09-06
+NIVI-B.ST        | opname:2026-08-22 | ROE:7.1% | Debt:129.3 | Marge:47.5% | Vol:30.9% | Omzet:2,204,886 | verwijderd | verwijderd:2026-09-06
+NMAN.ST          | opname:2026-08-22 | ROE:9.7% | Debt:103.1 | Marge:4.4% | Vol:27.1% | Omzet:3,905,107 | verwijderd | verwijderd:2026-09-06
+NOLA-B.ST        | opname:2026-08-22 | ROE:13.1% | Debt:31.0 | Marge:7.6% | Vol:27.2% | Omzet:12,918,492 | verwijderd | verwijderd:2026-09-06
+NTEK-B.ST        | opname:2026-08-22 | ROE:17.5% | Debt:42.2 | Marge:7.2% | Vol:61.2% | Omzet:468,027 | verwijderd | verwijderd:2026-09-06
+ORES.ST          | opname:2026-08-22 | ROE:13.0% | Debt:16.8 | Marge:96.7% | Vol:19.4% | Omzet:6,369,723 | verwijderd | verwijderd:2026-09-06
+OVZON.ST         | opname:2026-08-22 | ROE:13.0% | Debt:14.4 | Marge:23.2% | Vol:56.1% | Omzet:25,732,371 | verwijderd | verwijderd:2026-09-06
+PREV-B.ST        | opname:2026-08-22 | ROE:9.9% | Debt:39.1 | Marge:4.0% | Vol:37.8% | Omzet:1,995,887 | verwijderd | verwijderd:2026-09-06
+PROF-B.ST        | opname:2026-08-22 | ROE:19.4% | Debt:14.7 | Marge:5.0% | Vol:42.0% | Omzet:299,315 | verwijderd | verwijderd:2026-09-06
+RAY-B.ST         | opname:2026-08-22 | ROE:26.0% | Debt:45.6 | Marge:16.8% | Vol:48.6% | Omzet:33,525,442 | verwijderd | verwijderd:2026-09-06
+RVRC.ST          | opname:2026-07-19 | ROE:26.8% | Debt:125.9 | Marge:16.6% | Vol:40.6% | Omzet:20,608,586 | verwijderd | verwijderd:2026-09-06
+SAFETY-B.ST      | opname:2026-07-19 | ROE:26.1% | Debt:55.8 | Marge:8.8% | Vol:34.7% | Omzet:510,229 | verwijderd | verwijderd:2026-09-06
+SAGA-A.ST        | opname:2026-08-22 | ROE:12.5% | Debt:93.3 | Marge:98.3% | Vol:29.9% | Omzet:342,536 | verwijderd | verwijderd:2026-09-06
+SAGA-B.ST        | opname:2026-08-22 | ROE:12.5% | Debt:93.3 | Marge:98.3% | Vol:26.9% | Omzet:83,024,292 | verwijderd | verwijderd:2026-09-06
+SKF-A.ST         | opname:2026-08-22 | ROE:8.3% | Debt:34.4 | Marge:5.0% | Vol:28.5% | Omzet:1,704,128 | verwijderd | verwijderd:2026-09-06
+SKF-B.ST         | opname:2026-08-22 | ROE:8.3% | Debt:34.4 | Marge:5.0% | Vol:28.1% | Omzet:297,676,910 | verwijderd | verwijderd:2026-09-06
+SKIS-B.ST        | opname:2026-08-22 | ROE:13.3% | Debt:65.9 | Marge:11.9% | Vol:21.8% | Omzet:9,588,496 | verwijderd | verwijderd:2026-09-06
+SLP-B.ST         | opname:2026-08-22 | ROE:9.3% | Debt:110.7 | Marge:66.1% | Vol:24.2% | Omzet:13,074,705 | verwijderd | verwijderd:2026-09-06
+SOF-B.ST         | opname:2026-08-22 | ROE:29.0% | Debt:26.5 | Marge:7.6% | Vol:20.0% | Omzet:636,724 | verwijderd | verwijderd:2026-09-06
+STE-R.ST         | opname:2026-07-19 | ROE:5.4% | Debt:36.4 | Marge:6.2% | Vol:29.5% | Omzet:35,602,905 | verwijderd | verwijderd:2026-08-22
+SVED-B.ST        | opname:2026-08-22 | ROE:13.5% | Debt:77.4 | Marge:9.5% | Vol:33.5% | Omzet:3,816,458 | verwijderd | verwijderd:2026-09-06
+SWEC-A.ST        | opname:2026-08-22 | ROE:18.8% | Debt:56.5 | Marge:7.0% | Vol:33.2% | Omzet:212,342 | verwijderd | verwijderd:2026-09-06
+SWEC-B.ST        | opname:2026-08-22 | ROE:18.8% | Debt:56.5 | Marge:7.0% | Vol:25.9% | Omzet:44,866,556 | verwijderd | verwijderd:2026-09-06
+THULE.ST         | opname:2026-08-22 | ROE:15.8% | Debt:59.0 | Marge:11.2% | Vol:34.4% | Omzet:61,402,698 | verwijderd | verwijderd:2026-09-06
+TREL-B.ST        | opname:2026-07-19 | ROE:10.2% | Debt:32.2 | Marge:10.9% | Vol:24.8% | Omzet:122,752,376 | verwijderd | verwijderd:2026-09-06
+VBG-B.ST         | opname:2026-08-22 | ROE:10.2% | Debt:47.4 | Marge:7.4% | Vol:31.7% | Omzet:7,790,793 | verwijderd | verwijderd:2026-09-06
+VEFAB.ST         | opname:2026-08-22 | ROE:8.3% | Debt:6.1 | Marge:75.3% | Vol:33.8% | Omzet:2,757,627 | verwijderd | verwijderd:2026-09-06
+WALL-B.ST        | opname:2026-08-22 | ROE:8.4% | Debt:107.5 | Marge:80.8% | Vol:22.1% | Omzet:27,118,985 | verwijderd | verwijderd:2026-09-06
+XANO-B.ST        | opname:2026-08-22 | ROE:9.0% | Debt:101.8 | Marge:5.0% | Vol:58.8% | Omzet:1,503,404 | verwijderd | verwijderd:2026-09-06
