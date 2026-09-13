@@ -1,63 +1,63 @@
 # MASTERLIJST 050 — Zurich
-# Laatste update: 06/09/2026
+# Laatste update: 13/09/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-ACLN.SW          | opname:2026-07-19 | ROE:68.3% | Debt:126.8 | Marge:19.2% | Vol:34.2% | Omzet:12,889,826 | actief
-AUTN.SW          | opname:2026-08-02 | ROE:13.9% | Debt:75.6 | Marge:2.7% | Vol:34.2% | Omzet:1,013,828 | actief
-BANB.SW          | opname:2026-07-19 | ROE:10.6% | Debt:14.4 | Marge:21.0% | Vol:40.0% | Omzet:8,369,087 | actief
-BEAN.SW          | opname:2026-07-26 | ROE:35.2% | Debt:21.0 | Marge:16.6% | Vol:38.9% | Omzet:19,361,881 | actief
-BOSN.SW          | opname:2026-07-19 | ROE:23.4% | Debt:91.4 | Marge:8.0% | Vol:31.4% | Omzet:2,517,215 | actief
-CFR.SW           | opname:2026-08-16 | ROE:15.0% | Debt:56.0 | Marge:15.5% | Vol:30.3% | Omzet:145,280,141 | actief
-COTN.SW          | opname:2026-07-19 | ROE:5.0% | Debt:27.8 | Marge:3.3% | Vol:50.9% | Omzet:9,533,538 | actief
-GURN.SW          | opname:2026-09-06 | ROE:30.5% | Debt:114.4 | Marge:5.5% | Vol:75.3% | Omzet:523,872 | actief
-IFCN.SW          | opname:2026-07-19 | ROE:24.5% | Debt:25.4 | Marge:13.5% | Vol:42.3% | Omzet:6,196,170 | actief
-IMPN.SW          | opname:2026-07-19 | ROE:12.3% | Debt:104.4 | Marge:2.5% | Vol:36.8% | Omzet:3,163,854 | actief
-LOGN.SW          | opname:2026-07-19 | ROE:35.3% | Debt:3.6 | Marge:16.3% | Vol:33.0% | Omzet:57,320,359 | actief
-MED.SW           | opname:2026-07-19 | ROE:5.7% | Debt:73.5 | Marge:4.9% | Vol:35.3% | Omzet:527,124 | actief
-OERL.SW          | opname:2026-08-09 | ROE:3.3% | Debt:87.3 | Marge:21.4% | Vol:37.3% | Omzet:1,915,403 | actief
-PPGN.SW          | opname:2026-08-16 | ROE:4.2% | Debt:42.5 | Marge:3.1% | Vol:46.6% | Omzet:2,823,236 | actief
-SDZ.SW           | opname:2026-07-19 | ROE:7.2% | Debt:68.9 | Marge:5.5% | Vol:30.1% | Omzet:46,393,473 | actief
-SIKA.SW          | opname:2026-08-02 | ROE:16.0% | Debt:89.2 | Marge:9.4% | Vol:30.8% | Omzet:86,060,166 | actief
-SKAN.SW          | opname:2026-07-19 | ROE:20.2% | Debt:104.1 | Marge:8.3% | Vol:37.1% | Omzet:1,604,764 | actief
-SMG.SW           | opname:2026-08-16 | ROE:11.0% | Debt:27.3 | Marge:27.5% | Vol:52.5% | Omzet:4,550,356 | actief
-SRAIL.SW         | opname:2026-07-19 | ROE:12.6% | Debt:114.3 | Marge:2.5% | Vol:39.8% | Omzet:3,989,636 | actief
-SWON.SW          | opname:2026-08-30 | ROE:6.1% | Debt:87.2 | Marge:2.9% | Vol:42.6% | Omzet:4,123,276 | actief
-VACN.SW          | opname:2026-07-19 | ROE:30.1% | Debt:57.9 | Marge:20.2% | Vol:45.2% | Omzet:44,088,274 | actief
-YPSN.SW          | opname:2026-07-19 | ROE:31.1% | Debt:34.9 | Marge:30.4% | Vol:32.7% | Omzet:5,898,730 | actief
-ZEHN.SW          | opname:2026-08-09 | ROE:18.5% | Debt:11.4 | Marge:6.0% | Vol:32.7% | Omzet:1,290,095 | actief
-KARN.SW          | opname:2026-08-30 | ROE:11.0% | Debt:93.8 | Marge:3.2% | Vol:32.6% | Omzet:3,746,838 | zwakker | weken_buiten:1
-SFZN.SW          | opname:2026-08-09 | ROE:17.0% | Debt:93.1 | Marge:12.8% | Vol:32.6% | Omzet:8,060,493 | zwakker | weken_buiten:2
-SQN.SW           | opname:2026-08-22 | ROE:28.0% | Debt:23.2 | Marge:47.0% | Vol:33.3% | Omzet:18,885,800 | zwakker | weken_buiten:1
-ABBN.SW          | opname:2026-08-22 | ROE:32.6% | Debt:55.8 | Marge:14.1% | Vol:27.3% | Omzet:168,823,944 | verwijderd | verwijderd:2026-09-06
-AMRZ.SW          | opname:2026-08-22 | ROE:9.7% | Debt:55.1 | Marge:10.1% | Vol:35.6% | Omzet:62,097,231 | verwijderd | verwijderd:2026-09-06
-BCHN.SW          | opname:2026-08-22 | ROE:31.4% | Debt:42.1 | Marge:10.4% | Vol:29.0% | Omzet:4,242,333 | verwijderd | verwijderd:2026-09-06
-BRKN.SW          | opname:2026-08-22 | ROE:44.7% | Debt:16.4 | Marge:5.1% | Vol:20.8% | Omzet:2,194,788 | verwijderd | verwijderd:2026-09-06
-BSLN.SW          | opname:2026-08-22 | ROE:39.5% | Debt:51.4 | Marge:21.2% | Vol:27.6% | Omzet:1,923,621 | verwijderd | verwijderd:2026-09-06
-CFT.SW           | opname:2026-08-22 | ROE:30.8% | Debt:47.7 | Marge:12.7% | Vol:25.7% | Omzet:1,163,396 | verwijderd | verwijderd:2026-09-06
-CLTN.SW          | opname:2026-08-22 | ROE:16.0% | Debt:64.3 | Marge:6.3% | Vol:31.7% | Omzet:225,860 | verwijderd | verwijderd:2026-09-06
-DESN.SW          | opname:2026-08-22 | ROE:9.9% | Debt:11.9 | Marge:23.5% | Vol:33.3% | Omzet:1,781,860 | verwijderd | verwijderd:2026-09-06
-EMMN.SW          | opname:2026-08-22 | ROE:21.9% | Debt:103.0 | Marge:4.8% | Vol:18.2% | Omzet:3,890,381 | verwijderd | verwijderd:2026-09-06
-FHZN.SW          | opname:2026-08-22 | ROE:11.7% | Debt:59.0 | Marge:25.0% | Vol:21.3% | Omzet:10,818,410 | verwijderd | verwijderd:2026-09-06
-FORN.SW          | opname:2026-07-26 | ROE:10.5% | Debt:6.6 | Marge:6.1% | Vol:29.4% | Omzet:2,043,908 | verwijderd | verwijderd:2026-09-06
-GALD.SW          | opname:2026-08-22 | ROE:10.8% | Debt:33.1 | Marge:14.6% | Vol:28.2% | Omzet:102,308,064 | verwijderd | verwijderd:2026-09-06
-GIVN.SW          | opname:2026-08-22 | ROE:22.3% | Debt:110.8 | Marge:12.9% | Vol:24.8% | Omzet:65,453,022 | verwijderd | verwijderd:2026-09-06
-HBMN.SW          | opname:2026-08-22 | ROE:37.5% | Debt:8.3 | Marge:99.4% | Vol:21.1% | Omzet:1,283,145 | verwijderd | verwijderd:2026-09-06
-INRN.SW          | opname:2026-08-22 | ROE:11.4% | Debt:2.4 | Marge:10.2% | Vol:36.3% | Omzet:3,080,374 | verwijderd | verwijderd:2026-09-06
-JFN.SW           | opname:2026-08-22 | ROE:9.4% | Debt:15.7 | Marge:23.9% | Vol:23.0% | Omzet:2,495,536 | verwijderd | verwijderd:2026-09-06
-LISN.SW          | opname:2026-08-22 | ROE:15.9% | Debt:42.0 | Marge:12.3% | Vol:22.0% | Omzet:14,173,317 | verwijderd | verwijderd:2026-09-06
-LISP.SW          | opname:2026-08-22 | ROE:15.9% | Debt:42.0 | Marge:12.3% | Vol:23.6% | Omzet:29,025,754 | verwijderd | verwijderd:2026-09-06
-MOVE.SW          | opname:2026-08-22 | ROE:22.8% | Debt:57.6 | Marge:14.0% | Vol:26.1% | Omzet:2,436,463 | verwijderd | verwijderd:2026-09-06
-NOVN.SW          | opname:2026-08-22 | ROE:30.3% | Debt:116.8 | Marge:22.5% | Vol:20.1% | Omzet:325,447,553 | verwijderd | verwijderd:2026-09-06
-PGHN.SW          | opname:2026-08-22 | ROE:75.4% | Debt:192.8 | Marge:48.0% | Vol:33.1% | Omzet:83,844,564 | verwijderd | verwijderd:2026-09-06
-RO.SW            | opname:2026-08-22 | ROE:38.1% | Debt:90.7 | Marge:19.6% | Vol:24.9% | Omzet:9,517,689 | verwijderd | verwijderd:2026-09-06
-ROP.SW           | opname:2026-08-22 | ROE:38.1% | Debt:90.7 | Marge:19.6% | Vol:24.6% | Omzet:334,944,064 | verwijderd | verwijderd:2026-09-06
-SCHN.SW          | opname:2026-08-22 | ROE:23.1% | Debt:15.3 | Marge:9.5% | Vol:19.6% | Omzet:8,247,078 | verwijderd | verwijderd:2026-09-06
-SCHP.SW          | opname:2026-08-22 | ROE:23.1% | Debt:15.3 | Marge:9.5% | Vol:19.2% | Omzet:28,942,570 | verwijderd | verwijderd:2026-09-06
-SENS.SW          | opname:2026-07-19 | ROE:9.1% | Debt:9999.0 | Marge:8.5% | Vol:41.3% | Omzet:1,652,572 | verwijderd | verwijderd:2026-08-30
-SFSN.SW          | opname:2026-08-22 | ROE:16.7% | Debt:34.3 | Marge:8.3% | Vol:22.1% | Omzet:3,381,726 | verwijderd | verwijderd:2026-09-06
-SOON.SW          | opname:2026-08-22 | ROE:20.5% | Debt:64.9 | Marge:11.9% | Vol:27.7% | Omzet:34,627,047 | verwijderd | verwijderd:2026-09-06
-SREN.SW          | opname:2026-08-22 | ROE:20.4% | Debt:37.8 | Marge:11.9% | Vol:20.8% | Omzet:107,437,288 | verwijderd | verwijderd:2026-09-06
-STMN.SW          | opname:2026-07-19 | ROE:17.0% | Debt:20.8 | Marge:14.0% | Vol:31.6% | Omzet:37,362,731 | verwijderd | verwijderd:2026-09-06
-SUN.SW           | opname:2026-08-22 | ROE:24.7% | Debt:90.6 | Marge:8.7% | Vol:28.7% | Omzet:7,296,095 | verwijderd | verwijderd:2026-09-06
-VZN.SW           | opname:2026-08-22 | ROE:22.6% | Debt:78.0 | Marge:38.6% | Vol:22.0% | Omzet:4,184,763 | verwijderd | verwijderd:2026-09-06
+ACLN.SW          | opname:2026-07-19 | ROE:68.3% | Debt:126.8 | Marge:19.2% | Vol:34.6% | Omzet:13,001,411 | actief
+BANB.SW          | opname:2026-07-19 | ROE:10.6% | Debt:14.4 | Marge:21.0% | Vol:40.2% | Omzet:8,419,516 | actief
+BEAN.SW          | opname:2026-07-26 | ROE:35.2% | Debt:21.0 | Marge:16.6% | Vol:39.0% | Omzet:19,230,377 | actief
+BOSN.SW          | opname:2026-07-19 | ROE:23.4% | Debt:91.4 | Marge:8.0% | Vol:31.3% | Omzet:2,553,776 | actief
+CFR.SW           | opname:2026-08-16 | ROE:15.0% | Debt:56.0 | Marge:15.5% | Vol:30.6% | Omzet:145,516,998 | actief
+COTN.SW          | opname:2026-07-19 | ROE:5.0% | Debt:27.8 | Marge:3.3% | Vol:50.9% | Omzet:9,494,777 | actief
+GURN.SW          | opname:2026-09-06 | ROE:30.5% | Debt:114.4 | Marge:5.5% | Vol:75.5% | Omzet:559,990 | actief
+IFCN.SW          | opname:2026-07-19 | ROE:24.5% | Debt:25.4 | Marge:13.5% | Vol:42.4% | Omzet:6,222,712 | actief
+LOGN.SW          | opname:2026-07-19 | ROE:35.3% | Debt:3.6 | Marge:16.3% | Vol:33.3% | Omzet:57,429,680 | actief
+OERL.SW          | opname:2026-08-09 | ROE:3.3% | Debt:87.3 | Marge:21.4% | Vol:37.5% | Omzet:1,955,651 | actief
+PPGN.SW          | opname:2026-08-16 | ROE:4.2% | Debt:42.5 | Marge:3.1% | Vol:46.5% | Omzet:2,897,574 | actief
+SDZ.SW           | opname:2026-07-19 | ROE:7.2% | Debt:68.9 | Marge:5.5% | Vol:30.2% | Omzet:47,104,859 | actief
+SIKA.SW          | opname:2026-08-02 | ROE:16.0% | Debt:89.2 | Marge:9.4% | Vol:31.0% | Omzet:86,139,072 | actief
+SKAN.SW          | opname:2026-07-19 | ROE:20.2% | Debt:104.1 | Marge:8.3% | Vol:37.1% | Omzet:1,614,409 | actief
+SRAIL.SW         | opname:2026-07-19 | ROE:12.6% | Debt:114.3 | Marge:2.5% | Vol:39.9% | Omzet:4,034,375 | actief
+SWON.SW          | opname:2026-08-30 | ROE:6.1% | Debt:87.2 | Marge:2.9% | Vol:42.0% | Omzet:4,114,617 | actief
+VACN.SW          | opname:2026-07-19 | ROE:30.1% | Debt:57.9 | Marge:20.2% | Vol:45.1% | Omzet:44,062,652 | actief
+YPSN.SW          | opname:2026-07-19 | ROE:31.1% | Debt:34.9 | Marge:30.4% | Vol:33.6% | Omzet:5,999,051 | actief
+ZEHN.SW          | opname:2026-08-09 | ROE:18.5% | Debt:11.4 | Marge:6.0% | Vol:32.7% | Omzet:1,288,311 | actief
+AUTN.SW          | opname:2026-08-02 | ROE:13.9% | Debt:75.6 | Marge:2.7% | Vol:34.4% | Omzet:993,075 | zwakker | weken_buiten:1
+IMPN.SW          | opname:2026-07-19 | ROE:12.3% | Debt:104.4 | Marge:2.5% | Vol:37.1% | Omzet:3,164,614 | zwakker | weken_buiten:1
+KARN.SW          | opname:2026-08-30 | ROE:11.0% | Debt:93.8 | Marge:3.2% | Vol:32.8% | Omzet:3,734,686 | zwakker | weken_buiten:2
+MED.SW           | opname:2026-07-19 | ROE:5.7% | Debt:73.5 | Marge:4.9% | Vol:35.5% | Omzet:526,819 | zwakker | weken_buiten:1
+SMG.SW           | opname:2026-08-16 | ROE:11.0% | Debt:27.3 | Marge:27.5% | Vol:52.3% | Omzet:4,490,875 | zwakker | weken_buiten:1
+SQN.SW           | opname:2026-08-22 | ROE:28.0% | Debt:23.2 | Marge:47.0% | Vol:33.4% | Omzet:18,827,713 | zwakker | weken_buiten:2
+ABBN.SW          | opname:2026-08-22 | ROE:32.6% | Debt:55.8 | Marge:14.1% | Vol:27.8% | Omzet:169,520,651 | verwijderd | verwijderd:2026-09-06
+AMRZ.SW          | opname:2026-08-22 | ROE:9.7% | Debt:55.1 | Marge:10.1% | Vol:35.5% | Omzet:61,905,301 | verwijderd | verwijderd:2026-09-06
+BCHN.SW          | opname:2026-08-22 | ROE:31.4% | Debt:42.1 | Marge:10.4% | Vol:28.3% | Omzet:4,171,710 | verwijderd | verwijderd:2026-09-06
+BRKN.SW          | opname:2026-08-22 | ROE:61.3% | Debt:35.1 | Marge:5.5% | Vol:22.1% | Omzet:2,262,710 | verwijderd | verwijderd:2026-09-06
+BSLN.SW          | opname:2026-08-22 | ROE:39.5% | Debt:51.4 | Marge:21.2% | Vol:27.8% | Omzet:1,919,709 | verwijderd | verwijderd:2026-09-06
+CFT.SW           | opname:2026-08-22 | ROE:30.8% | Debt:47.7 | Marge:12.7% | Vol:25.9% | Omzet:1,167,549 | verwijderd | verwijderd:2026-09-06
+CLTN.SW          | opname:2026-08-22 | ROE:16.0% | Debt:64.3 | Marge:6.3% | Vol:31.8% | Omzet:224,175 | verwijderd | verwijderd:2026-09-06
+DESN.SW          | opname:2026-08-22 | ROE:9.9% | Debt:11.9 | Marge:23.5% | Vol:33.5% | Omzet:1,786,868 | verwijderd | verwijderd:2026-09-06
+EMMN.SW          | opname:2026-08-22 | ROE:21.9% | Debt:103.0 | Marge:4.8% | Vol:18.3% | Omzet:3,845,739 | verwijderd | verwijderd:2026-09-06
+FHZN.SW          | opname:2026-08-22 | ROE:11.7% | Debt:59.0 | Marge:25.0% | Vol:21.5% | Omzet:10,954,645 | verwijderd | verwijderd:2026-09-06
+FORN.SW          | opname:2026-07-26 | ROE:10.5% | Debt:6.6 | Marge:6.1% | Vol:29.4% | Omzet:2,050,363 | verwijderd | verwijderd:2026-09-06
+GALD.SW          | opname:2026-08-22 | ROE:10.8% | Debt:33.1 | Marge:14.6% | Vol:28.6% | Omzet:102,945,833 | verwijderd | verwijderd:2026-09-06
+GIVN.SW          | opname:2026-08-22 | ROE:22.3% | Debt:110.8 | Marge:12.9% | Vol:24.6% | Omzet:64,698,180 | verwijderd | verwijderd:2026-09-06
+HBMN.SW          | opname:2026-08-22 | ROE:37.5% | Debt:8.3 | Marge:99.4% | Vol:21.1% | Omzet:1,286,738 | verwijderd | verwijderd:2026-09-06
+INRN.SW          | opname:2026-08-22 | ROE:11.4% | Debt:2.4 | Marge:10.2% | Vol:37.3% | Omzet:3,056,474 | verwijderd | verwijderd:2026-09-06
+JFN.SW           | opname:2026-08-22 | ROE:9.4% | Debt:15.7 | Marge:23.9% | Vol:23.2% | Omzet:2,513,609 | verwijderd | verwijderd:2026-09-06
+LISN.SW          | opname:2026-08-22 | ROE:15.9% | Debt:42.0 | Marge:12.3% | Vol:22.2% | Omzet:14,199,771 | verwijderd | verwijderd:2026-09-06
+LISP.SW          | opname:2026-08-22 | ROE:15.9% | Debt:42.0 | Marge:12.3% | Vol:24.0% | Omzet:29,152,977 | verwijderd | verwijderd:2026-09-06
+MOVE.SW          | opname:2026-08-22 | ROE:17.0% | Debt:66.4 | Marge:10.9% | Vol:26.4% | Omzet:2,474,077 | verwijderd | verwijderd:2026-09-06
+NOVN.SW          | opname:2026-08-22 | ROE:30.3% | Debt:116.8 | Marge:22.5% | Vol:24.4% | Omzet:331,225,045 | verwijderd | verwijderd:2026-09-06
+PGHN.SW          | opname:2026-08-22 | ROE:75.4% | Debt:192.8 | Marge:48.0% | Vol:33.2% | Omzet:84,461,481 | verwijderd | verwijderd:2026-09-06
+RO.SW            | opname:2026-08-22 | ROE:38.1% | Debt:90.7 | Marge:19.6% | Vol:24.9% | Omzet:9,535,804 | verwijderd | verwijderd:2026-09-06
+ROP.SW           | opname:2026-08-22 | ROE:38.1% | Debt:90.7 | Marge:19.6% | Vol:24.6% | Omzet:334,076,599 | verwijderd | verwijderd:2026-09-06
+SCHN.SW          | opname:2026-08-22 | ROE:23.1% | Debt:15.3 | Marge:9.5% | Vol:19.7% | Omzet:8,293,890 | verwijderd | verwijderd:2026-09-06
+SCHP.SW          | opname:2026-08-22 | ROE:23.1% | Debt:15.3 | Marge:9.5% | Vol:19.3% | Omzet:29,091,100 | verwijderd | verwijderd:2026-09-06
+SENS.SW          | opname:2026-07-19 | ROE:9.1% | Debt:9999.0 | Marge:8.5% | Vol:41.5% | Omzet:1,650,827 | verwijderd | verwijderd:2026-08-30
+SFSN.SW          | opname:2026-08-22 | ROE:16.7% | Debt:34.3 | Marge:8.3% | Vol:22.1% | Omzet:3,405,224 | verwijderd | verwijderd:2026-09-06
+SFZN.SW          | opname:2026-08-09 | ROE:17.0% | Debt:93.1 | Marge:12.8% | Vol:32.5% | Omzet:8,057,476 | verwijderd | verwijderd:2026-09-13
+SOON.SW          | opname:2026-08-22 | ROE:20.5% | Debt:64.9 | Marge:11.9% | Vol:27.8% | Omzet:34,494,982 | verwijderd | verwijderd:2026-09-06
+SREN.SW          | opname:2026-08-22 | ROE:20.4% | Debt:37.8 | Marge:11.9% | Vol:21.5% | Omzet:107,951,277 | verwijderd | verwijderd:2026-09-06
+STMN.SW          | opname:2026-07-19 | ROE:17.0% | Debt:20.8 | Marge:14.0% | Vol:31.6% | Omzet:37,139,022 | verwijderd | verwijderd:2026-09-06
+SUN.SW           | opname:2026-08-22 | ROE:24.7% | Debt:90.6 | Marge:8.7% | Vol:29.1% | Omzet:7,316,515 | verwijderd | verwijderd:2026-09-06
+VZN.SW           | opname:2026-08-22 | ROE:22.6% | Debt:78.0 | Marge:38.6% | Vol:22.4% | Omzet:4,199,463 | verwijderd | verwijderd:2026-09-06

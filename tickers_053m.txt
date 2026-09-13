@@ -1,37 +1,37 @@
 # MASTERLIJST 053 — Kopenhagen
-# Laatste update: 06/09/2026
+# Laatste update: 13/09/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
-BAVA.CO          | opname:2026-08-22 | ROE:12.2% | Debt:99.4 | Marge:24.3% | Vol:32.5% | Omzet:60,851,707 | actief
+BAVA.CO          | opname:2026-08-22 | ROE:12.2% | Debt:99.4 | Marge:24.3% | Vol:32.8% | Omzet:60,231,386 | actief
 BOOZT-DKK.CO     | opname:2026-07-19 | ROE:11.0% | Debt:26.1 | Marge:3.7% | Vol:36.2% | Omzet:3,177,824 | actief
-CHEMM.CO         | opname:2026-08-16 | ROE:28.3% | Debt:79.9 | Marge:35.9% | Vol:65.5% | Omzet:28,718,447 | actief
-DNORD.CO         | opname:2026-07-19 | ROE:11.2% | Debt:60.8 | Marge:4.3% | Vol:40.2% | Omzet:19,928,025 | actief
-FLS.CO           | opname:2026-07-26 | ROE:15.1% | Debt:27.1 | Marge:10.4% | Vol:36.1% | Omzet:65,165,402 | actief
-GMAB.CO          | opname:2026-07-19 | ROE:14.0% | Debt:88.5 | Marge:19.1% | Vol:33.9% | Omzet:256,343,601 | actief
-MAERSK-A.CO      | opname:2026-07-19 | ROE:4.4% | Debt:31.0 | Marge:4.1% | Vol:37.7% | Omzet:80,536,748 | actief
-MAERSK-B.CO      | opname:2026-07-19 | ROE:4.4% | Debt:31.0 | Marge:4.1% | Vol:39.7% | Omzet:287,464,817 | actief
-NETC.CO          | opname:2026-08-02 | ROE:11.7% | Debt:122.6 | Marge:4.5% | Vol:38.2% | Omzet:40,524,544 | actief
-NKT.CO           | opname:2026-07-19 | ROE:13.1% | Debt:11.5 | Marge:7.7% | Vol:35.4% | Omzet:121,499,826 | actief
-PARKEN.CO        | opname:2026-07-19 | ROE:17.6% | Debt:83.8 | Marge:11.4% | Vol:30.5% | Omzet:633,665 | actief
-SPG.CO           | opname:2026-07-19 | ROE:18.6% | Debt:83.4 | Marge:9.7% | Vol:30.4% | Omzet:5,327,201 | actief
-STG.CO           | opname:2026-08-22 | ROE:7.8% | Debt:61.9 | Marge:7.3% | Vol:35.9% | Omzet:11,858,153 | actief
+CHEMM.CO         | opname:2026-08-16 | ROE:28.3% | Debt:79.9 | Marge:35.9% | Vol:65.7% | Omzet:29,862,625 | actief
+DNORD.CO         | opname:2026-07-19 | ROE:11.2% | Debt:60.8 | Marge:4.3% | Vol:40.2% | Omzet:20,078,491 | actief
+FLS.CO           | opname:2026-07-26 | ROE:15.1% | Debt:27.1 | Marge:10.4% | Vol:36.7% | Omzet:65,512,011 | actief
+GMAB.CO          | opname:2026-07-19 | ROE:14.0% | Debt:88.5 | Marge:19.1% | Vol:34.0% | Omzet:255,516,550 | actief
+MAERSK-A.CO      | opname:2026-07-19 | ROE:4.4% | Debt:31.0 | Marge:4.1% | Vol:37.8% | Omzet:81,098,136 | actief
+MAERSK-B.CO      | opname:2026-07-19 | ROE:4.4% | Debt:31.0 | Marge:4.1% | Vol:39.8% | Omzet:289,155,351 | actief
+NKT.CO           | opname:2026-07-19 | ROE:13.1% | Debt:11.5 | Marge:7.7% | Vol:35.5% | Omzet:121,934,357 | actief
+PARKEN.CO        | opname:2026-07-19 | ROE:17.6% | Debt:83.8 | Marge:11.5% | Vol:30.8% | Omzet:634,128 | actief
+SPG.CO           | opname:2026-07-19 | ROE:18.6% | Debt:83.4 | Marge:9.7% | Vol:30.4% | Omzet:5,334,070 | actief
 TRMD-A.CO        | opname:2026-07-19 | ROE:15.7% | Debt:47.6 | Marge:24.5% | Vol:40.8% | Omzet:36,572,278 | actief
-VWS.CO           | opname:2026-07-19 | ROE:30.9% | Debt:89.2 | Marge:5.4% | Vol:43.7% | Omzet:409,277,833 | actief
-AMBU-B.CO        | opname:2026-08-16 | ROE:8.4% | Debt:9.4 | Marge:8.2% | Vol:39.2% | Omzet:67,901,137 | zwakker | weken_buiten:2
-NOVO-B.CO        | opname:2026-07-19 | ROE:59.8% | Debt:63.3 | Marge:35.3% | Vol:47.5% | Omzet:1,885,551,007 | zwakker | weken_buiten:2
-ALK-B.CO         | opname:2026-08-22 | ROE:21.2% | Debt:6.1 | Marge:19.9% | Vol:27.1% | Omzet:39,747,053 | verwijderd | verwijderd:2026-09-06
-ALMB.CO          | opname:2026-08-22 | ROE:8.0% | Debt:12.9 | Marge:6.7% | Vol:20.0% | Omzet:24,439,018 | verwijderd | verwijderd:2026-09-06
-CBRAIN.CO        | opname:2026-08-22 | ROE:15.0% | Debt:9.7 | Marge:18.1% | Vol:55.3% | Omzet:4,037,692 | verwijderd | verwijderd:2026-09-06
-CEMAT.CO         | opname:2026-08-22 | ROE:23.3% | Debt:10.0 | Marge:27.8% | Vol:21.2% | Omzet:146,012 | verwijderd | verwijderd:2026-09-06
-DANT.CO          | opname:2026-08-22 | ROE:7.7% | Debt:10.0 | Marge:18.8% | Vol:34.1% | Omzet:153,569 | verwijderd | verwijderd:2026-09-06
-DATA.CO          | opname:2026-08-22 | ROE:15.7% | Debt:5.4 | Marge:10.7% | Vol:49.0% | Omzet:235,736 | verwijderd | verwijderd:2026-09-06
-DSV.CO           | opname:2026-07-19 | ROE:6.3% | Debt:75.8 | Marge:2.4% | Vol:33.7% | Omzet:594,608,739 | verwijderd | verwijderd:2026-08-09
-FED.CO           | opname:2026-08-22 | ROE:12.2% | Debt:87.0 | Marge:79.4% | Vol:46.4% | Omzet:380,503 | verwijderd | verwijderd:2026-09-06
-GUBRA.CO         | opname:2026-08-02 | ROE:-16.1% | Debt:17.8 | Marge:-67.2% | Vol:53.0% | Omzet:13,286,172 | verwijderd | verwijderd:2026-08-30
-HLUN-A.CO        | opname:2026-08-22 | ROE:15.4% | Debt:35.1 | Marge:15.2% | Vol:28.7% | Omzet:3,747,320 | verwijderd | verwijderd:2026-09-06
-HLUN-B.CO        | opname:2026-08-22 | ROE:15.4% | Debt:35.1 | Marge:15.2% | Vol:27.7% | Omzet:27,751,667 | verwijderd | verwijderd:2026-09-06
-HOVE.CO          | opname:2026-08-22 | ROE:23.1% | Debt:11.1 | Marge:8.2% | Vol:39.7% | Omzet:426,223 | verwijderd | verwijderd:2026-09-06
-NORTHM.CO        | opname:2026-08-22 | ROE:15.6% | Debt:9.5 | Marge:15.2% | Vol:26.2% | Omzet:747,543 | verwijderd | verwijderd:2026-09-06
-RBREW.CO         | opname:2026-08-02 | ROE:26.1% | Debt:107.3 | Marge:10.2% | Vol:33.5% | Omzet:60,953,483 | verwijderd | verwijderd:2026-09-06
-TCM.CO           | opname:2026-08-22 | ROE:12.5% | Debt:59.6 | Marge:5.5% | Vol:23.8% | Omzet:346,664 | verwijderd | verwijderd:2026-09-06
+VWS.CO           | opname:2026-07-19 | ROE:30.9% | Debt:89.2 | Marge:5.4% | Vol:43.5% | Omzet:413,017,552 | actief
+NETC.CO          | opname:2026-08-02 | ROE:11.7% | Debt:122.6 | Marge:4.5% | Vol:38.3% | Omzet:40,806,834 | zwakker | weken_buiten:1
+STG.CO           | opname:2026-08-22 | ROE:7.8% | Debt:61.9 | Marge:7.3% | Vol:36.1% | Omzet:11,839,544 | zwakker | weken_buiten:1
+ALK-B.CO         | opname:2026-08-22 | ROE:21.2% | Debt:6.1 | Marge:19.9% | Vol:27.3% | Omzet:40,114,196 | verwijderd | verwijderd:2026-09-06
+ALMB.CO          | opname:2026-08-22 | ROE:8.0% | Debt:12.9 | Marge:6.7% | Vol:20.1% | Omzet:24,497,366 | verwijderd | verwijderd:2026-09-06
+AMBU-B.CO        | opname:2026-08-16 | ROE:8.4% | Debt:9.4 | Marge:8.2% | Vol:39.2% | Omzet:67,997,570 | verwijderd | verwijderd:2026-09-13
+CBRAIN.CO        | opname:2026-08-22 | ROE:15.0% | Debt:9.7 | Marge:18.1% | Vol:55.9% | Omzet:4,077,900 | verwijderd | verwijderd:2026-09-06
+CEMAT.CO         | opname:2026-08-22 | ROE:23.3% | Debt:10.0 | Marge:27.8% | Vol:19.9% | Omzet:130,369 | verwijderd | verwijderd:2026-09-06
+DANT.CO          | opname:2026-08-22 | ROE:7.7% | Debt:10.0 | Marge:18.8% | Vol:34.0% | Omzet:154,941 | verwijderd | verwijderd:2026-09-06
+DATA.CO          | opname:2026-08-22 | ROE:9.0% | Debt:5.4 | Marge:9.3% | Vol:49.4% | Omzet:238,457 | verwijderd | verwijderd:2026-09-06
+DSV.CO           | opname:2026-07-19 | ROE:6.3% | Debt:75.8 | Marge:2.4% | Vol:33.9% | Omzet:595,270,038 | verwijderd | verwijderd:2026-08-09
+FED.CO           | opname:2026-08-22 | ROE:11.8% | Debt:87.0 | Marge:77.7% | Vol:46.3% | Omzet:390,366 | verwijderd | verwijderd:2026-09-06
+GUBRA.CO         | opname:2026-08-02 | ROE:-16.1% | Debt:17.8 | Marge:-67.2% | Vol:53.6% | Omzet:13,354,552 | verwijderd | verwijderd:2026-08-30
+HLUN-A.CO        | opname:2026-08-22 | ROE:15.4% | Debt:35.1 | Marge:15.2% | Vol:28.6% | Omzet:3,808,989 | verwijderd | verwijderd:2026-09-06
+HLUN-B.CO        | opname:2026-08-22 | ROE:15.4% | Debt:35.1 | Marge:15.2% | Vol:27.6% | Omzet:27,938,355 | verwijderd | verwijderd:2026-09-06
+HOVE.CO          | opname:2026-08-22 | ROE:23.1% | Debt:11.1 | Marge:8.2% | Vol:39.9% | Omzet:439,908 | verwijderd | verwijderd:2026-09-06
+NORTHM.CO        | opname:2026-08-22 | ROE:15.6% | Debt:9.5 | Marge:15.2% | Vol:25.9% | Omzet:748,730 | verwijderd | verwijderd:2026-09-06
+NOVO-B.CO        | opname:2026-07-19 | ROE:59.8% | Debt:63.3 | Marge:35.3% | Vol:47.4% | Omzet:1,873,806,983 | verwijderd | verwijderd:2026-09-13
+RBREW.CO         | opname:2026-08-02 | ROE:26.1% | Debt:107.3 | Marge:10.2% | Vol:33.7% | Omzet:61,031,802 | verwijderd | verwijderd:2026-09-06
+TCM.CO           | opname:2026-08-22 | ROE:12.5% | Debt:59.6 | Marge:5.5% | Vol:24.3% | Omzet:356,039 | verwijderd | verwijderd:2026-09-06
