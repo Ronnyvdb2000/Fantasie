@@ -55,6 +55,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
+try:
     from supabase import create_client, Client
     _SUPABASE_AVAILABLE = True
 except ImportError:
@@ -1082,6 +1089,16 @@ def run_eod():
             portfolio["total_trades"] = portfolio.get("total_trades", 0) + 1
             log_trade(today_str(), sig.ticker, "MR", "BUY",
                       entry_p, n, trade_cost(entry_p * n), 0, 0, 0, "IBS+RSI entry")
+            log_selectie(
+                ticker=sig.ticker, datum=today_str(), strategie="bot_00mr_ibsrsi",
+                beurs=ex_name, koers=entry_p,
+                parameters={
+                    "ibs": sig.ibs, "rsi3": sig.rsi3, "ma20": sig.ma20,
+                    "ma200": sig.ma200, "atr": sig.atr, "stop": sig.stop,
+                    "tp": sig.tp, "rr_pct": sig.rr,
+                    "grafiek": f"https://finance.yahoo.com/quote/{sig.ticker}",
+                },
+            )
             print(f"  KOOP {sig.ticker}: IBS={sig.ibs:.2f} RSI3={sig.rsi3:.1f} | {n}× EUR{entry_p:.2f}")
 
     # Max houdduur check
@@ -1200,6 +1217,16 @@ def run_orb():
             }
             log_trade(today_str(), sig.ticker, "ORB", "BUY",
                       entry_p, n, trade_cost(investering), 0, 0, 0, "ORB breakout")
+            log_selectie(
+                ticker=sig.ticker, datum=today_str(), strategie="bot_00mr_orb",
+                beurs=ex_name, koers=entry_p,
+                parameters={
+                    "orb_high": sig.orb_high, "orb_low": sig.orb_low,
+                    "orb_range": sig.orb_range, "breakout": sig.breakout,
+                    "breakout_vol": sig.vol_ratio, "stop": sig.stop, "tp": sig.tp,
+                    "grafiek": f"https://finance.yahoo.com/quote/{sig.ticker}",
+                },
+            )
             prices[sig.ticker] = sig.current
             print(f"  ORB KOOP {sig.ticker}: EUR{sig.current:.2f} | vol {sig.vol_ratio:.1f}×")
 
