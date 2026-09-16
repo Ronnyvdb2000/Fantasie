@@ -45,6 +45,13 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -771,6 +778,19 @@ def run_live_engine():
         exits: List[Dict] = []
 
         print(f"  → {len(signalen)} Dual Momentum kandidaten")
+
+        for rank, s in enumerate(signalen, start=1):
+            log_selectie(
+                ticker=s.ticker, datum=today_str(), strategie="bot_00dm",
+                beurs=ex_name, koers=s.price,
+                parameters={
+                    "score": s.score, "total_score": s.total_score, "rank": rank,
+                    "rev_growth_pct": s.rev_growth, "rs": s.rs,
+                    "pct_from_high": s.pct_from_high, "breakout": s.breakout,
+                    "breakout_vol": s.breakout_vol, "high52w": s.high52w,
+                    "grafiek": f"https://finance.yahoo.com/quote/{s.ticker}",
+                },
+            )
 
         if signalen or exits:
             max_sc = max((s.score for s in signalen), default=0)
