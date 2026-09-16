@@ -23,6 +23,13 @@ import pandas as pd
 import yfinance as yf
 import requests
 
+try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -989,6 +996,18 @@ def run_live_engine():
                 filtered_buys.append(sig)
                 if len(filtered_buys) + len(portfolio.positions) >= MAX_POSITIONS:
                     break
+
+        for rank, sig in enumerate(filtered_buys, start=1):
+            log_selectie(
+                ticker=sig.ticker, datum=today_str(), strategie="bot_00xxxV2",
+                beurs=ex_name, koers=sig.price,
+                parameters={
+                    "rank": rank, "substrategie": sig.strategy,
+                    "richting": sig.direction, "reden": sig.reason,
+                    "atr": sig.atr, "stop": sig.sl, "rr_pct": sig.rr_ratio,
+                    "grafiek": f"https://finance.yahoo.com/quote/{sig.ticker}",
+                },
+            )
 
         exit_ex = [s for s in exit_signals_all if s.ticker in tlist]
         deel1, deel2 = format_signals_per_exchange(ex_name, filtered_buys, exit_ex, portfolio, portfolio_waarde)
