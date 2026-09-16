@@ -61,6 +61,13 @@ import pandas as pd
 import yfinance as yf
 import requests
 
+try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -657,6 +664,18 @@ def run_live_engine(regio: str = "alle"):
         winnaar = kandidaten[0]
         print(f"  → Winnaar: {winnaar.ticker} (score {winnaar.total_score}, "
               f"vol {winnaar.vol_pct}% vs mediaan {vol_drempel:.0f}%)")
+
+        log_selectie(
+            ticker=winnaar.ticker, datum=today_str(), strategie="bot_00supervar",
+            beurs=ex_naam, koers=winnaar.price,
+            parameters={
+                "total_score": winnaar.total_score, "pivot": winnaar.pivot,
+                "stop": winnaar.stop, "rs": winnaar.rs,
+                "pct_from_high": winnaar.pct_from_high, "vol_pct": winnaar.vol_pct,
+                "vol_drempel_beurs": vol_drempel,
+                "grafiek": f"https://finance.yahoo.com/quote/{winnaar.ticker}",
+            },
+        )
 
         bericht = format_bericht(ex_naam, winnaar, portfolio_waarde)
         send_telegram_message(bericht)
