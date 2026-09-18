@@ -61,68 +61,23 @@
   },
   {
     "beurs": "03 Beursbrink",
-    "ticker": "BESI.AS",
-    "week_perf": 6.08
+    "ticker": "LIF.TO",
+    "week_perf": 1.66
   },
   {
     "beurs": "03 Beursbrink",
-    "ticker": "ELI.BR",
-    "week_perf": 5.6
+    "ticker": "AMGN",
+    "week_perf": 1.09
   },
   {
     "beurs": "03 Beursbrink",
-    "ticker": "ENG.MC",
-    "week_perf": 4.22
-  },
-  {
-    "beurs": "04 Benelux",
-    "ticker": "BESI.AS",
-    "week_perf": 6.08
-  },
-  {
-    "beurs": "04 Benelux",
-    "ticker": "ELI.BR",
-    "week_perf": 5.6
-  },
-  {
-    "beurs": "04 Benelux",
-    "ticker": "ASML.AS",
-    "week_perf": 4.19
-  },
-  {
-    "beurs": "04 Benelux",
-    "ticker": "HEIJM.AS",
-    "week_perf": 3.68
-  },
-  {
-    "beurs": "04 Benelux",
-    "ticker": "NN.AS",
-    "week_perf": 2.29
+    "ticker": "AEFC",
+    "week_perf": 0.79
   },
   {
     "beurs": "05 Parijs",
-    "ticker": "SU.PA",
-    "week_perf": 5.04
-  },
-  {
-    "beurs": "05 Parijs",
-    "ticker": "HO.PA",
-    "week_perf": 3.39
-  },
-  {
-    "beurs": "05 Parijs",
-    "ticker": "LR.PA",
-    "week_perf": 2.61
-  },
-  {
-    "beurs": "05 Parijs",
-    "ticker": "VIE.PA",
-    "week_perf": 1.24
-  },
-  {
-    "beurs": "05 Parijs",
-    "ticker": "SW.PA",
-    "week_perf": 1.15
+    "ticker": "AIR",
+    "week_perf": -6.09
   },
   {
     "beurs": "06 Power & AI",
@@ -186,11 +141,6 @@
   },
   {
     "beurs": "08 Defensie",
-    "ticker": "BA.L",
-    "week_perf": 4.38
-  },
-  {
-    "beurs": "08 Defensie",
     "ticker": "AVAV",
     "week_perf": 4.27
   },
@@ -198,6 +148,11 @@
     "beurs": "08 Defensie",
     "ticker": "ESLT.TA",
     "week_perf": 3.54
+  },
+  {
+    "beurs": "08 Defensie",
+    "ticker": "PLTR",
+    "week_perf": 2.5
   },
   {
     "beurs": "09 Varia",
@@ -211,11 +166,6 @@
   },
   {
     "beurs": "09 Varia",
-    "ticker": "BAYN.DE",
-    "week_perf": -2.51
-  },
-  {
-    "beurs": "09 Varia",
     "ticker": "HIMS",
     "week_perf": -2.85
   },
@@ -225,54 +175,59 @@
     "week_perf": -4.16
   },
   {
-    "beurs": "041 Benelux Ierland",
-    "ticker": "OPTI.BR",
-    "week_perf": 12.53
+    "beurs": "09 Varia",
+    "ticker": "CARR",
+    "week_perf": -5.9
   },
   {
     "beurs": "041 Benelux Ierland",
-    "ticker": "ABO.BR",
-    "week_perf": 11.17
+    "ticker": "EURN.BR",
+    "week_perf": 3.23
   },
   {
     "beurs": "041 Benelux Ierland",
-    "ticker": "KENDR.AS",
-    "week_perf": 9.86
+    "ticker": "GLPG.BR",
+    "week_perf": 0.0
   },
   {
     "beurs": "041 Benelux Ierland",
-    "ticker": "ASM.AS",
-    "week_perf": 7.19
+    "ticker": "PAY.BR",
+    "week_perf": 0.0
   },
   {
     "beurs": "041 Benelux Ierland",
-    "ticker": "FAST.AS",
-    "week_perf": 6.7
+    "ticker": "ZEN.BR",
+    "week_perf": 0.0
+  },
+  {
+    "beurs": "041 Benelux Ierland",
+    "ticker": "MTRK.AS",
+    "week_perf": 0.0
   },
   {
     "beurs": "042 Parijs",
-    "ticker": "ALIBR.PA",
-    "week_perf": 33.33
+    "ticker": "ALDBL.PA",
+    "week_perf": 8.74
   },
   {
     "beurs": "042 Parijs",
-    "ticker": "MLAAH.PA",
-    "week_perf": 20.0
+    "ticker": "ALAQU.PA",
+    "week_perf": 7.1
   },
   {
     "beurs": "042 Parijs",
-    "ticker": "ALTME.PA",
-    "week_perf": 15.38
+    "ticker": "ALBLU.PA",
+    "week_perf": 6.67
   },
   {
     "beurs": "042 Parijs",
-    "ticker": "ALOPM.PA",
-    "week_perf": 14.42
+    "ticker": "MLPLC.PA",
+    "week_perf": 0.0
   },
   {
     "beurs": "042 Parijs",
-    "ticker": "SOI.PA",
-    "week_perf": 14.26
+    "ticker": "ALREB.PA",
+    "week_perf": 0.0
   },
   {
     "beurs": "043 Frankfurt",
@@ -301,78 +256,63 @@
   },
   {
     "beurs": "044 Spanje/Portugal",
-    "ticker": "ENRS.MC",
-    "week_perf": 29.75
-  },
-  {
-    "beurs": "044 Spanje/Portugal",
     "ticker": "ESON.LS",
     "week_perf": 21.43
   },
   {
     "beurs": "044 Spanje/Portugal",
-    "ticker": "ART.MC",
-    "week_perf": 16.44
+    "ticker": "AIG.MC",
+    "week_perf": 2.14
   },
   {
     "beurs": "044 Spanje/Portugal",
-    "ticker": "TSK.MC",
-    "week_perf": 13.07
+    "ticker": "YDOA.MC",
+    "week_perf": 1.53
   },
   {
     "beurs": "044 Spanje/Portugal",
-    "ticker": "ARM.MC",
-    "week_perf": 11.63
+    "ticker": "YMIB.MC",
+    "week_perf": 1.51
+  },
+  {
+    "beurs": "044 Spanje/Portugal",
+    "ticker": "YATO.MC",
+    "week_perf": 1.15
   },
   {
     "beurs": "045 Londen",
-    "ticker": "OMI.L",
-    "week_perf": 90.97
+    "ticker": "NAR.L",
+    "week_perf": 4.0
   },
   {
     "beurs": "045 Londen",
-    "ticker": "ACRM.L",
-    "week_perf": 45.37
+    "ticker": "LSC.L",
+    "week_perf": 2.74
   },
   {
     "beurs": "045 Londen",
-    "ticker": "STCM.L",
-    "week_perf": 27.66
+    "ticker": "HEAD.L",
+    "week_perf": 0.0
   },
   {
     "beurs": "045 Londen",
-    "ticker": "KIE.L",
-    "week_perf": 26.45
+    "ticker": "ATOM.L",
+    "week_perf": 0.0
   },
   {
     "beurs": "045 Londen",
-    "ticker": "ALK.L",
-    "week_perf": 26.44
-  },
-  {
-    "beurs": "046 Milaan",
-    "ticker": "EPH.MI",
-    "week_perf": 31.67
-  },
-  {
-    "beurs": "046 Milaan",
-    "ticker": "BFG.MI",
-    "week_perf": 17.94
-  },
-  {
-    "beurs": "046 Milaan",
-    "ticker": "CRL.MI",
-    "week_perf": 6.19
-  },
-  {
-    "beurs": "046 Milaan",
-    "ticker": "LUVE.MI",
-    "week_perf": 5.43
+    "ticker": "POS.L",
+    "week_perf": 0.0
   },
   {
     "beurs": "046 Milaan",
     "ticker": "BWZ.MI",
     "week_perf": 5.0
+  },
+  {
+    "beurs": "046 Milaan",
+    "ticker": "EUK.MI",
+    "week_perf": -3.25
   },
   {
     "beurs": "047 Toronto",
@@ -426,153 +366,98 @@
   },
   {
     "beurs": "049 Stockholm",
-    "ticker": "SBB-D.ST",
-    "week_perf": 37.91
-  },
-  {
-    "beurs": "049 Stockholm",
-    "ticker": "ONCO.ST",
-    "week_perf": 27.53
-  },
-  {
-    "beurs": "049 Stockholm",
     "ticker": "VESTUM.ST",
     "week_perf": 14.33
   },
   {
     "beurs": "049 Stockholm",
-    "ticker": "SCST.ST",
-    "week_perf": 14.08
+    "ticker": "SVOL-A.ST",
+    "week_perf": 0.0
   },
   {
     "beurs": "049 Stockholm",
-    "ticker": "SIVE.ST",
-    "week_perf": 13.22
+    "ticker": "NGS.ST",
+    "week_perf": -1.48
+  },
+  {
+    "beurs": "049 Stockholm",
+    "ticker": "ANOT.ST",
+    "week_perf": -10.19
   },
   {
     "beurs": "050 Zurich",
-    "ticker": "AEVS.SW",
-    "week_perf": 24.41
+    "ticker": "EEII.SW",
+    "week_perf": 0.0
   },
   {
     "beurs": "050 Zurich",
-    "ticker": "CNTL.SW",
-    "week_perf": 12.77
+    "ticker": "ELMN.SW",
+    "week_perf": 0.0
   },
   {
     "beurs": "050 Zurich",
-    "ticker": "LEHN.SW",
-    "week_perf": 12.57
-  },
-  {
-    "beurs": "050 Zurich",
-    "ticker": "BCJ.SW",
-    "week_perf": 11.51
-  },
-  {
-    "beurs": "050 Zurich",
-    "ticker": "TECN.SW",
-    "week_perf": 11.07
+    "ticker": "LECN.SW",
+    "week_perf": 0.0
   },
   {
     "beurs": "051 Warschau",
-    "ticker": "LPP.WA",
-    "week_perf": 10.83
+    "ticker": "DGA.WA",
+    "week_perf": 0.0
   },
   {
     "beurs": "051 Warschau",
-    "ticker": "GPW.WA",
-    "week_perf": 6.47
+    "ticker": "ERG.WA",
+    "week_perf": 0.0
   },
   {
     "beurs": "051 Warschau",
-    "ticker": "XTB.WA",
-    "week_perf": 2.9
-  },
-  {
-    "beurs": "051 Warschau",
-    "ticker": "INC.WA",
-    "week_perf": 1.72
-  },
-  {
-    "beurs": "051 Warschau",
-    "ticker": "JSW.WA",
-    "week_perf": 1.57
+    "ticker": "PBG.WA",
+    "week_perf": 0.0
   },
   {
     "beurs": "052 Oslo",
-    "ticker": "2020.OL",
-    "week_perf": 71.76
+    "ticker": "ROM.OL",
+    "week_perf": 3.91
   },
   {
     "beurs": "052 Oslo",
-    "ticker": "NOM.OL",
-    "week_perf": 22.97
+    "ticker": "HERMA.OL",
+    "week_perf": -0.33
   },
   {
     "beurs": "052 Oslo",
-    "ticker": "SMOP.OL",
-    "week_perf": 14.86
-  },
-  {
-    "beurs": "052 Oslo",
-    "ticker": "LIFE.OL",
-    "week_perf": 12.87
-  },
-  {
-    "beurs": "052 Oslo",
-    "ticker": "GENO.OL",
-    "week_perf": 10.78
+    "ticker": "ITERA.OL",
+    "week_perf": -2.33
   },
   {
     "beurs": "053 Kopenhagen",
-    "ticker": "GMAB.CO",
-    "week_perf": 6.81
+    "ticker": "QINTER.CO",
+    "week_perf": 1.38
   },
   {
     "beurs": "053 Kopenhagen",
-    "ticker": "3NOV25.CO",
-    "week_perf": 6.3
+    "ticker": "FFARMS.CO",
+    "week_perf": 0.59
   },
   {
     "beurs": "053 Kopenhagen",
-    "ticker": "ISS.CO",
-    "week_perf": 6.12
+    "ticker": "KLEE-B.CO",
+    "week_perf": 0.51
   },
   {
     "beurs": "053 Kopenhagen",
-    "ticker": "CHEMM.CO",
-    "week_perf": 5.59
+    "ticker": "WMA.CO",
+    "week_perf": 0.0
   },
   {
     "beurs": "053 Kopenhagen",
-    "ticker": "IMPERO.CO",
-    "week_perf": 5.48
+    "ticker": "GJ.CO",
+    "week_perf": 0.0
   },
   {
     "beurs": "054 Helsinki",
-    "ticker": "NESTE.HE",
-    "week_perf": 9.74
-  },
-  {
-    "beurs": "054 Helsinki",
-    "ticker": "NOKIA.HE",
-    "week_perf": 8.99
-  },
-  {
-    "beurs": "054 Helsinki",
-    "ticker": "BOREO.HE",
-    "week_perf": 8.19
-  },
-  {
-    "beurs": "054 Helsinki",
-    "ticker": "WRT1V.HE",
-    "week_perf": 6.87
-  },
-  {
-    "beurs": "054 Helsinki",
-    "ticker": "KREATE.HE",
-    "week_perf": 6.53
+    "ticker": "AALLON.HE",
+    "week_perf": 0.67
   },
   {
     "beurs": "055 CBoe",
@@ -676,27 +561,27 @@
   },
   {
     "beurs": "059 Oostenrijk/Slovenië/Slowakije",
-    "ticker": "ATS.VI",
-    "week_perf": 16.12
-  },
-  {
-    "beurs": "059 Oostenrijk/Slovenië/Slowakije",
-    "ticker": "VER.VI",
-    "week_perf": 4.38
-  },
-  {
-    "beurs": "059 Oostenrijk/Slovenië/Slowakije",
-    "ticker": "VOE.VI",
-    "week_perf": 4.32
-  },
-  {
-    "beurs": "059 Oostenrijk/Slovenië/Slowakije",
     "ticker": "WOL.VI",
     "week_perf": 1.72
   },
   {
     "beurs": "059 Oostenrijk/Slovenië/Slowakije",
-    "ticker": "ANDR.VI",
-    "week_perf": 1.32
+    "ticker": "LTH.VI",
+    "week_perf": 0.0
+  },
+  {
+    "beurs": "059 Oostenrijk/Slovenië/Slowakije",
+    "ticker": "ABE.VI",
+    "week_perf": 0.0
+  },
+  {
+    "beurs": "059 Oostenrijk/Slovenië/Slowakije",
+    "ticker": "RWT.VI",
+    "week_perf": 0.0
+  },
+  {
+    "beurs": "059 Oostenrijk/Slovenië/Slowakije",
+    "ticker": "VAS.VI",
+    "week_perf": 0.0
   }
 ]
