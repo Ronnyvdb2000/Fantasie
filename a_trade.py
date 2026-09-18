@@ -18,6 +18,12 @@ naar Telegram (HTML, emojis) en naar e-mail (HTML, uitgelicht blok voor het
 topsignaal), inclusief een kosteninschatting per positie (vaste kost +
 variabele kost + TOB).
 
+De noemer bij "Overlap: x/y strategieën" is dynamisch: y is het aantal
+unieke strategieën dat binnen het opgehaalde LOOKBACK_DAYS-venster
+daadwerkelijk minstens 1 rij in `selecties` had, niet een hardcoded totaal
+-- dat totaal veranderde immers al meermaals (7 -> 13 -> 17 strategieën)
+naarmate er bots bijkwamen.
+
 Env vars (zelfde secrets als de rest van de Fantasie-repo):
   SUPABASE_DB_URL     - Postgres connectiestring naar Supabase
   TELEGRAM_TOKEN
@@ -180,7 +186,7 @@ def _esc(s):
     return html.escape(str(s))
 
 
-def maak_telegram_bericht(ranking, lookback_days):
+def maak_telegram_bericht(ranking, lookback_days, totaal_strategieen):
     vandaag = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     if not ranking:
@@ -204,7 +210,7 @@ def maak_telegram_bericht(ranking, lookback_days):
         strategieen_str = _esc(", ".join(r["strategieen"]))
         lijnen.append("")
         lijnen.append(f"{medaille} <b>{_esc(r['ticker'])}</b> ({_esc(r['beurs'])})")
-        lijnen.append(f"✅ Overlap: <b>{r['overlap']}/7</b> strategieën — {strategieen_str}")
+        lijnen.append(f"✅ Overlap: <b>{r['overlap']}/{totaal_strategieen}</b> strategieën — {strategieen_str}")
         if r["avg_score"]:
             lijnen.append(f"📊 Gem. score: <b>{r['avg_score']:.2f}</b>")
         if r["koers"] is not None:
@@ -215,7 +221,7 @@ def maak_telegram_bericht(ranking, lookback_days):
 
     return "\n".join(lijnen)
 
-def maak_email_html(ranking, lookback_days):
+def maak_email_html(ranking, lookback_days, totaal_strategieen):
     if not ranking:
         return (
             f"<h2>⚠️ Beste Signaal Bot</h2>"
@@ -236,7 +242,7 @@ def maak_email_html(ranking, lookback_days):
     if len(top) > 1:
         rijen = "".join(
             f"<tr><td>{r['ticker']}</td><td>{r['beurs']}</td>"
-            f"<td>{r['overlap']}/7</td><td>{r['avg_score']:.2f}</td></tr>"
+            f"<td>{r['overlap']}/{totaal_strategieen}</td><td>{r['avg_score']:.2f}</td></tr>"
             for r in top[1:]
         )
         overige_html = f"""
@@ -257,7 +263,7 @@ def maak_email_html(ranking, lookback_days):
              ({sum(r['overlap'] for r in ranking)} selecties totaal)</p>
           <p style="color:#555;">Aantal picks: <b>{TOP_N}</b> (van €{TRANSACTIE_BEDRAG:,.0f} elk)</p>
           <h2 style="font-size:28px; margin-bottom:5px;">🥇 {beste['ticker']} ({beste['beurs']})</h2>
-          <p style="font-size:18px;">✅ Overlap: <b>{beste['overlap']}/7 strategieën</b>
+          <p style="font-size:18px;">✅ Overlap: <b>{beste['overlap']}/{totaal_strategieen} strategieën</b>
              — {strategieen_html}</p>
           <p style="font-size:16px;">📊 Gemiddelde score: <b>{beste['avg_score']:.2f}</b></p>
           <p style="font-size:16px;">💶 Laatste koers: <b>{beste['koers']}</b></p>
@@ -319,9 +325,10 @@ def stuur_email(html_body: str, heeft_top_signaal: bool):
 def main():
     rows = haal_selecties_op(LOOKBACK_DAYS)
     ranking = bouw_ranking(rows)
+    totaal_strategieen = len({row["strategie"] for row in rows}) or 1
 
-    telegram_tekst = maak_telegram_bericht(ranking, LOOKBACK_DAYS)
-    email_html = maak_email_html(ranking, LOOKBACK_DAYS)
+    telegram_tekst = maak_telegram_bericht(ranking, LOOKBACK_DAYS, totaal_strategieen)
+    email_html = maak_email_html(ranking, LOOKBACK_DAYS, totaal_strategieen)
 
     stuur_telegram(telegram_tekst)
     stuur_email(email_html, heeft_top_signaal=bool(ranking))
