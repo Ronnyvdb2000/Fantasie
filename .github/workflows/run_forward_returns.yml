@@ -1,0 +1,27 @@
+name: "Feature Store: Forward Returns — koppelt selecties aan latere rendementen — dagelijks"
+
+on:
+  schedule:
+    - cron: "0 21 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  bouw-forward-returns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install yfinance pandas numpy requests python-dotenv psycopg2-binary
+      - name: Run bouw_forward_returns
+        env:
+          SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MAX_TICKERS_PER_RUN: "400"
+          HORIZONS: "5,10,20"
+        run: python bouw_forward_returns.py build
