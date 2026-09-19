@@ -217,7 +217,16 @@ def run_build():
         for r in open_rijen:
             per_ticker.setdefault(r["ticker"], []).append(r)
 
-        tickers = sorted(per_ticker.keys())[:MAX_TICKERS_PER_RUN]
+        # Prioriteer tickers op hun OUDSTE nog openstaande datum (langst
+        # wachtend eerst) i.p.v. alfabetisch -- anders blijft een ticker als
+        # AAPL (bijna dagelijks opnieuw geselecteerd door meerdere
+        # strategieën) elke run in de eerste MAX_TICKERS_PER_RUN vallen, en
+        # komen alfabetisch latere tickers structureel nooit aan de beurt.
+        oudste_datum_per_ticker = {
+            t: min(r["datum"] for r in rijen) for t, rijen in per_ticker.items()
+        }
+        alle_tickers_gesorteerd = sorted(per_ticker.keys(), key=lambda t: oudste_datum_per_ticker[t])
+        tickers = alle_tickers_gesorteerd[:MAX_TICKERS_PER_RUN]
         overgeslagen = len(per_ticker) - len(tickers)
         print(f"{len(tickers)} unieke tickers te verwerken dit run"
               + (f" ({overgeslagen} tickers volgen in een volgend run, MAX_TICKERS_PER_RUN bereikt)" if overgeslagen > 0 else ""))
