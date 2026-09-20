@@ -142,12 +142,17 @@ def bereken_indicatoren(hist: pd.DataFrame) -> pd.DataFrame:
 # Stap 1: welke (ticker, datum)-paren ontbreken nog in generieke_technicals?
 # --------------------------------------------------------------------------
 def haal_openstaande_paren(conn) -> List[dict]:
+    # ticker LIKE '%/%' sluit o.a. bot_01cointegr.py's samengestelde
+    # "TICKER_A/TICKER_B"-paarstrings uit -- die kunnen nooit via yfinance
+    # opgelost worden en zouden anders élke dag opnieuw (en voor altijd)
+    # als "openstaand" blijven terugkomen zonder ooit te slagen.
     query = """
         SELECT DISTINCT s.ticker, s.datum
         FROM selecties s
         LEFT JOIN generieke_technicals g
           ON s.ticker = g.ticker AND s.datum = g.datum
         WHERE g.ticker IS NULL
+          AND s.ticker NOT LIKE '%/%'
         ORDER BY s.ticker, s.datum;
     """
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
