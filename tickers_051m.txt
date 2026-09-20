@@ -1,5 +1,5 @@
 # MASTERLIJST 051 — Warschau
-# Laatste update: 13/09/2026
+# Laatste update: 20/09/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
@@ -18,9 +18,11 @@ ELT.WA           | opname:2026-07-19 | ROE:18.9% | Debt:8.7 | Marge:4.6% | Vol:3
 GPP.WA           | opname:2026-07-19 | ROE:44.9% | Debt:26.5 | Marge:29.0% | Vol:32.7% | Omzet:2,166,675 | actief
 KGH.WA           | opname:2026-07-19 | ROE:20.1% | Debt:17.0 | Marge:17.5% | Vol:53.5% | Omzet:261,825,043 | actief
 LBW.WA           | opname:2026-07-19 | ROE:24.0% | Debt:42.1 | Marge:20.4% | Vol:54.3% | Omzet:5,666,723 | actief
+LPP.WA           | opname:2026-09-20 | ROE:38.3% | Debt:148.2 | Marge:7.9% | Vol:36.6% | Omzet:82,081,736 | actief
 MOL.WA           | opname:2026-08-02 | ROE:9.9% | Debt:24.0 | Marge:4.2% | Vol:30.5% | Omzet:1,609,251 | actief
 MRB.WA           | opname:2026-08-02 | ROE:9.2% | Debt:51.9 | Marge:3.6% | Vol:30.2% | Omzet:1,834,164 | actief
 PAS.WA           | opname:2026-07-19 | ROE:51.5% | Debt:13.9 | Marge:8.3% | Vol:53.1% | Omzet:620,043 | actief
+PGE.WA           | opname:2026-09-20 | ROE:18.0% | Debt:32.6 | Marge:12.1% | Vol:42.1% | Omzet:34,600,384 | actief
 PKN.WA           | opname:2026-07-19 | ROE:8.7% | Debt:27.3 | Marge:4.4% | Vol:33.3% | Omzet:222,746,741 | actief
 PXM.WA           | opname:2026-08-09 | ROE:18.5% | Debt:14.4 | Marge:3.1% | Vol:54.8% | Omzet:7,941,425 | actief
 RBW.WA           | opname:2026-07-19 | ROE:42.9% | Debt:27.1 | Marge:5.4% | Vol:34.6% | Omzet:6,795,409 | actief
@@ -28,9 +30,9 @@ TEN.WA           | opname:2026-07-26 | ROE:25.0% | Debt:2.3 | Marge:17.3% | Vol:
 TOR.WA           | opname:2026-07-19 | ROE:13.9% | Debt:12.2 | Marge:4.1% | Vol:31.9% | Omzet:1,230,850 | actief
 VOX.WA           | opname:2026-08-09 | ROE:25.7% | Debt:43.8 | Marge:18.2% | Vol:36.4% | Omzet:1,095,141 | actief
 VRC.WA           | opname:2026-07-26 | ROE:21.4% | Debt:17.9 | Marge:18.9% | Vol:36.8% | Omzet:1,515,781 | actief
-XTB.WA           | opname:2026-07-19 | ROE:58.3% | Debt:10.7 | Marge:41.3% | Vol:36.4% | Omzet:44,743,412 | actief
+XTB.WA           | opname:2026-07-19 | ROE:58.3% | Debt:10.7 | Marge:41.3% | Vol:36.5% | Omzet:47,096,018 | actief
 QRS.WA           | opname:2026-07-26 | ROE:45.0% | Debt:2.8 | Marge:30.1% | Vol:30.3% | Omzet:465,067 | zwakker | weken_buiten:2
 TOA.WA           | opname:2026-07-19 | ROE:15.6% | Debt:9.2 | Marge:9.2% | Vol:30.0% | Omzet:711,403 | zwakker | weken_buiten:1
 TPE.WA           | opname:2026-07-26 | ROE:15.5% | Debt:58.9 | Marge:9.2% | Vol:45.6% | Omzet:31,583,086 | zwakker | weken_buiten:2
 TRK.WA           | opname:2026-07-26 | ROE:20.4% | Debt:39.2 | Marge:3.7% | Vol:44.6% | Omzet:837,345 | zwakker | weken_buiten:2
-VRG.WA           | opname:2026-08-22 | ROE:9.4% | Debt:46.8 | Marge:6.7% | Vol:26.6% | Omzet:297,907 | verwijderd | verwijderd:2026-09-06
+VRG.WA           | opname:2026-08-22 | ROE:9.4% | Debt:46.8 | Marge:6.7% | Vol:26.5% | Omzet:295,922 | verwijderd | verwijderd:2026-09-06
