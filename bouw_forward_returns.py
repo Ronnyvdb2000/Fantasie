@@ -103,6 +103,11 @@ def haal_openstaande_rijen(conn) -> List[dict]:
     # ~1.5x buffer voor weekends/feestdagen om max_horizon handelsdagen te dekken
     cutoff = (datetime.now(timezone.utc) - timedelta(days=int(max_horizon * 1.6) + 3)).strftime("%Y-%m-%d")
 
+    # ticker NOT LIKE '%/%' sluit bot_01cointegr.py's samengestelde
+    # "TICKER_A/TICKER_B"-paarstrings uit (zie bouw_generieke_technicals.py
+    # voor dezelfde fix en de uitleg) -- kunnen nooit via yfinance opgelost
+    # worden, en koers is voor die rijen sowieso een spread-ratio, geen
+    # echte prijs, dus een forward-rendement erop zou toch niet zinvol zijn.
     query = f"""
         SELECT s.ticker, s.datum, s.strategie, s.beurs, s.koers
         FROM selecties s
@@ -110,6 +115,7 @@ def haal_openstaande_rijen(conn) -> List[dict]:
           ON s.ticker = f.ticker AND s.datum = f.datum AND s.strategie = f.strategie
         WHERE s.datum <= %s
           AND s.koers IS NOT NULL
+          AND s.ticker NOT LIKE '%/%'
           AND (f.ticker IS NULL OR f.{kolom_max} IS NULL)
         ORDER BY s.ticker, s.datum;
     """
