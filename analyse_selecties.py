@@ -30,6 +30,24 @@ soms NaN terwijl hist.empty toch False is. Zonder guard telde zo'n NaN-rij
 als een "verlies" mee in de win-rate (NaN > 0 is False) en maakte hij
 gemiddelde/mediaan van de hele groep NaN. Nu wordt zo'n rij overgeslagen
 in plaats van als valse loss meegeteld.
+
+Wijziging (2026-09-21): twee extra guards toegevoegd n.a.v. de analyse van
+2026-09-20.
+1. Te-recent-guard in bereken_rendementen(): als de eerst-beschikbare
+   handelsdag op/na de selectiedatum dezelfde handelsdag is als de
+   laatst-beschikbare handelsdag in de opgehaalde historie, is er nog geen
+   volledige handelsdag verstreken om een rendement over te meten.
+   koers_start en koers_nu zijn dan letterlijk dezelfde koers, wat triviaal
+   0,00% opleverde (zichtbaar bij bot_01volhunter, waar alle 7 rijen exact
+   0,00% toonden). Zo'n rij wordt nu overgeslagen, net als de bestaande
+   NaN-rijen, in plaats van een vals "geen verandering"-resultaat te tonen.
+2. dedupliceer_selecties(): verwijdert exacte duplicaten (zelfde ticker +
+   strategie + datum) vóór de rendementsberekening. Dubbel gelogde
+   selecties (bv. STR.VI 2026-08-24 3x bij bot_01hoogl/bot_01graham,
+   GUBRA.CO 2x bij bot_01kasstr/bot_01greenblatt) telden anders zowel de
+   n-tellingen als de top/bottom-3-lijstjes kunstmatig op. --check-duplicates
+   blijft ongewijzigd werken op de ruwe (niet-gededupliceerde) data, zodat
+   het zijn diagnostische functie behoudt.
 """
 
 import argparse
@@ -84,6 +102,7 @@ def bereken_rendementen(df: pd.DataFrame) -> pd.DataFrame:
     vroegste_datum = df["datum"].min()
     hist_cache = {}
     overgeslagen_nan = 0
+    overgeslagen_te_recent = 0
     for i, ticker in enumerate(tickers, 1):
         try:
             hist = yf.download(
@@ -116,10 +135,21 @@ def bereken_rendementen(df: pd.DataFrame) -> pd.DataFrame:
         if na_selectie.empty:
             continue
         koers_start = float(na_selectie["Close"].iloc[0])
+        start_datum = na_selectie.index[0]
 
         if ticker not in laatste_koers_cache:
-            laatste_koers_cache[ticker] = float(hist["Close"].iloc[-1])
-        koers_nu = laatste_koers_cache[ticker]
+            laatste_koers_cache[ticker] = (float(hist["Close"].iloc[-1]), hist.index[-1])
+        koers_nu, laatste_datum = laatste_koers_cache[ticker]
+
+        # Te-recent-guard: als de eerst-beschikbare handelsdag op/na de
+        # selectiedatum dezelfde handelsdag is als de laatst-beschikbare
+        # handelsdag in de historie, is er nog geen volledige handelsdag
+        # verstreken. koers_start en koers_nu zijn dan dezelfde koers, wat
+        # triviaal 0,00% zou opleveren i.p.v. een echt (nog onbekend)
+        # rendement. Zo'n rij wordt overgeslagen, net als de NaN-rijen.
+        if start_datum == laatste_datum:
+            overgeslagen_te_recent += 1
+            continue
 
         # NaN-guard: yfinance geeft soms een niet-lege maar deels corrupte
         # DataFrame terug (tijdelijke storing/rate limiting). Zonder deze
@@ -144,6 +174,9 @@ def bereken_rendementen(df: pd.DataFrame) -> pd.DataFrame:
 
     if overgeslagen_nan:
         print(f"  waarschuwing: {overgeslagen_nan} rijen overgeslagen wegens NaN/ongeldige koersdata")
+    if overgeslagen_te_recent:
+        print(f"  waarschuwing: {overgeslagen_te_recent} rijen overgeslagen (nog geen volledige "
+              f"handelsdag verstreken sinds selectie, dus nog geen echt rendement meetbaar)")
 
     return pd.DataFrame(resultaten)
 
@@ -190,6 +223,19 @@ def bouw_telegram_duplicaten(dups: pd.DataFrame) -> str:
     for strat, n in per_strat.items():
         regels.append(f"  {strat}: {int(n)} overtollig")
     return "\n".join(regels)
+
+
+def dedupliceer_selecties(df: pd.DataFrame) -> pd.DataFrame:
+    """Verwijdert exacte duplicaten (zelfde ticker + strategie + datum) vóór de
+    rendementsberekening, behoudt de eerste occurrence. Dubbel gelogde selecties
+    zouden anders zowel de n-tellingen als de top/bottom-3-lijstjes per strategie
+    kunstmatig opblazen (bv. STR.VI 2026-08-24 3x bij bot_01hoogl/bot_01graham)."""
+    voor = len(df)
+    df = df.drop_duplicates(subset=["ticker", "strategie", "datum"], keep="first").reset_index(drop=True)
+    verwijderd = voor - len(df)
+    if verwijderd:
+        print(f"  {verwijderd} dubbele (ticker, strategie, datum)-records verwijderd vóór analyse.")
+    return df
 
 
 def getrimd_gemiddelde(reeks: pd.Series, trim: float) -> float:
@@ -384,6 +430,7 @@ def main():
             print("Duplicaten-check verstuurd via e-mail.")
         return
 
+    df = dedupliceer_selecties(df)
     resultaten = bereken_rendementen(df)
     if resultaten.empty:
         sys.exit("Geen rendementen kunnen berekenen (geen prijsdata gevonden).")
