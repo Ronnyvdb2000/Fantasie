@@ -61,6 +61,16 @@ F-Score, 0-9, informatief) in bot_01kasstr.py. Vereist de bijhorende
 ALTER TABLE-migratie, zie migratie_piotroski_kolom.sql. De volledige
 per-criterium breakdown (piotroski_detail) is NIET gewhitelist en blijft
 enkel in de JSON parameters-kolom staan.
+
+2026-09-21: _KOLOM_WHITELIST uitgebreid met combined_rank, roc_rank,
+ey_rank (bot_01greenblatt.py, Magic Formula) en vc2_score
+(bot_01oshaughnessy.py, Trending Value). Deze 4 kolommen bestonden al in
+de `selecties`-tabel (geen nieuwe migratie nodig) maar stonden niet in de
+whitelist, waardoor ze bij elke insert enkel in de JSON parameters-kolom
+belandden en de wide columns altijd NULL bleven. Ontdekt via
+weekly_db_opvolg.py's haal_laatste_rank_scores(), die deze wide columns
+leest en daardoor voor alle 4 velden n=0 opleverde in de
+weekly-correlatie-analyse.
 """
 
 import os
@@ -119,6 +129,10 @@ _KOLOM_WHITELIST = {
     "roe_pct", "terugverdienperiode", "forward_pe", "verwachte_winstgroei_pct",
     # bot_01kasstr (Piotroski F-Score, informatief) -- toegevoegd 2026-08-23
     "piotroski_score",
+    # bot_01greenblatt (Magic Formula) / bot_01oshaughnessy (Trending Value)
+    # -- ontbrak, ontdekt 2026-09-21 via lege niveau_-kolommen in de
+    # weekly-correlatie-analyse (zie moduledocstring hierboven)
+    "combined_rank", "roc_rank", "ey_rank", "vc2_score",
 }
 
 
