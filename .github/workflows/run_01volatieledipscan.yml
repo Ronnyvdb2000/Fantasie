@@ -1,4 +1,4 @@
-name: "Bot 01: Volatiele Dip-Scan — hoge-ATR mean reversion (a-lijsten) — wekelijks"
+name: "Bot 01: FULL scanner (041-059) Volatiele Dip-Scan — hoge-ATR mean reversion (a-lijsten) — wekelijks"
 
 on:
   schedule:
