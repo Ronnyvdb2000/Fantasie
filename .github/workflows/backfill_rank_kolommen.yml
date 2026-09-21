@@ -1,0 +1,39 @@
+name: Backfill rank-kolommen (eenmalig)
+
+# Enkel handmatig te starten (workflow_dispatch), geen cron -- dit is een
+# eenmalig backfill-scriptje, geen doorlopende job. Standaard dry-run
+# (apply=false): toont enkel wat er zou gebeuren, wijzigt niets. Zet
+# "apply" op true om de UPDATE's effectief door te voeren.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Effectief wijzigen doorvoeren (true) of enkel dry-run (false)?"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  backfill-rank-kolommen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installeer dependencies
+        run: pip install psycopg2-binary
+
+      - name: Draai backfill_rank_kolommen.py
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ "${{ inputs.apply }}" = "true" ]; then
+            echo "== APPLY-modus: wijzigingen worden effectief doorgevoerd =="
+            python backfill_rank_kolommen.py --apply
+          else
+            echo "== DRY RUN: er wordt niets gewijzigd =="
+            python backfill_rank_kolommen.py
+          fi
