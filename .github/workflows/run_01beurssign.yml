@@ -1,4 +1,4 @@
-name: "Bot 01: BeursSignalen-methodiek nagebouwd (x-lijsten) — dagelijks"
+name: "Bot 01: FULL Scanner (041-059) BeursSignalen-methodiek nagebouwd (x-lijsten) — dagelijks"
 
 on:
   schedule:
