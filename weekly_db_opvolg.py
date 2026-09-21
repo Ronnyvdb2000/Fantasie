@@ -12,6 +12,22 @@ Schrijft de wekelijkse Hall-of-Fame-analyse weg naar twee Supabase-tabellen
 
 Gebruikt dezelfde SUPABASE_DB_URL-secret en hetzelfde connectiepatroon als
 db_logger.py.
+
+Wijziging (2026-09-21): haal_laatste_rank_scores() haalt de 6 rank/score-
+velden nu APART op (1 query per veld, elk met een eigen "IS NOT NULL"-
+filter) i.p.v. in 1 query de meest recente `selecties`-rij als geheel te
+nemen voor alle 6 velden tegelijk. De oude aanpak ("SELECT DISTINCT ON
+(ticker) ... ORDER BY ticker, datum DESC") pakte gewoon de allerlaatste
+rij van een ticker, ongeacht welke strategie die geschreven had. Als een
+ticker na zijn Greenblatt/Oshaughnessy-selectie nog eens door een
+strategie zonder deze velden (bv. bot_01dm) gelogd werd, won die latere
+lege rij en bleven combined_rank/roc_rank/ey_rank/vc2_score NULL, ook al
+stond de echte waarde nog gewoon (ouder) in de tabel. Zichtbaar geworden
+in de weekly-correlatie-analyse: n=1 voor deze 4 velden ondanks een
+succesvolle whitelist-fix in db_logger.py + backfill van 150 rijen elk
+(zie db_logger.py voor die eerdere, aparte fix). Elke kolom haalt nu zijn
+eigen laatste NIET-NULL waarde op, onafhankelijk van welke rij "het
+laatst" is voor de andere kolommen.
 """
 
 import os
@@ -163,18 +179,34 @@ def log_weekly_topper_parameters(rows: list) -> int:
     return aantal_ok
 
 
+# De 6 rank/score-velden die haal_laatste_rank_scores() elk apart ophaalt.
+_RANK_KOLOMMEN = [
+    "combined_rank", "roc_rank", "ey_rank", "vc2_score",
+    "total_score", "piotroski_score",
+]
+
+
 def haal_laatste_rank_scores(tickers: list) -> dict:
     """
-    Haalt per ticker de meest recente gekende rank/score-waarden op uit de
-    bestaande `selecties`-tabel, ongeacht hoe oud. Deze velden zijn
+    Haalt per ticker, PER VELD APART, de meest recente NIET-NULL waarde op
+    uit de bestaande `selecties`-tabel, ongeacht hoe oud. Deze velden zijn
     cross-sectioneel (afhankelijk van het hele universum op een specifieke
     dag) en worden daarom NIET per historische dag gereconstrueerd, maar
     bevroren herhaald over de 5 dagen van de week.
 
+    Elk van de 6 velden krijgt zijn eigen query met een eigen "<veld> IS
+    NOT NULL"-filter, zodat een ticker die zowel door bot_01greenblatt
+    (combined_rank/roc_rank/ey_rank) als nadien door een strategie zonder
+    deze velden gelogd is, toch de oudere-maar-echte waarde meekrijgt i.p.v.
+    NULL van de recentere lege rij. Zie de moduledocstring voor de
+    aanleiding (2026-09-21).
+
     Retourneert: {ticker: {"combined_rank":..., "roc_rank":..., "ey_rank":...,
                             "vc2_score":..., "total_score":..., "piotroski_score":...}}
-    Tickers zonder gekende rij in `selecties` zitten niet in het resultaat
-    (-> alle 6 velden blijven NULL bij het wegschrijven).
+    Een ticker zit enkel in het resultaat als minstens 1 van de 6 velden
+    ooit een niet-NULL waarde had; de overige velden staan dan op None.
+    Tickers zonder enige gekende waarde zitten niet in het resultaat (->
+    alle 6 velden blijven NULL bij het wegschrijven).
     """
     if not tickers:
         return {}
@@ -187,28 +219,26 @@ def haal_laatste_rank_scores(tickers: list) -> dict:
     resultaat = {}
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT DISTINCT ON (ticker)
-                    ticker, combined_rank, roc_rank, ey_rank, vc2_score,
-                    total_score, piotroski_score
-                FROM selecties
-                WHERE ticker = ANY(%s)
-                ORDER BY ticker, datum DESC
-                """,
-                (list(tickers),),
-            )
-            for row in cur.fetchall():
-                resultaat[row[0]] = {
-                    "combined_rank": row[1],
-                    "roc_rank": row[2],
-                    "ey_rank": row[3],
-                    "vc2_score": row[4],
-                    "total_score": row[5],
-                    "piotroski_score": row[6],
-                }
-    except Exception as exc:
-        logger.error("weekly_db.haal_laatste_rank_scores: query mislukt: %s", exc)
+            for kolom in _RANK_KOLOMMEN:
+                try:
+                    cur.execute(
+                        f"""
+                        SELECT DISTINCT ON (ticker) ticker, {kolom}
+                        FROM selecties
+                        WHERE ticker = ANY(%s) AND {kolom} IS NOT NULL
+                        ORDER BY ticker, datum DESC
+                        """,
+                        (list(tickers),),
+                    )
+                    for ticker, waarde in cur.fetchall():
+                        resultaat.setdefault(
+                            ticker, {k: None for k in _RANK_KOLOMMEN}
+                        )[kolom] = waarde
+                except Exception as exc:
+                    logger.error(
+                        "weekly_db.haal_laatste_rank_scores: query voor kolom %s mislukt: %s",
+                        kolom, exc,
+                    )
     finally:
         conn.close()
     return resultaat
