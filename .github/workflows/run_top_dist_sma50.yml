@@ -1,4 +1,4 @@
-name: "a_top tickers - laagste pct_from_ma50"
+name: "A Top tickers - laagste pct_from_ma50"
 
 # Enkel handmatig te starten -- geen cron. Dit is een opzoektool, geen
 # geautomatiseerd rapport: je bekijkt de output gewoon in de run-log.
@@ -25,12 +25,19 @@ jobs:
           python-version: "3.11"
 
       - name: Installeer dependencies
-        run: pip install pandas psycopg2-binary
+        run: pip install pandas psycopg2-binary requests
 
-      - name: Draai top_dist_sma50.py (enkel print, geen DB-wijzigingen)
+      - name: Draai top_dist_sma50.py (enkel lezen, geen DB-wijzigingen)
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
         run: >
           python a_top_dist_sma50.py
           --dagen ${{ github.event.inputs.dagen }}
           --top ${{ github.event.inputs.top }}
+          --telegram
+          --email
