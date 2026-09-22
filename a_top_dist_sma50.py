@@ -33,11 +33,14 @@ Gebruik:
 
 import argparse
 import os
+import smtplib
 import sys
 from datetime import date, timedelta
+from email.mime.text import MIMEText
 
 import pandas as pd
 import psycopg2
+import requests
 
 
 def _get_connection():
@@ -86,6 +89,84 @@ def haal_recente_strategieen(conn, tickers, dagen: int) -> dict:
     return resultaat
 
 
+def bouw_telegram_bericht(df: pd.DataFrame, strategieen: dict, dagen: int) -> str:
+    regels = [
+        f"*Top {len(df)} tickers -- laagste pct_from_ma50* (laatste {dagen} dagen)",
+        "_Signaal uit analyseer_forward_correlaties.py: rho=-0,159 op 3 weken, "
+        "R2~2,5%. GEEN koopadvies, enkel een filter._",
+        "",
+    ]
+    for _, r in df.iterrows():
+        strat_lijst = ", ".join(strategieen.get(r["ticker"], [])) or "-"
+        regels.append(
+            f"*{r['ticker']}*  ({r['datum']})\n"
+            f"  pct_from_ma50: {r['pct_from_ma50']:+.2f}%  RSI14: {r['rsi14']:.1f}  "
+            f"IBS: {r['ibs']:.2f}  ATR%: {r['atr14_pct']:.2f}\n"
+            f"  strategieën: {strat_lijst}"
+        )
+    return "\n".join(regels)
+
+
+def bouw_html_rapport(df: pd.DataFrame, strategieen: dict, dagen: int) -> str:
+    rijen_html = []
+    for _, r in df.iterrows():
+        strat_lijst = ", ".join(strategieen.get(r["ticker"], [])) or "-"
+        rijen_html.append(
+            f"<tr>"
+            f"<td>{r['ticker']}</td><td>{r['datum']}</td>"
+            f"<td>{r['pct_from_ma50']:+.2f}%</td><td>{r['rsi14']:.1f}</td>"
+            f"<td>{r['ibs']:.2f}</td><td>{r['atr14_pct']:.2f}</td>"
+            f"<td>{strat_lijst}</td>"
+            f"</tr>"
+        )
+    return f"""
+    <html><body style="font-family:Arial,sans-serif;font-size:13px;">
+    <h2>📉 Top {len(df)} tickers — laagste pct_from_ma50 (laatste {dagen} dagen)</h2>
+    <p>Signaal uit <code>analyseer_forward_correlaties.py</code>: rho=-0,159 op een
+    3-wekenhorizon, R²~2,5%. <b>Geen koopadvies</b>, enkel een filter op wie vandaag
+    toevallig het verst onder zijn 50-daags gemiddelde noteert.</p>
+    <table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;">
+    <tr style="background:#ddd;">
+        <th>Ticker</th><th>Datum</th><th>pct_from_ma50</th><th>RSI14</th>
+        <th>IBS</th><th>ATR%</th><th>Recent geselecteerd door</th>
+    </tr>
+    {"".join(rijen_html)}
+    </table>
+    </body></html>
+    """
+
+
+def verstuur_telegram(tekst: str):
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print("Telegram-secrets ontbreken, overslaan.")
+        return
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    max_len = 4000
+    for i in range(0, len(tekst), max_len):
+        chunk = tekst[i:i + max_len]
+        resp = requests.post(url, data={"chat_id": chat_id, "text": chunk, "parse_mode": "Markdown"})
+        if resp.status_code != 200:
+            print(f"waarschuwing: Telegram-verzending mislukt ({resp.status_code}): {resp.text}")
+
+
+def verstuur_email(onderwerp: str, html_body: str):
+    user = os.environ.get("EMAIL_USER")
+    wachtwoord = os.environ.get("EMAIL_PASS")
+    ontvanger = os.environ.get("EMAIL_RECEIVER")
+    if not user or not wachtwoord or not ontvanger:
+        print("Email-secrets ontbreken, overslaan.")
+        return
+    msg = MIMEText(html_body, "html", "utf-8")
+    msg["Subject"] = onderwerp
+    msg["From"] = user
+    msg["To"] = ontvanger
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(user, wachtwoord)
+        server.sendmail(user, [ontvanger], msg.as_string())
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Toont de tickers met de laagste pct_from_ma50 uit generieke_technicals "
@@ -96,6 +177,8 @@ def main():
                         help="Hoe recent de technicals-meting moet zijn (default 15)")
     parser.add_argument("--top", type=int, default=10, help="Aantal tickers om te tonen (default 10)")
     parser.add_argument("--csv", help="Optioneel: schrijf het resultaat weg naar dit csv-pad")
+    parser.add_argument("--telegram", action="store_true", help="Stuur beknopte samenvatting via Telegram")
+    parser.add_argument("--email", action="store_true", help="Stuur volledig rapport via e-mail")
     args = parser.parse_args()
 
     conn = _get_connection()
@@ -127,6 +210,17 @@ def main():
     if args.csv:
         df.to_csv(args.csv, index=False)
         print(f"\nWeggeschreven naar {args.csv}")
+
+    if args.telegram:
+        verstuur_telegram(bouw_telegram_bericht(df, strategieen, args.dagen))
+        print("Bericht verstuurd via Telegram.")
+
+    if args.email:
+        verstuur_email(
+            f"Top {len(df)} tickers — laagste pct_from_ma50 ({args.dagen} dagen)",
+            bouw_html_rapport(df, strategieen, args.dagen),
+        )
+        print("Rapport verstuurd via e-mail.")
 
 
 if __name__ == "__main__":
