@@ -1,5 +1,5 @@
 """
-top_dist_sma50.py
+a_top_dist_sma50.py
 ===================
 Ad hoc, read-only scriptje: toont de tickers met de laagste (meest
 negatieve) `pct_from_ma50` uit `generieke_technicals`, gemeten binnen de
