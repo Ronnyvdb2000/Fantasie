@@ -1,5 +1,5 @@
 """
-a_top_dist_sma50.py
+top_dist_sma50.py
 ===================
 Ad hoc, read-only scriptje: toont de tickers met de laagste (meest
 negatieve) `pct_from_ma50` uit `generieke_technicals`, gemeten binnen de
@@ -49,8 +49,14 @@ def _get_connection():
 
 def haal_recente_technicals(conn, dagen: int) -> pd.DataFrame:
     """Per ticker de meest recente rij uit generieke_technicals binnen de
-    laatste `dagen` dagen (DISTINCT ON, nieuwste datum per ticker wint)."""
-    sinds = date.today() - timedelta(days=dagen)
+    laatste `dagen` dagen (DISTINCT ON, nieuwste datum per ticker wint).
+
+    `datum` staat, net als in `selecties`, als ISO-tekst in de databank
+    (geen native date-type) -- vandaar .isoformat() i.p.v. het date-object
+    zelf door te geven. Werkt correct omdat ISO-datumstrings (YYYY-MM-DD)
+    ook lexicografisch correct sorteren/vergelijken.
+    """
+    sinds = (date.today() - timedelta(days=dagen)).isoformat()
     query = """
         SELECT DISTINCT ON (ticker)
             ticker, datum, pct_from_ma50, pct_from_ma200, rsi14, atr14_pct,
