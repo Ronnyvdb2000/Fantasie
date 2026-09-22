@@ -1,0 +1,47 @@
+name: Forward-correlatie-analyse (N weken)
+
+# Wekelijks zaterdagnacht om 2:00 lokale tijd (België). Cron draait in UTC:
+# 00:00 UTC = 2:00 CEST (zomertijd) / 1:00 CET (wintertijd) -- zelfde
+# 1u-verschuiving rond de klokwissel als bij de andere cron-jobs in deze
+# repo, niet DST-gecorrigeerd. Ook handmatig te starten via workflow_dispatch.
+on:
+  schedule:
+    - cron: '0 0 * * 6'
+  workflow_dispatch:
+
+jobs:
+  forward-correlatie-analyse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pandas numpy scipy requests yfinance psycopg2-binary
+
+      - name: Run Forward-correlatie-analyse (horizon 3 weken)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+        run: >
+          python analyseer_forward_correlaties.py
+          --weken 3
+          --csv forward_correlatie_rapport.csv
+          --telegram
+          --email
+
+      - name: Upload volledig rapport als artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forward-correlatie-rapport
+          path: forward_correlatie_rapport.csv
+          if-no-files-found: ignore
