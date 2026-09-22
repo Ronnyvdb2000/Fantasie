@@ -1,0 +1,36 @@
+name: Top tickers - laagste pct_from_ma50
+
+# Enkel handmatig te starten -- geen cron. Dit is een opzoektool, geen
+# geautomatiseerd rapport: je bekijkt de output gewoon in de run-log.
+on:
+  workflow_dispatch:
+    inputs:
+      dagen:
+        description: "Hoe recent de technicals-meting moet zijn (dagen)"
+        required: false
+        default: "15"
+      top:
+        description: "Aantal tickers om te tonen"
+        required: false
+        default: "10"
+
+jobs:
+  top-dist-sma50:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installeer dependencies
+        run: pip install pandas psycopg2-binary
+
+      - name: Draai top_dist_sma50.py (enkel print, geen DB-wijzigingen)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: >
+          python top_dist_sma50.py
+          --dagen ${{ github.event.inputs.dagen }}
+          --top ${{ github.event.inputs.top }}
