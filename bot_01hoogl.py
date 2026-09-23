@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_01hoogl.py  —  GARP ONDERWAARDERING SELECTIE ENGINE v2.0
+bot_01hoogl.py  —  GARP ONDERWAARDERING SELECTIE ENGINE v2.1
 
 Screent op "Growth At a Reasonable Price", geïnspireerd op de
 selectiecriteria uit de TopAandelen.com-rapporten (Jack Hoogland):
@@ -41,6 +41,28 @@ verwachte_winstgroei_pct) zijn toegevoegd aan db_logger.py's
 _KOLOM_WHITELIST — vereist de bijhorende ALTER TABLE-migratie op
 Supabase, zie migratie_hoogl_kolommen.sql.
 
+Wijziging (2026-09-22): adaptieve rate-limit-backoff toegevoegd n.a.v. de
+full-scan-run van 2026-09-22, waar Yahoo vanaf beurs 044 (Spanje/Portugal)
+op VRIJWEL ELKE resterende ticker "Too Many Requests" teruggaf -- 16 van
+de 19 beurzen leverden daardoor 0 geanalyseerde tickers op, zonder dat de
+run zelf crashte of dat zichtbaar was in de eindstatus ("Klaar."). Er was
+geen enkele backoff-logica: de bot bleef in exact hetzelfde tempo
+doorbeuken tegen de rate limit voor de volledige resterende looptijd
+(~27 minuten, ~13.150 tickers, allemaal zinloos).
+
+Nieuwe aanpak: analyse_ticker() herkent een rate-limit-fout specifiek
+(tekst "Too Many Requests"/"Rate limited" in de exception) en meldt dit
+terug aan run_engine() via een tweede returnwaarde. run_engine() houdt
+een lopende teller van OPEENVOLGENDE rate-limit-fouten bij over de HELE
+run (niet per beurs -- de vorige run toonde dat de blokkade beursgrenzen
+overschrijdt). Bij het bereiken van RATE_LIMIT_CONSECUTIVE_DREMPEL wordt
+er RATE_LIMIT_PAUZE_SEC gepauzeerd en de doorlopende throttle blijvend
+opgehoogd, tot een maximum van RATE_LIMIT_MAX_PAUZES pauzes; wordt dat
+budget overschreden, dan stopt de run bewust vroegtijdig (i.p.v. de
+resterende duizenden tickers zinloos te blijven proberen tot de GH
+Actions-timeout van 300 minuten) en wordt dat expliciet gemeld in
+Telegram/e-mail zodat het niet stilzwijgend verborgen blijft.
+
 Gebruik:
   python bot_01hoogl.py live      # dagelijks rapport (x-lijsten)
   python bot_01hoogl.py full      # wekelijks full-scan rapport (a-lijsten, strenger)
@@ -54,11 +76,11 @@ import math
 import warnings
 import datetime as dt
 import time
-import smtplib
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import smtplib
 
 import yfinance as yf
 import requests
@@ -81,6 +103,12 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 EMAIL_USER       = os.getenv("EMAIL_USER", "")
 EMAIL_PASS       = os.getenv("EMAIL_PASS", "")
 EMAIL_RECEIVER   = os.getenv("EMAIL_RECEIVER", "")
+
+# Rate-limit-backoff (zie moduledocstring, 2026-09-22).
+RATE_LIMIT_CONSECUTIVE_DREMPEL = 5      # na zoveel opeenvolgende rate-limit-fouten: pauzeren
+RATE_LIMIT_PAUZE_SEC           = 300    # 5 minuten pauze bij het bereiken van de drempel
+RATE_LIMIT_MAX_PAUZES          = 6      # max. aantal pauzes per run (budget: 6x5min = 30min)
+RATE_LIMIT_THROTTLE_VERHOGING  = 0.5    # throttle_sec blijvend verhogen na elke pauze
 
 # Beursnamen per nummer (suffix-onafhankelijk: x of a wordt los toegevoegd)
 BEURS_NAMEN = {
@@ -169,6 +197,13 @@ def load_tickers_from_file(path: str) -> List[str]:
             result.append(t)
     return sorted(list(set(result)))
 
+def is_rate_limit_fout(e: Exception) -> bool:
+    """Herkent Yahoo's rate-limit-fout specifiek, om te onderscheiden van
+    andere fouten (delisted ticker, ontbrekende data, netwerkfout, ...) die
+    niet in de opeenvolgende-rate-limit-teller mogen meetellen."""
+    tekst = str(e)
+    return "Too Many Requests" in tekst or "Rate limited" in tekst
+
 def send_telegram_message(text: str) -> None:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print(text)
@@ -229,14 +264,18 @@ class HooglSignaal:
     marktkap_label:           str
     analisten_label:          str
 
-def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
+def analyse_ticker(ticker: str, cfg: dict) -> Tuple[Optional[HooglSignaal], bool]:
+    """Retourneert (signaal, was_rate_limited). signaal is None bij elke
+    fout of als de ticker geen bruikbare koers heeft; was_rate_limited is
+    enkel True bij een specifiek herkende Yahoo-rate-limit-fout, zodat de
+    caller dat apart kan tellen voor de backoff-logica."""
     try:
         tk   = yf.Ticker(ticker)
         info = tk.info or {}
 
         price = safe_float(info.get("currentPrice") or info.get("regularMarketPrice"))
         if math.isnan(price) or price <= 0:
-            return None
+            return None, False
 
         boekwaarde   = safe_float(info.get("bookValue"))
         winst_nu     = safe_float(info.get("trailingEps"))
@@ -309,7 +348,7 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
             analisten_count = float("nan")
             analisten_label = "✗ coverage onbekend"
 
-        return HooglSignaal(
+        signaal = HooglSignaal(
             ticker=ticker, price=round(price, 2), score=score,
             roe_pct=round(roe_pct, 1) if not math.isnan(roe_pct) else 0.0,
             terugverdienperiode=round(terugverdienperiode, 1) if not math.isnan(terugverdienperiode) else 0.0,
@@ -322,9 +361,15 @@ def analyse_ticker(ticker: str, cfg: dict) -> Optional[HooglSignaal]:
             fwd_pe_label=fwd_pe_label, groei_label=groei_label,
             marktkap_label=marktkap_label, analisten_label=analisten_label,
         )
+        return signaal, False
     except Exception as e:
+        if is_rate_limit_fout(e):
+            # Geen eigen print hier -- run_engine() logt dit gebundeld via
+            # de opeenvolgende-teller, om de log niet vol te spammen met
+            # duizenden identieke regels zoals in de 2026-09-22-run.
+            return None, True
         print(f"[WARN] {ticker}: fout — {e}")
-        return None
+        return None, False
 
 
 # ============================================================
@@ -406,17 +451,58 @@ def run_engine(modus: str):
 
     email_delen: List[str] = []
 
+    # Rate-limit-backoff-status: loopt over de HELE run, niet per beurs --
+    # de run van 2026-09-22 toonde dat een Yahoo-blokkade beursgrenzen
+    # overschrijdt en niet vanzelf herstelt binnen dezelfde sessie.
+    opeenvolgende_rate_limits = 0
+    aantal_pauzes = 0
+    huidige_throttle = cfg["throttle_sec"]
+    totaal_rate_limit_fouten = 0
+    vroegtijdig_gestopt = False
+
     for ex_name, tlist in exchange_tickers.items():
+        if vroegtijdig_gestopt:
+            break
+
         print(f"\nAnalyseren: {ex_name} ({len(tlist)} tickers)...")
 
         alle: List[HooglSignaal] = []
         for ticker in tlist:
-            sig = analyse_ticker(ticker, cfg)
+            sig, was_rate_limited = analyse_ticker(ticker, cfg)
+
+            if was_rate_limited:
+                opeenvolgende_rate_limits += 1
+                totaal_rate_limit_fouten += 1
+            else:
+                opeenvolgende_rate_limits = 0
+
             if sig is not None:
                 alle.append(sig)
                 if sig.score >= cfg["min_score"]:
-                    print(f"  ✓ {ticker}: score {sig.score}/4 | RoE={sig.roe_pct:.1f}%")
-            time.sleep(cfg["throttle_sec"])  # lichte throttle tegen Yahoo rate-limits
+                    print(f"  ✓ {ticker}: score {sig.score}/6 | RoE={sig.roe_pct:.1f}%")
+
+            if opeenvolgende_rate_limits >= RATE_LIMIT_CONSECUTIVE_DREMPEL:
+                if aantal_pauzes >= RATE_LIMIT_MAX_PAUZES:
+                    print(
+                        f"[RATE LIMIT] Pauzebudget ({RATE_LIMIT_MAX_PAUZES}x{RATE_LIMIT_PAUZE_SEC}s) "
+                        f"uitgeput na {totaal_rate_limit_fouten} rate-limit-fouten in totaal -- "
+                        f"run wordt bewust vroegtijdig gestopt i.p.v. de resterende tickers "
+                        f"zinloos te blijven proberen."
+                    )
+                    vroegtijdig_gestopt = True
+                    break
+                aantal_pauzes += 1
+                huidige_throttle += RATE_LIMIT_THROTTLE_VERHOGING
+                print(
+                    f"[RATE LIMIT] {opeenvolgende_rate_limits} opeenvolgende rate-limit-fouten "
+                    f"(bij {ex_name}, ticker {ticker}) -- pauze {RATE_LIMIT_PAUZE_SEC}s "
+                    f"(pauze {aantal_pauzes}/{RATE_LIMIT_MAX_PAUZES}), throttle blijvend "
+                    f"verhoogd naar {huidige_throttle:.2f}s"
+                )
+                time.sleep(RATE_LIMIT_PAUZE_SEC)
+                opeenvolgende_rate_limits = 0
+
+            time.sleep(huidige_throttle)
 
         kandidaten = [s for s in alle if s.score >= cfg["min_score"]]
         kandidaten.sort(key=lambda s: (s.score, -s.terugverdienperiode), reverse=True)
@@ -453,6 +539,19 @@ def run_engine(modus: str):
         else:
             print(f"  → Overgeslagen: {ex_name}")
 
+    if vroegtijdig_gestopt:
+        waarschuwing = (
+            f"⚠️ *{cfg['label']}*: run vroegtijdig gestopt wegens aanhoudende Yahoo-rate-limiting "
+            f"({totaal_rate_limit_fouten} fouten in totaal, pauzebudget van "
+            f"{RATE_LIMIT_MAX_PAUZES}x{RATE_LIMIT_PAUZE_SEC}s uitgeput). Niet alle beurzen "
+            f"zijn (volledig) gescand deze run."
+        )
+        send_telegram_message(waarschuwing)
+        email_delen.append(waarschuwing)
+    elif totaal_rate_limit_fouten:
+        print(f"\n[INFO] {totaal_rate_limit_fouten} rate-limit-fouten opgevangen tijdens deze run "
+              f"({aantal_pauzes} pauze(s) van {RATE_LIMIT_PAUZE_SEC}s), run toch volledig doorlopen.")
+
     if email_delen:
         send_email(
             f"{cfg['label']} {today_str()}",
@@ -460,7 +559,7 @@ def run_engine(modus: str):
         )
 
     print(f"\n{'='*60}")
-    print("Klaar.")
+    print("Klaar." if not vroegtijdig_gestopt else "Vroegtijdig gestopt (rate limiting).")
 
 
 def run_backtest():
