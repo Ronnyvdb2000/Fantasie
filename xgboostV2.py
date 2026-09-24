@@ -1,4 +1,4 @@
-import os
+9import os
 import joblib
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -18,7 +18,7 @@ def get_training_data_from_supabase():
 
 
 def train_xgboost2():
-  print("Geoptimaliseerde dataset ophalen uit Supabase voor xgboost2...")
+  print("Geoptimaliseerde dataset ophalen uit Supabase voor xgboostV2...")
   df = get_training_data_from_supabase()
 
   if df.empty or "is_profitable" not in df.columns:
@@ -55,7 +55,7 @@ def train_xgboost2():
   )
 
   print(
-      f"Start training van xgboost2 op {len(X_train)} records met features:"
+      f"Start training van xgboostV2 op {len(X_train)} records met features:"
       f" {features}..."
   )
 
@@ -73,11 +73,11 @@ def train_xgboost2():
 
   # Evalueer de nauwkeurigheid op de testset
   score = model.score(X_test, y_test)
-  print(f"Model xgboost2 succesvol getraind! Test-accuratesse: {score * 100:.2f}%")
+  print(f"Model xgboostV2 succesvol getraind! Test-accuratesse: {score * 100:.2f}%")
 
   # Sla het getrainde model op
-  joblib.dump(model, "xgboost2_model.pkl")
-  print("Getraind model opgeslagen als xgboost2_model.pkl")
+  joblib.dump(model, "xgboostV2_model.pkl")
+  print("Getraind model opgeslagen als xgboostV2_model.pkl")
 
 
 if __name__ == "__main__":
