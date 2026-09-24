@@ -29,7 +29,7 @@ jobs:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       run: |
-        python xgboost2.py
+        python xgboostV2.py
 
     - name: Commit en push het nieuwe model naar de repo
       run: |
