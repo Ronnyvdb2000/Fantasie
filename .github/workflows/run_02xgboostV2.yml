@@ -23,13 +23,13 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install xgboost pandas scikit-learn joblib psycopg2-binary
-        
+    
     - name: Start training script
       env:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       run: |
         python xgboostV2.py
-        
+      
     - name: Commit en push het nieuwe model naar de repo
       run: |
         git config --global user.name 'GitHub Actions Bot'
