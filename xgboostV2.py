@@ -1,19 +1,22 @@
 import os
 import joblib
 import pandas as pd
+import psycopg2
 from sklearn.model_selection import train_test_split
-from supabase import create_client
 import xgboost as xgb
 
 
 def get_training_data_from_supabase():
-  url = os.environ.get("SUPABASE_URL")
-  key = os.environ.get("SUPABASE_KEY")
-  supabase = create_client(url, key)
+  db_url = os.environ.get("SUPABASE_DB_URL")
+  if not db_url:
+    raise RuntimeError("SUPABASE_DB_URL ontbreekt in de omgeving.")
 
-  # Haal alle evaluatielogs op uit de database
-  response = supabase.table("evaluation_logs").select("*").execute()
-  df = pd.DataFrame(response.data)
+  conn = psycopg2.connect(db_url)
+  try:
+    df = pd.read_sql("SELECT * FROM evaluation_logs;", conn)
+  finally:
+    conn.close()
+
   return df
 
 
