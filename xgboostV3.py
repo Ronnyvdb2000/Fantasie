@@ -6,6 +6,51 @@ from sklearn.model_selection import train_test_split
 import xgboost as xgb
 
 
+HORIZONS = ["10d", "30d", "60d"]
+
+FEATURE_COLUMNS = [
+    "atr14",
+    "atr14_pct",
+    "rsi14",
+    "ibs",
+    "ma50",
+    "ma200",
+    "pct_from_ma50",
+    "pct_from_ma200",
+    "vol_ratio_20d",
+    "high52w",
+    "pct_from_high52w",
+]
+
+JOIN_QUERY = """
+WITH fr_dedup AS (
+    SELECT DISTINCT ON (ticker, datum)
+        ticker, datum, fwd_ret_10d, fwd_ret_30d, fwd_ret_60d
+    FROM forward_returns
+    ORDER BY ticker, datum
+)
+SELECT
+    gt.ticker,
+    gt.datum,
+    gt.atr14,
+    gt.atr14_pct,
+    gt.rsi14,
+    gt.ibs,
+    gt.ma50,
+    gt.ma200,
+    gt.pct_from_ma50,
+    gt.pct_from_ma200,
+    gt.vol_ratio_20d,
+    gt.high52w,
+    gt.pct_from_high52w,
+    fr_dedup.fwd_ret_10d,
+    fr_dedup.fwd_ret_30d,
+    fr_dedup.fwd_ret_60d
+FROM generieke_technicals gt
+JOIN fr_dedup ON fr_dedup.ticker = gt.ticker AND fr_dedup.datum = gt.datum;
+"""
+
+
 def get_training_data_from_supabase():
   db_url = os.environ.get("SUPABASE_DB_URL")
   if not db_url:
@@ -13,86 +58,41 @@ def get_training_data_from_supabase():
 
   conn = psycopg2.connect(db_url)
   try:
-    # Haal alle data op uit de tabel 'selecties'
-    df = pd.read_sql("SELECT * FROM selecties;", conn)
+    df = pd.read_sql(JOIN_QUERY, conn)
   finally:
     conn.close()
 
   return df
 
 
-def train_xgboost2():
-  print("Dataset ophalen uit Supabase (tabel: selecties)...")
-  df = get_training_data_from_supabase()
-
-  if df.empty:
-    print("De tabel 'selecties' is leeg.")
-    return
-
-  # Kies hier je gewenste horizon/target kolom, bijv. 'ret_20d' of 'ret_60d'
-  # We maken hier een binaire target van: 1 als rendement > 0, anders 0
-  target_column = (
-      "ret_20d"  # Pas dit aan naar bijv. 'ret_60d' als je langer wilt meten
-  )
+def train_voor_horizon(df: pd.DataFrame, horizon: str) -> None:
+  target_column = f"fwd_ret_{horizon}"
 
   if target_column not in df.columns:
-    print(f"Doelkolom '{target_column}' ontbreekt in de tabel.")
+    print(f"[{horizon}] Doelkolom '{target_column}' ontbreekt in de gejoinde dataset.")
     return
 
-  # Maak de target-kolom (is het rendement positief?)
-  df["is_profitable"] = (df[target_column] > 0).astype(int)
+  df_horizon = df.copy()
+  df_horizon["is_profitable"] = (df_horizon[target_column] > 0).astype(int)
 
-  # Selecteer automatisch alle bruikbare numerieke kolommen als features,
-  # behalve de target zelf, ID's of datums.
-  exclude_cols = [
-      "id",
-      "datum",
-      "created_at",
-      "ticker",
-      "strategie",
-      "beurs",
-      "grafiek",
-      "parameters",
-      "sector",
-      "rsi_label",
-      "macd_label",
-      "is_profitable",
-      "ret_5d",
-      "ret_20d",
-      "ret_60d",
-  ]
-
-  features = [
-      col
-      for col in df.select_dtypes(
-          include=["number", "boolean"]
-      ).columns  # type: ignore[attr-defined]
-      if col not in exclude_cols
-  ]
-
-  print(f"Aantal geselecteerde features voor training: {len(features)}")
-
-  # Filter rijen waar essentiële data ontbreekt
-  df_clean = df.dropna(subset=features + ["is_profitable"])
+  df_clean = df_horizon.dropna(subset=FEATURE_COLUMNS + [target_column])
 
   if len(df_clean) < 30:
     print(
-        f"Nog niet genoeg data met ingevulde features (minimaal 30 vereist, nu"
-        f" {len(df_clean)})."
+        f"[{horizon}] Nog niet genoeg data met ingevulde features (minimaal 30"
+        f" vereist, nu {len(df_clean)})."
     )
     return
 
-  X = df_clean[features]
+  X = df_clean[FEATURE_COLUMNS]
   y = df_clean["is_profitable"]
 
-  # Train-test split (80% trainen, 20% testen)
   X_train, X_test, y_train, y_test = train_test_split(
       X, y, test_size=0.2, random_state=42
   )
 
-  print(f"Start training van xgboostV2 op {len(X_train)} records...")
+  print(f"[{horizon}] Start training op {len(X_train)} records...")
 
-  # XGBoost Classifier geoptimaliseerd voor financiële data
   model = xgb.XGBClassifier(
       n_estimators=150,
       learning_rate=0.03,
@@ -104,14 +104,30 @@ def train_xgboost2():
 
   model.fit(X_train, y_train)
 
-  # Evalueer de nauwkeurigheid op de testset
   score = model.score(X_test, y_test)
-  print(f"Model xgboostV2 succesvol getraind! Test-accuratesse: {score * 100:.2f}%")
+  print(f"[{horizon}] Model succesvol getraind! Test-accuratesse: {score * 100:.2f}%")
 
-  # Sla het getrainde model op
-  joblib.dump(model, "xgboostV2_model.pkl")
-  print("Getraind model opgeslagen als xgboostV2_model.pkl")
+  bestandsnaam = f"xgboostV3_{horizon}_model.pkl"
+  joblib.dump(model, bestandsnaam)
+  print(f"[{horizon}] Getraind model opgeslagen als {bestandsnaam}")
+
+
+def train_xgboost3():
+  print(
+      "Dataset ophalen uit Supabase (generieke_technicals + forward_returns,"
+      " join op ticker+datum, horizons: " + ", ".join(HORIZONS) + ")..."
+  )
+  df = get_training_data_from_supabase()
+
+  if df.empty:
+    print("Geen gejoinde rijen tussen generieke_technicals en forward_returns.")
+    return
+
+  print(f"Aantal geselecteerde features per model: {len(FEATURE_COLUMNS)}")
+
+  for horizon in HORIZONS:
+    train_voor_horizon(df, horizon)
 
 
 if __name__ == "__main__":
-  train_xgboost2()
+  train_xgboost3()
