@@ -1,4 +1,4 @@
-name: "XGBoostV2 Model Retraining"
+name: "XGBoostV3 Model Retraining"
 
 on:
   schedule:
@@ -28,12 +28,12 @@ jobs:
       env:
         SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       run: |
-        python xgboostV2.py
+        python xgboostV3.py
         
     - name: Commit en push het nieuwe model naar de repo
       run: |
         git config --global user.name 'GitHub Actions Bot'
         git config --global user.email 'actions@github.com'
-        git add xgboostV2_model.pkl
-        git commit -m "Auto-update: xgboostV2 model hertraind op actuele data" || echo "Geen wijzigingen om te committeren"
+        git add xgboostV3_model.pkl
+        git commit -m "Auto-update: xgboostV3 model hertraind op actuele data" || echo "Geen wijzigingen om te committeren"
         git push
