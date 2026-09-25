@@ -1,4 +1,4 @@
-name: XGBoost2 Model Retraining
+name: "XGBoostV2 Model Retraining"
 
 on:
   schedule:
@@ -35,6 +35,6 @@ jobs:
       run: |
         git config --global user.name 'GitHub Actions Bot'
         git config --global user.email 'actions@github.com'
-        git add xgboost2_model.pkl
-        git commit -m "Auto-update: xgboost2 model hertraind op actuele data" || echo "Geen wijzigingen om te committeren"
+        git add xgboostV2_model.pkl
+        git commit -m "Auto-update: xgboostV2 model hertraind op actuele data" || echo "Geen wijzigingen om te committeren"
         git push
