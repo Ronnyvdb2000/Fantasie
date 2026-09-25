@@ -1,0 +1,39 @@
+name: "XGBoostV2 Model Retraining"
+
+on:
+  schedule:
+    - cron: '0 2 * * 0' # Draait elke zondag om 02:00 uur 's nachts
+  workflow_dispatch: # Maakt het ook mogelijk om de bot handmatig te starten vanuit GitHub
+
+jobs:
+  train-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Uitpakken repository code
+      uses: actions/checkout@v4
+
+    - name: Python instellen
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+
+    - name: Benodigde pakketten installeren
+      run: |
+        python -m pip install --upgrade pip
+        pip install xgboost pandas scikit-learn joblib psycopg2-binary
+        
+    - name: Start training script
+      env:
+        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: |
+        python xgboostV2.py
+        
+    - name: Commit en push het nieuwe model naar de repo
+      run: |
+        git config --global user.name 'GitHub Actions Bot'
+        git config --global user.email 'actions@github.com'
+        git add xgboostV2_model.pkl
+        git commit -m "Auto-update: xgboostV2 model hertraind op actuele data" || echo "Geen wijzigingen om te committeren"
+        git push
