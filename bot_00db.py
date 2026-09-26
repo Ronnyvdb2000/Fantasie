@@ -132,7 +132,7 @@ DB_CFG = {
     "ma_mid":                150,
     "ma_slow":               200,
     "atr_period":            14,
-    "min_score":             4,
+    "min_score":             5,
     "lookback_days":         150,
 }
 
