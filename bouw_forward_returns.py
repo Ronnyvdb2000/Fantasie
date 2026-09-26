@@ -115,7 +115,7 @@ def haal_openstaande_rijen(conn) -> List[dict]:
           ON s.ticker = f.ticker AND s.datum = f.datum AND s.strategie = f.strategie
         WHERE s.datum <= %s
           AND s.koers IS NOT NULL
-          AND s.ticker NOT LIKE '%/%'
+          AND s.ticker NOT LIKE '%%/%%'
           AND (f.ticker IS NULL OR f.{kolom_max} IS NULL)
         ORDER BY s.ticker, s.datum;
     """
