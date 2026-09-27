@@ -2,12 +2,14 @@ name: XGBoostV3 Model Retraining
 
 on:
   schedule:
-    - cron: '0 3 * * 0'  # wekelijks zondag 03:00 UTC — pas aan naar je bestaande schema indien anders
+    - cron: '0 3 * * 0'  # pas aan naar je bestaande schema indien anders
   workflow_dispatch:
 
 jobs:
   train-and-update:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     - name: Uitpakken repository code
