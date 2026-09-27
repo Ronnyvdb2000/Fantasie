@@ -1,5 +1,5 @@
 # MASTERLIJST 045 — Londen
-# Laatste update: 20/09/2026
+# Laatste update: 27/09/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
@@ -82,7 +82,6 @@ VLX.L            | opname:2026-08-11 | ROE:16.4% | Debt:45.7 | Marge:5.3% | Vol:
 WEIR.L           | opname:2026-05-04 | ROE:13.9% | Debt:91.1 | Marge:10.0% | Vol:30.6% | Omzet:2,841,872,981 | actief
 WOSG.L           | opname:2026-05-08 | ROE:16.9% | Debt:87.2 | Marge:5.4% | Vol:38.7% | Omzet:408,208,297 | actief
 YOU.L            | opname:2026-08-16 | ROE:6.9% | Debt:112.4 | Marge:3.1% | Vol:45.0% | Omzet:177,106,473 | actief
-ZTF.L            | opname:2026-08-11 | ROE:19.0% | Debt:44.9 | Marge:13.9% | Vol:38.8% | Omzet:55,313,695 | actief
 AMS.L            | opname:2026-08-16 | ROE:1.5% | Debt:33.4 | Marge:1.6% | Vol:39.3% | Omzet:452,977,715 | zwakker | weken_buiten:1
 ANP.L            | opname:2026-08-11 | ROE:17.5% | Debt:59.8 | Marge:14.5% | Vol:34.3% | Omzet:18,914,207 | zwakker | weken_buiten:2
 BCG.L            | opname:2026-05-04 | ROE:15.8% | Debt:24.8 | Marge:57.6% | Vol:110.7% | Omzet:461,219,769 | zwakker | weken_buiten:2
@@ -99,6 +98,7 @@ JUP.L            | opname:2026-05-04 | ROE:12.0% | Debt:4.8 | Marge:21.2% | Vol:
 MSLH.L           | opname:2026-08-23 | ROE:3.1% | Debt:27.1 | Marge:3.3% | Vol:36.6% | Omzet:207,371,866 | zwakker | weken_buiten:2
 PGH.L            | opname:2026-08-11 | ROE:23.0% | Debt:9999.0 | Marge:16.1% | Vol:32.2% | Omzet:21,734,452 | zwakker | weken_buiten:1
 RS1.L            | opname:2026-05-08 | ROE:11.7% | Debt:35.0 | Marge:5.6% | Vol:30.0% | Omzet:949,153,545 | zwakker | weken_buiten:1
+ZTF.L            | opname:2026-08-11 | ROE:19.0% | Debt:44.9 | Marge:13.9% | Vol:38.2% | Omzet:55,276,329 | zwakker | weken_buiten:1
 AAIF.L           | opname:2026-05-08 | ROE:41.8% | Debt:8.0 | Marge:94.5% | Vol:21.7% | Omzet:97,072,783 | verwijderd | verwijderd:2026-09-13
 ABDN.L           | opname:2026-05-08 | ROE:7.6% | Debt:10.8 | Marge:28.1% | Vol:29.3% | Omzet:966,259,011 | verwijderd | verwijderd:2026-09-13
 ABF.L            | opname:2026-05-08 | ROE:8.5% | Debt:32.2 | Marge:4.9% | Vol:25.2% | Omzet:1,910,592,895 | verwijderd | verwijderd:2026-09-13
