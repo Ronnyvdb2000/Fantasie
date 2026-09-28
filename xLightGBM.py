@@ -1,150 +1,128 @@
-# xLightGBM – Optie 1: Volledige versie met Proxy + RapidAPI + CSV fallback
-import os
-import json
-import time
-import requests
 import pandas as pd
 import numpy as np
-import yfinance as yf
-from datetime import datetime
-from tqdm import tqdm
 import lightgbm as lgb
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from tqdm import tqdm
+import requests
+import io
+import datetime
 
-RUN_ID = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-RESULT_DIR = "results"
-os.makedirs(RESULT_DIR, exist_ok=True)
+# -----------------------------------------
+#  SAFE DATA DOWNLOADER (NO CRASHES)
+# -----------------------------------------
 
-TICKERS = ["SPY", "QQQ", "DIA", "IWM", "VIX", "GLD", "TLT", "XLF"]
+def download_ticker(ticker):
+    """
+    Probeert Yahoo CSV → als dat faalt → Stooq → als dat faalt → skip.
+    Retourneert een DataFrame of None.
+    """
 
-# ---------------------------
-# 1. Yahoo Finance Download
-# ---------------------------
-def download_yahoo(ticker):
+    # --- 1) Yahoo CSV fallback (geen JSON, dus geen JSONDecodeError)
+    yahoo_url = f"https://query1.finance.yahoo.com/v7/finance/download/{ticker}?period1=0&period2=9999999999&interval=1d&events=history"
+
     try:
-        df = yf.download(ticker, period="5y", auto_adjust=False)
-        if df is None or df.empty:
-            raise Exception("Empty dataframe")
-        return df
-    except Exception as e:
-        return None
-
-# ---------------------------
-# 2. Proxy Fallback
-# ---------------------------
-def download_proxy(ticker):
-    try:
-        url = f"https://query1.finance.yahoo.com/v7/finance/download/{ticker}"
-        params = {
-            "range": "5y",
-            "interval": "1d",
-            "events": "history"
-        }
-        r = requests.get(url, params=params, timeout=10)
-        if r.status_code != 200:
-            return None
-        df = pd.read_csv(pd.compat.StringIO(r.text))
-        return df
-    except:
-        return None
-
-# ---------------------------
-# 3. RapidAPI Fallback
-# ---------------------------
-def download_rapidapi(ticker):
-    try:
-        url = "https://yahoo-finance15.p.rapidapi.com/api/yahoo/qu/quote/" + ticker
-        headers = {
-            "X-RapidAPI-Key": os.getenv("RAPIDAPI_KEY", ""),
-            "X-RapidAPI-Host": "yahoo-finance15.p.rapidapi.com"
-        }
-        r = requests.get(url, headers=headers, timeout=10)
-        if r.status_code != 200:
-            return None
-        data = r.json()
-        if "body" not in data:
-            return None
-        df = pd.DataFrame(data["body"])
-        return df
-    except:
-        return None
-
-# ---------------------------
-# 4. CSV Backup Fallback
-# ---------------------------
-def download_csv_backup(ticker):
-    path = f"backup/{ticker}.csv"
-    if os.path.exists(path):
-        return pd.read_csv(path)
-    return None
-
-# ---------------------------
-# 5. Unified Download Handler
-# ---------------------------
-def get_data(ticker):
-    print(f"\nDownloading {ticker}...")
-
-    methods = [
-        ("Yahoo", download_yahoo),
-        ("Proxy", download_proxy),
-        ("RapidAPI", download_rapidapi),
-        ("CSV Backup", download_csv_backup)
-    ]
-
-    for name, func in methods:
-        df = func(ticker)
-        if df is not None and not df.empty:
-            print(f"✔ {ticker} via {name}")
+        r = requests.get(yahoo_url, timeout=10)
+        if r.status_code == 200 and len(r.text) > 50:
+            df = pd.read_csv(io.StringIO(r.text))
+            df["Ticker"] = ticker
             return df
+    except Exception:
+        pass
 
-    print(f"✖ FAILED: {ticker}")
+    # --- 2) Stooq fallback
+    stooq_url = f"https://stooq.com/q/d/l/?s={ticker.lower()}.us&i=d"
+
+    try:
+        r = requests.get(stooq_url, timeout=10)
+        if r.status_code == 200 and len(r.text) > 50:
+            df = pd.read_csv(io.StringIO(r.text))
+            df["Ticker"] = ticker
+            return df
+    except Exception:
+        pass
+
+    print(f"⚠ Ticker overgeslagen: {ticker}")
     return None
 
-# ---------------------------
-# MAIN
-# ---------------------------
-print("\nStart xLightGBM run")
-print("RUN_ID:", RUN_ID)
-print("Download data:\n")
 
-all_data = {}
+# -----------------------------------------
+#  LOAD ALL TICKERS
+# -----------------------------------------
 
-for ticker in tqdm(TICKERS):
-    df = get_data(ticker)
-    if df is None:
-        print(f"Ticker {ticker} FAILED completely.")
-    else:
-        all_data[ticker] = df
-        df.to_csv(f"{RESULT_DIR}/{ticker}_{RUN_ID}.csv")
+TICKERS = ["SPY", "QQQ", "DIA", "IWM", "AAPL", "MSFT", "NVDA", "META"]
 
-print("\nDownload complete.\n")
+def load_all_data():
+    all_data = []
 
-# ---------------------------
-# MODEL (simple example)
-# ---------------------------
-if "SPY" not in all_data:
-    print("SPY missing → model cannot run.")
-    exit(0)
+    print("\nDownload data:\n")
+    for t in tqdm(TICKERS):
+        df = download_ticker(t)
+        if df is not None:
+            all_data.append(df)
 
-df = all_data["SPY"].copy()
-df["Return"] = df["Close"].pct_change()
-df["Target"] = (df["Return"] > 0).astype(int)
-df = df.dropna()
+    if len(all_data) == 0:
+        raise Exception("Geen enkele ticker kon worden gedownload.")
 
-X = df[["Open", "High", "Low", "Close", "Volume"]]
-y = df["Target"]
+    return pd.concat(all_data, ignore_index=True)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-model = lgb.LGBMClassifier()
-model.fit(X_train, y_train)
+# -----------------------------------------
+#  FEATURE ENGINEERING
+# -----------------------------------------
 
-pred = model.predict(X_test)
-acc = accuracy_score(y_test, pred)
+def add_features(df):
+    df["Return"] = df["Close"].pct_change()
+    df["MA10"] = df["Close"].rolling(10).mean()
+    df["MA50"] = df["Close"].rolling(50).mean()
+    df["Volatility"] = df["Return"].rolling(20).std()
+    df["Target"] = (df["Return"].shift(-1) > 0).astype(int)
+    df = df.dropna()
+    return df
 
-with open(f"{RESULT_DIR}/model_result_{RUN_ID}.txt", "w") as f:
-    f.write(f"Accuracy: {acc}\n")
 
-print(f"Model accuracy: {acc}")
-print("Done.")
+# -----------------------------------------
+#  TRAIN MODEL
+# -----------------------------------------
+
+def train_model(df):
+    features = ["Close", "MA10", "MA50", "Volatility"]
+    X = df[features]
+    y = df["Target"]
+
+    model = lgb.LGBMClassifier(
+        n_estimators=300,
+        learning_rate=0.05,
+        max_depth=-1,
+        num_leaves=31
+    )
+
+    model.fit(X, y)
+    return model
+
+
+# -----------------------------------------
+#  MAIN
+# -----------------------------------------
+
+def main():
+    print("\nStart xLightGBM run")
+    run_id = "run_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    print("RUN_ID:", run_id)
+
+    df = load_all_data()
+    df = add_features(df)
+
+    model = train_model(df)
+
+    # Save output
+    out_file = f"results/{run_id}_summary.txt"
+    with open(out_file, "w") as f:
+        f.write("Model training completed.\n")
+        f.write(f"Rows used: {len(df)}\n")
+        f.write(f"Tickers used: {df['Ticker'].nunique()}\n")
+
+    print("\n✔ Run voltooid zonder blokkades.")
+    print("✔ Resultaten opgeslagen in:", out_file)
+
+
+if __name__ == "__main__":
+    main()
