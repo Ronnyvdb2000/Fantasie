@@ -30,7 +30,6 @@ def train_xgboost2():
     )
     return
 
-  # De slimme parameters (features) die zorgen voor de beste filtering
   features = [
       "win_rate_historical",
       "average_return_historical",
@@ -39,7 +38,6 @@ def train_xgboost2():
       "market_volatility",
   ]
 
-  # Filter rijen waar essentiële data ontbreekt
   df_clean = df.dropna(subset=features + ["is_profitable"])
 
   if len(df_clean) < 50:
@@ -50,9 +48,8 @@ def train_xgboost2():
     return
 
   X = df_clean[features]
-  y = df_clean["is_profitable"]  # 1 = succesvol rendement, 0 = afvaller
+  y = df_clean["is_profitable"]
 
-  # Train-test split (80% trainen, 20% testen)
   X_train, X_test, y_train, y_test = train_test_split(
       X, y, test_size=0.2, random_state=42
   )
@@ -62,7 +59,6 @@ def train_xgboost2():
       f" {features}..."
   )
 
-  # XGBoost Classifier geoptimaliseerd voor financiële data
   model = xgb.XGBClassifier(
       n_estimators=150,
       learning_rate=0.03,
@@ -74,11 +70,9 @@ def train_xgboost2():
 
   model.fit(X_train, y_train)
 
-  # Evalueer de nauwkeurigheid op de testset
   score = model.score(X_test, y_test)
   print(f"Model xgboostV2 succesvol getraind! Test-accuratesse: {score * 100:.2f}%")
 
-  # Sla het getrainde model op
   joblib.dump(model, "xgboostV2_model.pkl")
   print("Getraind model opgeslagen als xgboostV2_model.pkl")
 
