@@ -1,112 +1,153 @@
+#!/usr/bin/env python3
+# xLightGBM.py — ML-bot met LightGBM + Telegram + e-mail + Supabase
+# Score-optie 1: score = LightGBM-predictie (kans op positieve return)
+
 import os
+import sys
 import time
-import uuid
+import json
+import smtplib
+import traceback
+from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 
-import yfinance as yf
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import train_test_split
+import yfinance as yf
 import lightgbm as lgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
+from tqdm import tqdm
 import requests
 
+# ------------------------------------------------------------
+# Config uit environment (zelfde stijl als je Darvas-bot)
+# ------------------------------------------------------------
 
-# -----------------------------
-# Config
-# -----------------------------
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-TICKERS = [
-    "SPY", "QQQ", "IWM",
-    "AAPL", "MSFT", "GOOGL", "META", "NVDA",
-]
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+MAIL_TO = os.getenv("MAIL_TO", "")
 
-HORIZONS = [10, 30, 60]  # dagen vooruit
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+SUPABASE_TABLE = os.getenv("SUPABASE_TABLE", "xlightgbm_signals")
 
-START_DATE = "2015-01-01"
-END_DATE = None  # None = tot vandaag
+HTTP_PROXY = os.getenv("HTTP_PROXY", "")
+HTTPS_PROXY = os.getenv("HTTPS_PROXY", "")
 
-TOP_N = 20  # voor eenvoudige top-N backtest
+# Tickers (zoals in je log: 8 stuks)
+TICKERS = ["SPY", "QQQ", "IWM", "DIA", "XLK", "XLF", "XLE", "XLV"]
 
-# Supabase config (vul zelf in)
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://YOUR_PROJECT.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "YOUR_SERVICE_ROLE_KEY")
-SUPABASE_TABLE = "signals_lightgbm"
+# ------------------------------------------------------------
+# Helper: veilige download met proxy fallback
+# ------------------------------------------------------------
 
-RUN_ID = datetime.utcnow().strftime("run_%Y%m%d_%H%M%S")
+def download_with_proxy_fallback(ticker: str, start: str, end: str) -> pd.DataFrame:
+    """
+    Probeer eerst met proxy (als gezet), dan zonder proxy.
+    Lost typische SPY/QQQ timezone/no data issues vaak op.
+    """
+    proxies = {}
+    if HTTP_PROXY:
+        proxies["http"] = HTTP_PROXY
+    if HTTPS_PROXY:
+        proxies["https"] = HTTPS_PROXY
 
+    # 1) met proxy (indien aanwezig)
+    try:
+        if proxies:
+            data = yf.download(
+                ticker,
+                start=start,
+                end=end,
+                progress=False,
+                proxy=HTTP_PROXY or HTTPS_PROXY,
+            )
+        else:
+            data = yf.download(ticker, start=start, end=end, progress=False)
+        if isinstance(data, pd.DataFrame) and not data.empty:
+            return data
+    except Exception as e:
+        print(f"Download met proxy faalde voor {ticker}: {e}")
 
-# -----------------------------
-# Data download
-# -----------------------------
+    # 2) zonder proxy
+    try:
+        data = yf.download(ticker, start=start, end=end, progress=False)
+        if isinstance(data, pd.DataFrame) and not data.empty:
+            return data
+    except Exception as e:
+        print(f"Download zonder proxy faalde voor {ticker}: {e}")
 
-def download_data(tickers, start, end=None):
-    if end is None:
-        end = datetime.utcnow().strftime("%Y-%m-%d")
+    print(f"Geen bruikbare data voor {ticker} na proxy fallback.")
+    return pd.DataFrame()
 
-    all_data = {}
-    for t in tqdm(tickers, desc="Download data"):
-        df = yf.download(t, start=start, end=end, auto_adjust=False)
-        if df.empty:
-            continue
-        df = df.rename(columns=str.lower)
-        df["ticker"] = t
-        all_data[t] = df
+# ------------------------------------------------------------
+# Feature & label bouw
+# ------------------------------------------------------------
 
-    return all_data
-
-
-# -----------------------------
-# Feature engineering
-# -----------------------------
-
-def add_features(df: pd.DataFrame) -> pd.DataFrame:
+def build_features_and_labels(df: pd.DataFrame, horizon: int = 10):
+    """
+    Bouw simpele features + label:
+    - label = 1 als close(t+horizon) > close(t), anders 0
+    - features: returns, rolling vol, moving averages, RSI-achtig
+    """
     df = df.copy()
-
-    df["return_1d"] = df["close"].pct_change()
-    df["return_5d"] = df["close"].pct_change(5)
-    df["return_10d"] = df["close"].pct_change(10)
+    df["return_1d"] = df["Adj Close"].pct_change()
+    df["return_5d"] = df["Adj Close"].pct_change(5)
+    df["return_10d"] = df["Adj Close"].pct_change(10)
 
     df["vol_10d"] = df["return_1d"].rolling(10).std()
     df["vol_20d"] = df["return_1d"].rolling(20).std()
 
-    df["ma_10"] = df["close"].rolling(10).mean()
-    df["ma_20"] = df["close"].rolling(20).mean()
-    df["ma_50"] = df["close"].rolling(50).mean()
+    df["ma_10"] = df["Adj Close"].rolling(10).mean()
+    df["ma_20"] = df["Adj Close"].rolling(20).mean()
+    df["ma_ratio_10_20"] = df["ma_10"] / df["ma_20"]
 
-    df["ma_10_rel"] = df["ma_10"] / df["close"] - 1.0
-    df["ma_20_rel"] = df["ma_20"] / df["close"] - 1.0
-    df["ma_50_rel"] = df["ma_50"] / df["close"] - 1.0
+    # simpele momentum / RSI-achtig
+    df["up_move"] = np.where(df["return_1d"] > 0, df["return_1d"], 0.0)
+    df["down_move"] = np.where(df["return_1d"] < 0, -df["return_1d"], 0.0)
+    df["avg_up"] = df["up_move"].rolling(14).mean()
+    df["avg_down"] = df["down_move"].rolling(14).mean()
+    df["rsi"] = df["avg_up"] / (df["avg_up"] + df["avg_down"] + 1e-9)
 
-    df["high_low_range"] = (df["high"] - df["low"]) / df["close"]
-    df["volume_zscore"] = (df["volume"] - df["volume"].rolling(20).mean()) / (
-        df["volume"].rolling(20).std()
+    # label: horizon forward return
+    df["future_price"] = df["Adj Close"].shift(-horizon)
+    df["future_return"] = (df["future_price"] - df["Adj Close"]) / df["Adj Close"]
+    df["label"] = np.where(df["future_return"] > 0, 1, 0)
+
+    df = df.dropna()
+
+    feature_cols = [
+        "return_1d",
+        "return_5d",
+        "return_10d",
+        "vol_10d",
+        "vol_20d",
+        "ma_10",
+        "ma_20",
+        "ma_ratio_10_20",
+        "rsi",
+    ]
+
+    X = df[feature_cols].values
+    y = df["label"].values
+
+    return X, y, df
+
+# ------------------------------------------------------------
+# Train LightGBM model (score = predictie)
+# ------------------------------------------------------------
+
+def train_lightgbm(X: np.ndarray, y: np.ndarray):
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.2, shuffle=False
     )
 
-    df = df.dropna()
-    return df
-
-
-# -----------------------------
-# Labels per horizon
-# -----------------------------
-
-def add_labels_for_horizon(df: pd.DataFrame, horizon: int) -> pd.DataFrame:
-    df = df.copy()
-    future_price = df["close"].shift(-horizon)
-    future_return = (future_price / df["close"]) - 1.0
-    df[f"label_{horizon}d"] = (future_return > 0.0).astype(int)
-    df[f"target_ret_{horizon}d"] = future_return
-    df = df.dropna()
-    return df
-
-
-# -----------------------------
-# Model training
-# -----------------------------
-
-def train_lightgbm(X_train, y_train, X_val, y_val):
     train_data = lgb.Dataset(X_train, label=y_train)
     val_data = lgb.Dataset(X_val, label=y_val)
 
@@ -114,73 +155,77 @@ def train_lightgbm(X_train, y_train, X_val, y_val):
         "objective": "binary",
         "metric": "auc",
         "learning_rate": 0.05,
-        "num_leaves": 64,
+        "num_leaves": 31,
         "feature_fraction": 0.9,
-        "bagging_fraction": 0.9,
-        "bagging_freq": 1,
-        "min_data_in_leaf": 50,
-        "lambda_l1": 0.0,
-        "lambda_l2": 0.0,
-        "verbosity": -1,
+        "bagging_fraction": 0.8,
+        "bagging_freq": 5,
+        "min_data_in_leaf": 20,
+        "verbose": -1,
     }
 
     model = lgb.train(
         params,
         train_data,
-        num_boost_round=1000,
+        num_boost_round=300,
         valid_sets=[train_data, val_data],
         valid_names=["train", "valid"],
         early_stopping_rounds=50,
         verbose_eval=False,
     )
 
+    # AUC voor info
+    y_val_pred = model.predict(X_val)
+    auc = roc_auc_score(y_val, y_val_pred)
+    print(f"LightGBM AUC (valid): {auc:.4f}")
+
     return model
 
+# ------------------------------------------------------------
+# Telegram, e-mail, Supabase
+# ------------------------------------------------------------
 
-# -----------------------------
-# Eenvoudige top-N backtest
-# -----------------------------
+def send_telegram_message(text: str):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram-config ontbreekt, bericht niet verzonden.")
+        return
 
-def simple_topN_backtest(df: pd.DataFrame, horizon: int, prob_col: str) -> dict:
-    """
-    Heel eenvoudige backtest:
-    - per datum: sorteer tickers op prob_up
-    - neem top-N
-    - gebruik echte future return (target_ret_horizon)
-    - bereken gemiddelde R/R en hitrate
-    """
-    df = df.copy()
-    label_col = f"label_{horizon}d"
-    ret_col = f"target_ret_{horizon}d"
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": text,
+        "parse_mode": "Markdown",
+    }
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        if r.status_code != 200:
+            print(f"Telegram-fout: {r.status_code} {r.text}")
+        else:
+            print("Telegram-bericht verzonden.")
+    except Exception as e:
+        print(f"Telegram-exceptie: {e}")
 
-    # we doen het per datum
-    results = []
-    for date, group in df.groupby(df.index.date):
-        group = group.sort_values(prob_col, ascending=False)
-        top = group.head(TOP_N)
-        if top.empty:
-            continue
+def send_email(subject: str, body: str):
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS or not MAIL_TO:
+        print("SMTP-config ontbreekt, e-mail niet verzonden.")
+        return
 
-        avg_ret = top[ret_col].mean()
-        hitrate = (top[ret_col] > 0.0).mean()
-        results.append((date, avg_ret, hitrate))
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = SMTP_USER
+    msg["To"] = MAIL_TO
 
-    if not results:
-        return {"rr": None, "hitrate": None}
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+        print("E-mail verzonden.")
+    except Exception as e:
+        print(f"E-mail-exceptie: {e}")
 
-    rr = np.mean([r[1] for r in results])
-    hitrate = np.mean([r[2] for r in results])
-
-    return {"rr": rr, "hitrate": hitrate}
-
-
-# -----------------------------
-# Supabase helper
-# -----------------------------
-
-def push_signals_to_supabase(rows):
+def log_to_supabase(records):
     if not SUPABASE_URL or not SUPABASE_KEY:
-        print("Supabase config ontbreekt, skip push.")
+        print("Supabase-config ontbreekt, logging niet verzonden.")
         return
 
     url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}"
@@ -191,107 +236,153 @@ def push_signals_to_supabase(rows):
         "Prefer": "return=representation",
     }
 
-    resp = requests.post(url, headers=headers, json=rows, timeout=30)
-    if resp.status_code >= 300:
-        print(f"Supabase error: {resp.status_code} {resp.text}")
-    else:
-        print(f"Supabase OK, {len(rows)} rows ingevoegd.")
+    try:
+        r = requests.post(url, headers=headers, data=json.dumps(records), timeout=10)
+        if r.status_code not in (200, 201):
+            print(f"Supabase-fout: {r.status_code} {r.text}")
+        else:
+            print("Supabase-logging verzonden.")
+    except Exception as e:
+        print(f"Supabase-exceptie: {e}")
 
-
-# -----------------------------
-# Main pipeline
-# -----------------------------
+# ------------------------------------------------------------
+# Main run
+# ------------------------------------------------------------
 
 def main():
-    print("Start xLightGBM run")
-    print(f"RUN_ID: {RUN_ID}")
+    run_id = f"run_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+    print("\nStart xLightGBM run")
+    print(f"RUN_ID: {run_id}")
 
-    data = download_data(TICKERS, START_DATE, END_DATE)
+    end_date = datetime.utcnow().date()
+    start_date = end_date - timedelta(days=365 * 3)  # 3 jaar historie
+    start_str = start_date.strftime("%Y-%m-%d")
+    end_str = end_date.strftime("%Y-%m-%d")
 
-    all_rows_for_supabase = []
+    all_X = []
+    all_y = []
+    per_ticker_df = {}
 
-    for horizon in HORIZONS:
-        print(f"\n=== Horizon {horizon} dagen ===")
+    print("Download data:")
+    for ticker in tqdm(TICKERS):
+        try:
+            df = download_with_proxy_fallback(ticker, start_str, end_str)
+            if df.empty:
+                print(f"Geen data voor {ticker}, skip.")
+                continue
+            df = df.rename(columns=str)  # defensief
+            X, y, df_feat = build_features_and_labels(df)
+            if len(X) < 200:
+                print(f"Te weinig data voor {ticker}, skip.")
+                continue
 
-        frames = []
-        for t, df in data.items():
-            df_feat = add_features(df)
-            df_lab = add_labels_for_horizon(df_feat, horizon)
-            df_lab["ticker"] = t
-            frames.append(df_lab)
+            all_X.append(X)
+            all_y.append(y)
+            per_ticker_df[ticker] = df_feat
+        except Exception as e:
+            print(f"Fout bij ticker {ticker}: {e}")
+            traceback.print_exc()
 
-        if not frames:
-            print(f"Geen data voor horizon {horizon}")
-            continue
+    if not all_X:
+        print("Geen bruikbare data voor enig ticker — geen model, geen signalen.")
+        return
 
-        full = pd.concat(frames, axis=0)
-        full = full.sort_index()
+    X_all = np.vstack(all_X)
+    y_all = np.concatenate(all_y)
 
+    print("Train LightGBM-model...")
+    model = train_lightgbm(X_all, y_all)
+
+    # --------------------------------------------------------
+    # Score berekening (optie 1: score = predictie)
+    # --------------------------------------------------------
+    signals = []
+
+    for ticker, df_feat in per_ticker_df.items():
+        # laatste rij = huidige dag
+        last_row = df_feat.iloc[-1]
         feature_cols = [
-            "return_1d", "return_5d", "return_10d",
-            "vol_10d", "vol_20d",
-            "ma_10_rel", "ma_20_rel", "ma_50_rel",
-            "high_low_range", "volume_zscore",
+            "return_1d",
+            "return_5d",
+            "return_10d",
+            "vol_10d",
+            "vol_20d",
+            "ma_10",
+            "ma_20",
+            "ma_ratio_10_20",
+            "rsi",
         ]
-        label_col = f"label_{horizon}d"
+        x = last_row[feature_cols].values.reshape(1, -1)
+        prob = float(model.predict(x)[0])  # kans op label=1
+        score = prob  # 0–1
+        total_score = score * 100.0
 
-        X = full[feature_cols].values
-        y = full[label_col].values
+        signals.append({
+            "ticker": ticker,
+            "date": end_date.isoformat(),
+            "score": round(score, 4),
+            "total_score": round(total_score, 2),
+            "close": float(last_row["Adj Close"]),
+            "run_id": run_id,
+        })
 
-        X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=0.2, shuffle=False
+    # sorteer op score
+    signals_sorted = sorted(signals, key=lambda s: s["score"], reverse=True)
+    top_n = signals_sorted[:2]
+
+    # --------------------------------------------------------
+    # Bericht opbouwen (Telegram + e-mail)
+    # --------------------------------------------------------
+    date_str = end_date.strftime("%Y-%m-%d")
+    lines = []
+    lines.append(f"📊 xLightGBM-signalen — {date_str}")
+    lines.append(f"RUN_ID: {run_id}")
+    lines.append("")
+    lines.append("Top 2 tickers (score = LightGBM-kans op positieve 10d-return):")
+    for s in top_n:
+        lines.append(
+            f"- {s['ticker']}: score={s['score']:.4f} (total_score={s['total_score']:.2f}), close={s['close']:.2f}"
         )
+    lines.append("")
+    lines.append("Alle scores:")
+    for s in signals_sorted:
+        lines.append(
+            f"{s['ticker']}: score={s['score']:.4f}, total_score={s['total_score']:.2f}, close={s['close']:.2f}"
+        )
+    lines.append("")
+    lines.append("Deze bot gebruikt LightGBM op 3 jaar Yahoo Finance data met proxy fallback.")
+    message_text = "\n".join(lines)
 
-        model = train_lightgbm(X_train, y_train, X_val, y_val)
+    # Telegram
+    send_telegram_message(message_text)
 
-        # AUC
-        y_val_pred = model.predict(X_val)
-        auc = roc_auc_score(y_val, y_val_pred)
-        print(f"AUC horizon {horizon}: {auc:.3f}")
+    # E-mail
+    send_email(subject=f"xLightGBM-signalen {date_str}", body=message_text)
 
-        # Backtest
-        full["prob_up"] = model.predict(full[feature_cols].values)
-        bt = simple_topN_backtest(full, horizon, "prob_up")
-        rr = bt["rr"]
-        hitrate = bt["hitrate"]
-        print(f"Backtest horizon {horizon}:")
-        if rr is not None:
-            print(f"  R/R: {rr:.3%}, hitrate: {hitrate:.1%}")
-        else:
-            print("  Onvoldoende data voor backtest.")
-
-        # Laatste datum per ticker als signaal naar Supabase
-        latest_date = full.index.max()
-        latest = full[full.index == latest_date].copy()
-        latest = latest.sort_values("prob_up", ascending=False)
-        latest["rank"] = np.arange(1, len(latest) + 1)
-
-        for _, row in latest.iterrows():
-            all_rows_for_supabase.append(
-                {
-                    "run_id": RUN_ID,
-                    "horizon_days": int(horizon),
-                    "ticker": str(row["ticker"]),
-                    "prob_up": float(row["prob_up"]),
-                    "expected_return": float(row.get(f"target_ret_{horizon}d", np.nan)),
-                    "rank": int(row["rank"]),
-                    "rr": float(rr) if rr is not None else None,
-                    "meta": {
-                        "auc": float(auc),
-                        "hitrate": float(hitrate) if hitrate is not None else None,
-                        "latest_date": latest_date.isoformat(),
-                    },
-                }
-            )
-
-    # Push naar Supabase (bot doet daarna telegram + mail)
-    if all_rows_for_supabase:
-        push_signals_to_supabase(all_rows_for_supabase)
-    else:
-        print("Geen rows om naar Supabase te sturen.")
+    # Supabase logging
+    supabase_records = []
+    for s in signals_sorted:
+        supabase_records.append({
+            "ticker": s["ticker"],
+            "date": s["date"],
+            "score": s["score"],
+            "total_score": s["total_score"],
+            "close": s["close"],
+            "run_id": s["run_id"],
+            "created_at": datetime.utcnow().isoformat() + "Z",
+        })
+    log_to_supabase(supabase_records)
 
     print("xLightGBM run klaar.")
 
+# ------------------------------------------------------------
+# Entry point
+# ------------------------------------------------------------
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"Onverwachte fout in xLightGBM: {e}")
+        traceback.print_exc()
+        sys.exit(1)
