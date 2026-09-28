@@ -24,11 +24,16 @@ jobs:
     - name: Benodigde pakketten installeren
       run: |
         python -m pip install --upgrade pip
-        pip install xgboost pandas scikit-learn joblib psycopg2-binary
+        pip install xgboost==3.2.0 pandas scikit-learn joblib psycopg2-binary requests
 
     - name: Start training script
       env:
-        SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
+        TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+        EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+        EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
       run: |
         python xgboostV3.py
 
@@ -47,5 +52,5 @@ jobs:
           git commit -m "Auto-update: xgboostV3 modellen hertraind op actuele data" || echo "Geen wijzigingen om te committeren"
           git push
         else
-          echo "Geen enkel model getraind dit run — niets te committen."
+          echo "Geen enkel model getraind dit run â€” niets te committen."
         fi
