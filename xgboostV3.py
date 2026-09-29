@@ -4,24 +4,22 @@
 """
 xgboostV3.py — wekelijkse hertraining per horizon (10d / 30d / 60d)
 
-Versie 3.2
+Versie 3.3
 
-Train per horizon een XGBoost-classifier en sla uitsluitend geldige,
-niet-lege modellen op.
-
-Belangrijke beveiligingen:
-- modelbestand wordt na joblib.dump gecontroleerd
-- bestandsgrootte wordt gecontroleerd
-- model wordt onmiddellijk opnieuw geladen
-- predict_proba wordt gecontroleerd
-- feature_names_in_ wordt gecontroleerd
-- training faalt als een model niet correct opgeslagen kan worden
-- controle-model wordt niet opgeslagen
-- tijdssplit gebeurt op datumgrenzen
+Belangrijk:
+- Alleen succesvol getrainde modellen worden opgeslagen.
+- Modellen worden eerst naar een tijdelijk bestand geschreven.
+- Het tijdelijke bestand wordt gecontroleerd en daarna atomair vervangen.
+- Een mislukte/te kleine/corrupte nieuwe training overschrijft nooit
+  een bestaand geldig model.
+- Een horizon met onvoldoende data veroorzaakt GEEN workflow failure.
+- Ontbrekende modellen worden als "nog niet beschikbaar" behandeld.
+- Een bestaand geldig model blijft behouden als een nieuwe training
+  voor die horizon nog niet mogelijk is.
+- Tijdssplit gebeurt op volledige datumgrenzen.
 """
 
 import os
-import math
 import smtplib
 import warnings
 import datetime as dt
@@ -90,6 +88,11 @@ AUC_VERSCHIL_WAARSCHUWING = 0.10
 MIN_RIJEN_TRAINING = 30
 MIN_RIJEN_TEST = 10
 
+# Een geldig joblib-model hoort ruim groter te zijn dan dit.
+# Dit is uitsluitend een sanity check; de echte controle
+# gebeurt door joblib.load + predict_proba + features.
+MIN_MODEL_BYTES = 1000
+
 
 # ============================================================
 # OMGEVING
@@ -116,7 +119,14 @@ WITH fr_dedup AS (
         fwd_ret_30d,
         fwd_ret_60d
     FROM forward_returns
-    ORDER BY ticker, datum
+    ORDER BY
+        ticker,
+        datum,
+        (
+            (fwd_ret_10d IS NOT NULL)::int +
+            (fwd_ret_30d IS NOT NULL)::int +
+            (fwd_ret_60d IS NOT NULL)::int
+        ) DESC
 )
 
 SELECT
@@ -153,6 +163,7 @@ NAN = float("nan")
 # ============================================================
 
 def _is_nan(v) -> bool:
+
     if v is None:
         return True
 
@@ -163,6 +174,7 @@ def _is_nan(v) -> bool:
 
 
 def _db_waarde(v):
+
     if _is_nan(v):
         return None
 
@@ -170,6 +182,7 @@ def _db_waarde(v):
 
 
 def _f(v, decimalen: int = 3) -> str:
+
     if _is_nan(v):
         return "n.v.t."
 
@@ -177,6 +190,7 @@ def _f(v, decimalen: int = 3) -> str:
 
 
 def _pr(v) -> str:
+
     if _is_nan(v):
         return "n.v.t."
 
@@ -201,6 +215,7 @@ def send_telegram(tekst: str) -> None:
     for i in range(0, len(tekst), 4096):
 
         try:
+
             r = requests.post(
                 url,
                 json={
@@ -212,20 +227,28 @@ def send_telegram(tekst: str) -> None:
             )
 
             if r.status_code != 200:
+
                 print(
-                    f"Telegram gaf status {r.status_code}: "
+                    f"Telegram gaf status "
+                    f"{r.status_code}: "
                     f"{r.text[:200]}"
                 )
 
         except Exception as e:
-            print(f"Telegram fout: {e}")
+
+            print(
+                f"Telegram fout: {e}"
+            )
 
 
 # ============================================================
 # EMAIL
 # ============================================================
 
-def send_email(onderwerp: str, tekst: str) -> None:
+def send_email(
+    onderwerp: str,
+    tekst: str,
+) -> None:
 
     if (
         not EMAIL_USER
@@ -267,23 +290,79 @@ def send_email(onderwerp: str, tekst: str) -> None:
         server.quit()
 
         print(
-            f"Email verzonden naar {EMAIL_RECEIVER}"
+            f"Email verzonden naar "
+            f"{EMAIL_RECEIVER}"
         )
 
     except Exception as e:
-        print(f"Email fout: {e}")
+
+        print(
+            f"Email fout: {e}"
+        )
 
 
 # ============================================================
 # DATA
 # ============================================================
 
-def get_training_data(conn) -> pd.DataFrame:
+def get_training_data(
+    conn,
+) -> pd.DataFrame:
 
     return pd.read_sql(
         JOIN_QUERY,
         conn,
     )
+
+
+def toon_data_diagnose(
+    df: pd.DataFrame,
+) -> None:
+
+    print("")
+    print("=" * 70)
+    print("DATA-DIAGNOSE PER HORIZON")
+    print("=" * 70)
+
+    for horizon in HORIZONS:
+
+        target = f"fwd_ret_{horizon}"
+
+        if target not in df.columns:
+
+            print(
+                f"[{horizon}] {target}: "
+                f"ONTBREEKT"
+            )
+
+            continue
+
+        aantal_target = int(
+            df[target].notna().sum()
+        )
+
+        aantal_datums = int(
+            df.loc[
+                df[target].notna(),
+                "datum",
+            ].nunique()
+        )
+
+        df_temp = df.dropna(
+            subset=FEATURE_COLUMNS
+            + [target, "datum"]
+        )
+
+        print(
+            f"[{horizon}] "
+            f"{target}: "
+            f"{aantal_target} niet-lege labels | "
+            f"{aantal_datums} datums | "
+            f"{len(df_temp)} complete records"
+        )
+
+    print("=" * 70)
+    print("")
 
 
 # ============================================================
@@ -349,8 +428,11 @@ def train_en_evalueer(
     )
 
     if test_df["is_profitable"].nunique() < 2:
+
         auc = NAN
+
     else:
+
         auc = float(
             roc_auc_score(
                 test_df["is_profitable"],
@@ -407,6 +489,141 @@ def leeg_resultaat(
 
 
 # ============================================================
+# MODEL VALIDATIE
+# ============================================================
+
+def valideer_modelbestand(
+    bestandsnaam: str,
+    features: List[str],
+    horizon: str,
+    stil: bool = False,
+) -> bool:
+
+    if not os.path.isfile(bestandsnaam):
+
+        if not stil:
+            print(
+                f"[{horizon}] ❌ "
+                f"bestand ontbreekt: "
+                f"{bestandsnaam}"
+            )
+
+        return False
+
+    try:
+
+        grootte = os.path.getsize(
+            bestandsnaam
+        )
+
+    except Exception as e:
+
+        if not stil:
+            print(
+                f"[{horizon}] ❌ "
+                f"bestandsgrootte niet "
+                f"leesbaar: {e}"
+            )
+
+        return False
+
+    if grootte < MIN_MODEL_BYTES:
+
+        if not stil:
+            print(
+                f"[{horizon}] ❌ "
+                f"bestand te klein: "
+                f"{grootte} bytes"
+            )
+
+        return False
+
+    try:
+
+        model = joblib.load(
+            bestandsnaam
+        )
+
+    except Exception as e:
+
+        if not stil:
+            print(
+                f"[{horizon}] ❌ "
+                f"joblib.load mislukt: "
+                f"{e}"
+            )
+
+        return False
+
+    if not hasattr(
+        model,
+        "predict_proba",
+    ):
+
+        if not stil:
+            print(
+                f"[{horizon}] ❌ "
+                f"model heeft geen "
+                f"predict_proba()"
+            )
+
+        return False
+
+    opgeslagen_features = getattr(
+        model,
+        "feature_names_in_",
+        None,
+    )
+
+    if opgeslagen_features is None:
+
+        if not stil:
+            print(
+                f"[{horizon}] ❌ "
+                f"feature_names_in_ ontbreekt"
+            )
+
+        return False
+
+    opgeslagen_features = list(
+        opgeslagen_features
+    )
+
+    if opgeslagen_features != list(
+        features
+    ):
+
+        if not stil:
+
+            print(
+                f"[{horizon}] ❌ "
+                f"features komen niet overeen."
+            )
+
+            print(
+                f"    Verwacht: "
+                f"{features}"
+            )
+
+            print(
+                f"    Model:    "
+                f"{opgeslagen_features}"
+            )
+
+        return False
+
+    if not stil:
+
+        print(
+            f"[{horizon}] ✅ geldig model "
+            f"({grootte:,} bytes, "
+            f"{len(opgeslagen_features)} features)"
+        )
+
+    return True
+
+
+# ============================================================
 # MODEL OPSLAAN + CONTROLEREN
 # ============================================================
 
@@ -420,77 +637,123 @@ def sla_model_veilig_op(
         f"{MODEL_VERSIE}_{horizon}_model.pkl"
     )
 
-    print(
-        f"[{horizon}] Model opslaan naar "
-        f"{bestandsnaam}..."
+    tijdelijk_bestand = (
+        f"{bestandsnaam}.tmp"
     )
+
+    print(
+        f"[{horizon}] Model veilig opslaan "
+        f"naar {bestandsnaam}..."
+    )
+
+    # --------------------------------------------------------
+    # Eventueel oud tijdelijk bestand verwijderen
+    # --------------------------------------------------------
+
+    if os.path.exists(
+        tijdelijk_bestand
+    ):
+
+        try:
+            os.remove(
+                tijdelijk_bestand
+            )
+        except Exception:
+            pass
+
+    # --------------------------------------------------------
+    # Eerst naar .tmp schrijven
+    # --------------------------------------------------------
 
     try:
 
         joblib.dump(
             model,
-            bestandsnaam,
+            tijdelijk_bestand,
         )
 
     except Exception as e:
 
+        if os.path.exists(
+            tijdelijk_bestand
+        ):
+
+            try:
+                os.remove(
+                    tijdelijk_bestand
+                )
+            except Exception:
+                pass
+
         raise RuntimeError(
-            f"[{horizon}] joblib.dump mislukt "
-            f"voor {bestandsnaam}: {e}"
+            f"[{horizon}] joblib.dump "
+            f"mislukt: {e}"
         ) from e
 
     # --------------------------------------------------------
-    # BESTAND MOET BESTAAN
+    # Tijdelijk bestand controleren
     # --------------------------------------------------------
 
-    if not os.path.isfile(bestandsnaam):
+    if not os.path.isfile(
+        tijdelijk_bestand
+    ):
 
         raise RuntimeError(
-            f"[{horizon}] Modelbestand bestaat niet "
-            f"na joblib.dump: {bestandsnaam}"
+            f"[{horizon}] tijdelijk "
+            f"modelbestand bestaat niet."
         )
 
-    # --------------------------------------------------------
-    # BESTAND MAG NIET LEEG ZIJN
-    # --------------------------------------------------------
-
-    bestandsgrootte = os.path.getsize(
-        bestandsnaam
+    grootte = os.path.getsize(
+        tijdelijk_bestand
     )
-
-    if bestandsgrootte <= 0:
-
-        raise RuntimeError(
-            f"[{horizon}] MODEL IS LEEG: "
-            f"{bestandsnaam} "
-            f"({bestandsgrootte} bytes)"
-        )
 
     print(
-        f"[{horizon}] Bestandsgrootte: "
-        f"{bestandsgrootte:,} bytes"
+        f"[{horizon}] Tijdelijk model: "
+        f"{grootte:,} bytes"
     )
 
+    if grootte < MIN_MODEL_BYTES:
+
+        try:
+            os.remove(
+                tijdelijk_bestand
+            )
+        except Exception:
+            pass
+
+        raise RuntimeError(
+            f"[{horizon}] tijdelijk "
+            f"modelbestand is ongeldig "
+            f"({grootte} bytes)."
+        )
+
     # --------------------------------------------------------
-    # DIRECT TERUGLADEN
+    # Tijdelijk bestand laden
     # --------------------------------------------------------
 
     try:
 
         controle_model = joblib.load(
-            bestandsnaam
+            tijdelijk_bestand
         )
 
     except Exception as e:
 
+        try:
+            os.remove(
+                tijdelijk_bestand
+            )
+        except Exception:
+            pass
+
         raise RuntimeError(
-            f"[{horizon}] Modelbestand bestaat maar "
-            f"kan niet opnieuw geladen worden: "
-            f"{bestandsnaam}: {e}"
+            f"[{horizon}] tijdelijk "
+            f"model kan niet geladen "
+            f"worden: {e}"
         ) from e
 
     # --------------------------------------------------------
-    # CONTROLE predict_proba
+    # predict_proba
     # --------------------------------------------------------
 
     if not hasattr(
@@ -498,13 +761,20 @@ def sla_model_veilig_op(
         "predict_proba",
     ):
 
+        try:
+            os.remove(
+                tijdelijk_bestand
+            )
+        except Exception:
+            pass
+
         raise RuntimeError(
-            f"[{horizon}] Het opgeslagen object "
-            f"heeft geen predict_proba()."
+            f"[{horizon}] model heeft "
+            f"geen predict_proba()."
         )
 
     # --------------------------------------------------------
-    # CONTROLE FEATURES
+    # Featurecontrole
     # --------------------------------------------------------
 
     opgeslagen_features = getattr(
@@ -515,27 +785,93 @@ def sla_model_veilig_op(
 
     if opgeslagen_features is None:
 
+        try:
+            os.remove(
+                tijdelijk_bestand
+            )
+        except Exception:
+            pass
+
         raise RuntimeError(
-            f"[{horizon}] Model bevat geen "
-            f"feature_names_in_."
+            f"[{horizon}] model bevat "
+            f"geen feature_names_in_."
         )
 
     opgeslagen_features = list(
         opgeslagen_features
     )
 
-    if opgeslagen_features != list(features):
+    if opgeslagen_features != list(
+        features
+    ):
+
+        try:
+            os.remove(
+                tijdelijk_bestand
+            )
+        except Exception:
+            pass
 
         raise RuntimeError(
-            f"[{horizon}] Features in opgeslagen "
-            f"model komen niet overeen.\n"
+            f"[{horizon}] features "
+            f"komen niet overeen.\n"
             f"Verwacht: {features}\n"
             f"Model:    {opgeslagen_features}"
         )
 
+    # --------------------------------------------------------
+    # Atomair vervangen
+    #
+    # BELANGRIJK:
+    # Een bestaand geldig model wordt pas hier vervangen,
+    # nadat het nieuwe model volledig gecontroleerd is.
+    # --------------------------------------------------------
+
+    try:
+
+        os.replace(
+            tijdelijk_bestand,
+            bestandsnaam,
+        )
+
+    except Exception as e:
+
+        if os.path.exists(
+            tijdelijk_bestand
+        ):
+
+            try:
+                os.remove(
+                    tijdelijk_bestand
+                )
+            except Exception:
+                pass
+
+        raise RuntimeError(
+            f"[{horizon}] atomair "
+            f"vervangen van model "
+            f"mislukt: {e}"
+        ) from e
+
+    # --------------------------------------------------------
+    # Eindcontrole na replace
+    # --------------------------------------------------------
+
+    if not valideer_modelbestand(
+        bestandsnaam,
+        features,
+        horizon,
+        stil=False,
+    ):
+
+        raise RuntimeError(
+            f"[{horizon}] modelbestand "
+            f"faalt eindcontrole na opslaan."
+        )
+
     print(
-        f"[{horizon}] ✅ Model succesvol opgeslagen "
-        f"en opnieuw geladen."
+        f"[{horizon}] ✅ Model succesvol "
+        f"opgeslagen en gevalideerd."
     )
 
     return bestandsnaam
@@ -562,7 +898,7 @@ def train_voor_horizon(
         )
 
         print(
-            f"[{horizon}] {msg}."
+            f"[{horizon}] ⏭️ {msg}."
         )
 
         return leeg_resultaat(
@@ -572,6 +908,30 @@ def train_voor_horizon(
         )
 
     df_horizon = df.copy()
+
+    # Eerst controleren hoeveel labels werkelijk bestaan.
+    aantal_labels = int(
+        df_horizon[target_column]
+        .notna()
+        .sum()
+    )
+
+    if aantal_labels == 0:
+
+        msg = (
+            f"geen ingevulde {target_column} "
+            f"labels beschikbaar"
+        )
+
+        print(
+            f"[{horizon}] ⏳ {msg}."
+        )
+
+        return leeg_resultaat(
+            horizon,
+            "onvoldoende_data",
+            msg,
+        )
 
     df_horizon["is_profitable"] = (
         df_horizon[target_column] > 0
@@ -592,7 +952,7 @@ def train_voor_horizon(
         )
 
         print(
-            f"[{horizon}] {msg}."
+            f"[{horizon}] ⏳ {msg}."
         )
 
         return leeg_resultaat(
@@ -624,15 +984,33 @@ def train_voor_horizon(
         .reset_index(drop=True)
     )
 
+    if len(unieke_datums) < 2:
+
+        msg = (
+            "onvoldoende verschillende "
+            "datums voor een tijdssplit"
+        )
+
+        print(
+            f"[{horizon}] ⏳ {msg}."
+        )
+
+        return leeg_resultaat(
+            horizon,
+            "onvoldoende_datums",
+            msg,
+        )
+
     split_datum_index = int(
         len(unieke_datums) * 0.80
     )
 
-    if split_datum_index >= len(unieke_datums):
-
-        split_datum_index = (
-            len(unieke_datums) - 1
-        )
+    # Zorg dat er altijd minstens één datum
+    # voor de testperiode overblijft.
+    split_datum_index = min(
+        max(split_datum_index, 1),
+        len(unieke_datums) - 1,
+    )
 
     split_datum = unieke_datums[
         split_datum_index
@@ -660,7 +1038,7 @@ def train_voor_horizon(
         )
 
         print(
-            f"[{horizon}] {msg}."
+            f"[{horizon}] ⏳ {msg}."
         )
 
         return leeg_resultaat(
@@ -682,7 +1060,7 @@ def train_voor_horizon(
         )
 
         print(
-            f"[{horizon}] {msg}."
+            f"[{horizon}] ⏳ {msg}."
         )
 
         return leeg_resultaat(
@@ -703,7 +1081,7 @@ def train_voor_horizon(
         )
 
         print(
-            f"[{horizon}] {msg}."
+            f"[{horizon}] ⏳ {msg}."
         )
 
         return leeg_resultaat(
@@ -724,8 +1102,8 @@ def train_voor_horizon(
         f"[{horizon}] Start training op "
         f"{len(train_df)} records "
         f"(vóór {split_datum}), "
-        f"test op {len(test_df)} recentere "
-        f"records..."
+        f"test op {len(test_df)} "
+        f"recentere records..."
     )
 
     # --------------------------------------------------------
@@ -788,7 +1166,8 @@ def train_voor_horizon(
     print(
         f"[{horizon}] Top {n_top}/"
         f"{len(test_df)} volgens model: "
-        f"{target_column}={top_model:.3f}% | "
+        f"{target_column}="
+        f"{top_model:.3f}% | "
         f"baseline ({BASELINE_KOLOM}): "
         f"{top_baseline:.3f}% | "
         f"hele test-set: "
@@ -803,14 +1182,27 @@ def train_voor_horizon(
     )
 
     # --------------------------------------------------------
-    # MODEL OPSLAAN
+    # MODEL VEILIG OPSLAAN
     # --------------------------------------------------------
 
-    sla_model_veilig_op(
-        model,
-        horizon,
-        FEATURE_COLUMNS,
-    )
+    try:
+
+        sla_model_veilig_op(
+            model,
+            horizon,
+            FEATURE_COLUMNS,
+        )
+
+    except Exception as e:
+
+        # Een nieuwe training mag nooit eindigen met
+        # een corrupt modelbestand.
+        print(
+            f"[{horizon}] ❌ "
+            f"Model niet gepubliceerd: {e}"
+        )
+
+        raise
 
     return {
         "horizon": horizon,
@@ -1011,9 +1403,15 @@ def auc_regel(
     vorig: Optional[Dict],
 ) -> str:
 
-    tekst = (
-        f"AUC {_f(res['auc'])}"
-    )
+    if _is_nan(res["auc"]):
+
+        tekst = "AUC n.v.t."
+
+    else:
+
+        tekst = (
+            f"AUC {_f(res['auc'])}"
+        )
 
     if (
         vorig
@@ -1035,6 +1433,26 @@ def auc_regel(
     return tekst
 
 
+def model_status(
+    horizon: str,
+) -> str:
+
+    bestandsnaam = (
+        f"{MODEL_VERSIE}_{horizon}_model.pkl"
+    )
+
+    if valideer_modelbestand(
+        bestandsnaam,
+        FEATURE_COLUMNS,
+        horizon,
+        stil=True,
+    ):
+
+        return "bestaand geldig model"
+
+    return "nog geen geldig model"
+
+
 def bouw_bericht(
     resultaten: List[Dict],
     vorige: Dict[str, Dict],
@@ -1053,12 +1471,22 @@ def bouw_bericht(
 
         if res["status"] != "getraind":
 
+            status_model = model_status(
+                h
+            )
+
             regels.append(
                 f"[{h}] ⏳ "
                 f"{res['opmerking']}"
             )
 
+            regels.append(
+                f"  Modelstatus: "
+                f"{status_model}"
+            )
+
             regels.append("")
+
             continue
 
         regels.append(
@@ -1109,14 +1537,14 @@ def bouw_bericht(
 # CONTROLE ALLE MODELFILES
 # ============================================================
 
-def controleer_alle_modelbestanden() -> None:
+def controleer_alle_modelbestanden() -> bool:
 
     print("")
     print("=" * 70)
-    print("CONTROLE VAN ALLE XGBOOSTV3 MODELFILES")
+    print("CONTROLE VAN XGBOOSTV3 MODELFILES")
     print("=" * 70)
 
-    fouten = []
+    aantal_geldig = 0
 
     for horizon in HORIZONS:
 
@@ -1129,99 +1557,127 @@ def controleer_alle_modelbestanden() -> None:
             f"{bestandsnaam}"
         )
 
+        geldig = valideer_modelbestand(
+            bestandsnaam,
+            FEATURE_COLUMNS,
+            horizon,
+            stil=False,
+        )
+
+        if geldig:
+
+            aantal_geldig += 1
+
+        else:
+
+            print(
+                f"[{horizon}] ⚠️ "
+                f"Geen geldig model beschikbaar."
+            )
+
+    print("=" * 70)
+
+    if aantal_geldig == 0:
+
+        print(
+            "❌ GEEN ENKEL GELDIG "
+            "XGBOOSTV3 MODEL BESCHIKBAAR."
+        )
+
+        raise RuntimeError(
+            "Er is geen enkel geldig "
+            "XGBoostV3 model beschikbaar."
+        )
+
+    print(
+        f"✅ {aantal_geldig}/"
+        f"{len(HORIZONS)} "
+        f"XGBoostV3 modellen geldig."
+    )
+
+    print(
+        "Niet-beschikbare horizons worden "
+        "overgeslagen totdat voldoende "
+        "historische data beschikbaar is."
+    )
+
+    print("=" * 70)
+
+    return True
+
+
+# ============================================================
+# ONGELDIGE PLACEHOLDERS OPRUIMEN
+# ============================================================
+
+def verwijder_ongeldige_placeholders() -> None:
+
+    print("")
+    print(
+        "Controle op oude lege/corrupte "
+        "modelbestanden..."
+    )
+
+    for horizon in HORIZONS:
+
+        bestandsnaam = (
+            f"{MODEL_VERSIE}_{horizon}_model.pkl"
+        )
+
         if not os.path.isfile(
             bestandsnaam
         ):
+            continue
 
-            fouten.append(
-                f"{bestandsnaam}: BESTAND ONTBREEKT"
-            )
+        geldig = valideer_modelbestand(
+            bestandsnaam,
+            FEATURE_COLUMNS,
+            horizon,
+            stil=True,
+        )
 
+        if geldig:
             continue
 
         grootte = os.path.getsize(
             bestandsnaam
         )
 
-        print(
-            f"[{horizon}] Grootte: "
-            f"{grootte:,} bytes"
-        )
+        # Alleen duidelijk ongeldige kleine bestanden
+        # automatisch verwijderen.
+        if grootte < MIN_MODEL_BYTES:
 
-        if grootte <= 0:
+            try:
 
-            fouten.append(
-                f"{bestandsnaam}: BESTAND IS LEEG"
+                os.remove(
+                    bestandsnaam
+                )
+
+                print(
+                    f"[{horizon}] 🧹 "
+                    f"Oude ongeldige placeholder "
+                    f"verwijderd: "
+                    f"{bestandsnaam} "
+                    f"({grootte} bytes)"
+                )
+
+            except Exception as e:
+
+                raise RuntimeError(
+                    f"[{horizon}] Kan ongeldig "
+                    f"placeholderbestand niet "
+                    f"verwijderen: {e}"
+                ) from e
+
+        else:
+
+            # Een groter maar corrupt bestand mag niet
+            # automatisch verwijderd worden.
+            print(
+                f"[{horizon}] ⚠️ Ongeldig "
+                f"modelbestand van {grootte:,} bytes "
+                f"blijft staan voor handmatige controle."
             )
-
-            continue
-
-        try:
-
-            model = joblib.load(
-                bestandsnaam
-            )
-
-        except Exception as e:
-
-            fouten.append(
-                f"{bestandsnaam}: kan niet laden: {e}"
-            )
-
-            continue
-
-        if not hasattr(
-            model,
-            "predict_proba",
-        ):
-
-            fouten.append(
-                f"{bestandsnaam}: "
-                f"geen predict_proba"
-            )
-
-            continue
-
-        features = getattr(
-            model,
-            "feature_names_in_",
-            None,
-        )
-
-        if features is None:
-
-            fouten.append(
-                f"{bestandsnaam}: "
-                f"feature_names_in_ ontbreekt"
-            )
-
-            continue
-
-        print(
-            f"[{horizon}] ✅ geldig model "
-            f"met {len(features)} features."
-        )
-
-    print("=" * 70)
-
-    if fouten:
-
-        print("MODEL-CONTROLE MISLUKT:")
-
-        for fout in fouten:
-            print(f"  ❌ {fout}")
-
-        raise RuntimeError(
-            "Niet alle drie XGBoostV3 "
-            "modellen zijn geldig. "
-            "Workflow wordt bewust gestopt."
-        )
-
-    print(
-        "✅ ALLE DRIE MODELLEN ZIJN GELDIG."
-    )
-
-    print("=" * 70)
 
 
 # ============================================================
@@ -1258,6 +1714,9 @@ def train_xgboost3() -> None:
         db_url
     )
 
+    resultaten = []
+    vorige: Dict[str, Dict] = {}
+
     try:
 
         df = get_training_data(
@@ -1274,7 +1733,15 @@ def train_xgboost3() -> None:
             f"{len(FEATURE_COLUMNS)}"
         )
 
-        resultaten = []
+        toon_data_diagnose(
+            df
+        )
+
+        # ----------------------------------------------------
+        # OUDE 1-BYTE PLACEHOLDERS VERWIJDEREN
+        # ----------------------------------------------------
+
+        verwijder_ongeldige_placeholders()
 
         # ----------------------------------------------------
         # ALLE HORIZONS TRAINEN
@@ -1294,8 +1761,6 @@ def train_xgboost3() -> None:
         # ----------------------------------------------------
         # VORIGE RUNS
         # ----------------------------------------------------
-
-        vorige: Dict[str, Dict] = {}
 
         try:
 
@@ -1342,14 +1807,9 @@ def train_xgboost3() -> None:
         conn.close()
 
     # --------------------------------------------------------
-    # KRITIEKE CONTROLE
+    # MODEL-CONTROLE
     # --------------------------------------------------------
 
-    # Dit gebeurt buiten de DB-verbinding.
-    #
-    # Als één model ontbreekt/leeg/corrupt is,
-    # krijgt de GitHub Action exit code 1.
-    #
     controleer_alle_modelbestanden()
 
     # --------------------------------------------------------
