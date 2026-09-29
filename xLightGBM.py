@@ -1,4 +1,3 @@
-```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -16,40 +15,68 @@ Leert uit ALLE historische regels uit:
     +
     forward_returns
 
-Er wordt NIET eerst gefilterd op de Nitro-aandelenlijst.
+Er wordt NIET vooraf gefilterd op Nitro-aandelen.
 
-Per horizon wordt een afzonderlijk LightGBM-classificatiemodel getraind:
+Per horizon wordt een afzonderlijk LightGBM-classificatiemodel
+getraind:
 
     lightgbmV1_10d_model.pkl
     lightgbmV1_30d_model.pkl
     lightgbmV1_60d_model.pkl
 
-Het model voorspelt:
-
-    1 = forward return > 0
-    0 = forward return <= 0
+TARGET
+------
+1 = forward return > 0
+0 = forward return <= 0
 
 EVALUATIE
 ---------
 - chronologische 80/20 split
+- Accuracy
 - AUC
-- accuratesse
 - top 20% volgens model
 - top 20% volgens baseline pct_from_ma50
-- gemiddelde volledige test-set
-- controlemodel met enkel schaalvrije features
-- Pearson + Spearman correlaties
+- gemiddelde volledige testset
+- schaalvrij controlemodel
+- Pearson correlatie
+- Spearman correlatie
 - LightGBM feature importance
 
 BELANGRIJK
 ----------
-De correlatieanalyse wordt uitsluitend op de TRAINING-set uitgevoerd.
-Daarmee voorkomen we dat informatie uit de testperiode de featureselectie
-of analyse beïnvloedt.
+De correlatieanalyse gebruikt alleen de TRAINING-set.
 
-DATA
-----
-SUPABASE_DB_URL moet als environment variable aanwezig zijn.
+FEATURES
+--------
+Volledig model:
+
+    atr14
+    atr14_pct
+    rsi14
+    ibs
+    ma50
+    ma200
+    pct_from_ma50
+    pct_from_ma200
+    vol_ratio_20d
+    high52w
+    pct_from_high52w
+
+Controlemodel:
+
+    atr14_pct
+    rsi14
+    ibs
+    pct_from_ma50
+    pct_from_ma200
+    vol_ratio_20d
+    pct_from_high52w
+
+DATABASE
+--------
+Environment variable:
+
+    SUPABASE_DB_URL
 
 OUTPUT
 ------
@@ -66,14 +93,14 @@ results/
     lightgbmV1_30d_correlations.csv
     lightgbmV1_60d_correlations.csv
 
-    lightgbmV1_summary.txt
+    lightgbmV1_10d_test_predictions.csv
+    lightgbmV1_30d_test_predictions.csv
+    lightgbmV1_60d_test_predictions.csv
 
-De modellen zijn joblib-bestanden zodat ze later door een aparte
-voorspellingsbot geladen kunnen worden.
+    lightgbmV1_summary.txt
 """
 
 import os
-import math
 import warnings
 import datetime as dt
 
@@ -97,7 +124,11 @@ warnings.filterwarnings("ignore")
 
 MODEL_VERSIE = "lightgbmV1"
 
-HORIZONS = ["10d", "30d", "60d"]
+HORIZONS = [
+    "10d",
+    "30d",
+    "60d",
+]
 
 TOP_N_FRACTIE = 0.20
 
@@ -105,6 +136,13 @@ MIN_RIJEN_TRAINING = 100
 MIN_RIJEN_TEST = 30
 
 RANDOM_STATE = 42
+
+RESULTS_DIR = "results"
+
+os.makedirs(
+    RESULTS_DIR,
+    exist_ok=True,
+)
 
 
 # ============================================================
@@ -126,17 +164,13 @@ FEATURE_COLUMNS = [
 ]
 
 
-# Controlemodel.
+# Schaalvrije controlefeatures.
 #
-# Absolute prijsniveaus worden bewust verwijderd:
+# Absolute prijsniveaus worden hier verwijderd.
 #
-#   ma50
-#   ma200
-#   high52w
-#   atr14
-#
-# Hierdoor kunnen we controleren of het volledige model mogelijk
-# gedeeltelijk een ticker/prijsklasse herkent.
+# Hierdoor kunnen we controleren of het volledige model
+# sterk afhankelijk is van absolute prijsinformatie.
+
 FEATURE_COLUMNS_RELATIEF = [
     "atr14_pct",
     "rsi14",
@@ -151,15 +185,6 @@ FEATURE_COLUMNS_RELATIEF = [
 BASELINE_KOLOM = "pct_from_ma50"
 
 AUC_VERSCHIL_WAARSCHUWING = 0.10
-
-
-# ============================================================
-# OUTPUT
-# ============================================================
-
-RESULTS_DIR = "results"
-
-os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
 # ============================================================
@@ -208,7 +233,9 @@ JOIN fr_dedup
     ON fr_dedup.ticker = gt.ticker
     AND fr_dedup.datum = gt.datum
 
-ORDER BY gt.datum, gt.ticker;
+ORDER BY
+    gt.datum,
+    gt.ticker;
 """
 
 
@@ -217,6 +244,7 @@ ORDER BY gt.datum, gt.ticker;
 # ============================================================
 
 def is_nan(value):
+
     if value is None:
         return True
 
@@ -227,6 +255,7 @@ def is_nan(value):
 
 
 def fmt(value, decimals=3):
+
     if is_nan(value):
         return "n.v.t."
 
@@ -234,6 +263,7 @@ def fmt(value, decimals=3):
 
 
 def pct(value, decimals=2):
+
     if is_nan(value):
         return "n.v.t."
 
@@ -241,6 +271,7 @@ def pct(value, decimals=2):
 
 
 def safe_float(value):
+
     if is_nan(value):
         return None
 
@@ -252,101 +283,154 @@ def safe_float(value):
 # ============================================================
 
 def get_training_data(conn):
+
     print()
     print("=" * 70)
     print("DATASET OPHALEN")
     print("=" * 70)
 
-    df = pd.read_sql(JOIN_QUERY, conn)
+    df = pd.read_sql(
+        JOIN_QUERY,
+        conn,
+    )
 
     if df.empty:
+
         raise RuntimeError(
             "Supabase gaf 0 rijen terug uit "
             "generieke_technicals + forward_returns."
         )
 
-    print(f"Rijen opgehaald : {len(df):,}")
-    print(f"Tickers         : {df['ticker'].nunique():,}")
+    df["datum"] = pd.to_datetime(
+        df["datum"],
+        errors="coerce",
+    )
 
-    datum_min = pd.to_datetime(df["datum"]).min()
-    datum_max = pd.to_datetime(df["datum"]).max()
+    df = df.dropna(
+        subset=["datum"]
+    )
 
-    print(f"Van             : {datum_min}")
-    print(f"Tot             : {datum_max}")
+    print(
+        f"Rijen opgehaald : {len(df):,}"
+    )
+
+    print(
+        f"Tickers         : "
+        f"{df['ticker'].nunique():,}"
+    )
+
+    print(
+        f"Van             : "
+        f"{df['datum'].min()}"
+    )
+
+    print(
+        f"Tot             : "
+        f"{df['datum'].max()}"
+    )
 
     return df
 
 
 # ============================================================
-# DATA OPSCHONEN
+# DATA VOORBEREIDEN
 # ============================================================
 
-def prepare_horizon_data(df, horizon):
+def prepare_horizon_data(
+    df,
+    horizon,
+):
 
     target_column = f"fwd_ret_{horizon}"
 
     if target_column not in df.columns:
+
         raise RuntimeError(
             f"Doelkolom ontbreekt: {target_column}"
         )
 
     work = df.copy()
 
-    work["datum"] = pd.to_datetime(work["datum"])
+    work["datum"] = pd.to_datetime(
+        work["datum"],
+        errors="coerce",
+    )
 
-    # Heel belangrijk:
-    # ticker + datum moet maximaal één observatie bevatten.
+    # Eén observatie per ticker/datum.
     work = work.drop_duplicates(
-        subset=["ticker", "datum"],
+        subset=[
+            "ticker",
+            "datum",
+        ],
         keep="first",
     )
 
-    # Binary classification target.
-    work["is_profitable"] = (
-        pd.to_numeric(
-            work[target_column],
-            errors="coerce",
-        ) > 0
-    ).astype("float")
-
-    # Eerst ontbrekende target verwijderen.
-    work = work.dropna(
-        subset=[target_column, "datum"]
+    # Forward return numeriek maken.
+    work[target_column] = pd.to_numeric(
+        work[target_column],
+        errors="coerce",
     )
 
-    # Daarna features controleren.
-    required = FEATURE_COLUMNS
-
+    # Eerst target verwijderen indien ontbreekt.
     work = work.dropna(
-        subset=required
+        subset=[
+            target_column,
+            "datum",
+        ]
+    )
+
+    # Target:
+    #
+    # positief toekomstig rendement = 1
+    # niet-positief = 0
+    work["is_profitable"] = (
+        work[target_column] > 0
+    ).astype(int)
+
+    # Features numeriek maken.
+    for feature in FEATURE_COLUMNS:
+
+        work[feature] = pd.to_numeric(
+            work[feature],
+            errors="coerce",
+        )
+
+    # Ontbrekende features verwijderen.
+    work = work.dropna(
+        subset=FEATURE_COLUMNS
     )
 
     work = work.sort_values(
-        ["datum", "ticker"]
-    ).reset_index(drop=True)
-
-    work["is_profitable"] = work["is_profitable"].astype(int)
+        [
+            "datum",
+            "ticker",
+        ]
+    ).reset_index(
+        drop=True
+    )
 
     return work
 
 
 # ============================================================
-# TIJDSGEBASEERDE SPLIT
+# CHRONOLOGISCHE SPLIT
 # ============================================================
 
 def time_split(df):
 
-    if len(df) < MIN_RIJEN_TRAINING + MIN_RIJEN_TEST:
+    if len(df) < (
+        MIN_RIJEN_TRAINING
+        + MIN_RIJEN_TEST
+    ):
+
         raise RuntimeError(
-            f"Te weinig bruikbare rijen: {len(df)}. "
-            f"Minimaal {MIN_RIJEN_TRAINING + MIN_RIJEN_TEST} vereist."
+            f"Te weinig bruikbare rijen: "
+            f"{len(df)}. "
+            f"Minimaal "
+            f"{MIN_RIJEN_TRAINING + MIN_RIJEN_TEST} "
+            f"vereist."
         )
 
-    # Unieke datums bepalen.
-    #
-    # We splitsen op DATUM, niet op willekeurige rijen.
-    # Daardoor komen observaties van dezelfde handelsdag niet
-    # gedeeltelijk in train en gedeeltelijk in test terecht.
     dates = (
         df["datum"]
         .drop_duplicates()
@@ -355,12 +439,19 @@ def time_split(df):
     )
 
     if len(dates) < 2:
+
         raise RuntimeError(
-            "Er zijn onvoldoende verschillende handelsdatums."
+            "Er zijn onvoldoende "
+            "verschillende handelsdatums."
         )
 
+    split_index = max(
+        0,
+        int(len(dates) * 0.80) - 1,
+    )
+
     split_date = dates.iloc[
-        max(0, int(len(dates) * 0.80) - 1)
+        split_index
     ]
 
     train_df = df[
@@ -371,34 +462,49 @@ def time_split(df):
         df["datum"] > split_date
     ].copy()
 
-    if len(test_df) < MIN_RIJEN_TEST:
+    if len(train_df) < MIN_RIJEN_TRAINING:
+
         raise RuntimeError(
-            f"Testset te klein: {len(test_df)} "
-            f"(minimum {MIN_RIJEN_TEST})."
+            f"Trainingsset te klein: "
+            f"{len(train_df)}."
+        )
+
+    if len(test_df) < MIN_RIJEN_TEST:
+
+        raise RuntimeError(
+            f"Testset te klein: "
+            f"{len(test_df)}."
         )
 
     if train_df["is_profitable"].nunique() < 2:
+
         raise RuntimeError(
-            "Trainingsset bevat slechts één klasse."
+            "Trainingsset bevat slechts "
+            "één klasse."
         )
 
-    if test_df["is_profitable"].nunique() < 2:
-        print(
-            "WAARSCHUWING: testset bevat slechts één klasse. "
-            "AUC wordt n.v.t."
-        )
-
-    return train_df, test_df, split_date
+    return (
+        train_df,
+        test_df,
+        split_date,
+    )
 
 
 # ============================================================
 # CORRELATIE
 # ============================================================
 
-def calculate_correlations(train_df, target_column, horizon):
+def calculate_correlations(
+    train_df,
+    target_column,
+    horizon,
+):
 
     print()
-    print(f"[{horizon}] Correlatieanalyse op TRAINING-set...")
+    print(
+        f"[{horizon}] "
+        "Correlatieanalyse op TRAINING-set..."
+    )
 
     rows = []
 
@@ -415,14 +521,20 @@ def calculate_correlations(train_df, target_column, horizon):
         )
 
         valid = pd.concat(
-            [x, target],
+            [
+                x,
+                target,
+            ],
             axis=1,
         ).dropna()
 
         if len(valid) < 10:
+
             pearson = np.nan
             spearman = np.nan
+
         else:
+
             pearson = valid.iloc[:, 0].corr(
                 valid.iloc[:, 1],
                 method="pearson",
@@ -433,23 +545,27 @@ def calculate_correlations(train_df, target_column, horizon):
                 method="spearman",
             )
 
-        rows.append({
-            "feature": feature,
-            "pearson": pearson,
-            "spearman": spearman,
-            "abs_pearson": (
-                abs(pearson)
-                if not pd.isna(pearson)
-                else np.nan
-            ),
-            "abs_spearman": (
-                abs(spearman)
-                if not pd.isna(spearman)
-                else np.nan
-            ),
-        })
+        rows.append(
+            {
+                "feature": feature,
+                "pearson": pearson,
+                "spearman": spearman,
+                "abs_pearson": (
+                    abs(pearson)
+                    if not pd.isna(pearson)
+                    else np.nan
+                ),
+                "abs_spearman": (
+                    abs(spearman)
+                    if not pd.isna(spearman)
+                    else np.nan
+                ),
+            }
+        )
 
-    result = pd.DataFrame(rows)
+    result = pd.DataFrame(
+        rows
+    )
 
     result = result.sort_values(
         "abs_spearman",
@@ -467,7 +583,9 @@ def calculate_correlations(train_df, target_column, horizon):
     )
 
     print()
-    print(f"[{horizon}] Sterkste correlaties:")
+    print(
+        f"[{horizon}] Sterkste correlaties:"
+    )
 
     for _, row in result.head(10).iterrows():
 
@@ -476,10 +594,6 @@ def calculate_correlations(train_df, target_column, horizon):
             f"Pearson {fmt(row['pearson'])} | "
             f"Spearman {fmt(row['spearman'])}"
         )
-
-    print(
-        f"[{horizon}] Correlaties opgeslagen: {filename}"
-    )
 
     return result
 
@@ -496,9 +610,6 @@ def create_lightgbm_model():
 
         boosting_type="gbdt",
 
-        # Rustiger dan de standaard LightGBM-instellingen.
-        # Dit is bewust gekozen om overfitting bij financiële
-        # datasets te beperken.
         n_estimators=400,
 
         learning_rate=0.03,
@@ -542,21 +653,32 @@ def train_model(
 
     model = create_lightgbm_model()
 
-    X_train = train_df[features]
-    y_train = train_df["is_profitable"]
+    X_train = train_df[
+        features
+    ]
 
-    X_test = test_df[features]
-    y_test = test_df["is_profitable"]
+    y_train = train_df[
+        "is_profitable"
+    ]
 
-    # Geen testset gebruiken om het model te trainen.
+    X_test = test_df[
+        features
+    ]
+
+    y_test = test_df[
+        "is_profitable"
+    ]
+
     model.fit(
         X_train,
         y_train,
     )
 
-    probabilities = model.predict_proba(
-        X_test
-    )[:, 1]
+    probabilities = (
+        model.predict_proba(
+            X_test
+        )[:, 1]
+    )
 
     predictions = (
         probabilities >= 0.50
@@ -575,12 +697,18 @@ def train_model(
         )
 
     else:
+
         auc = np.nan
 
     result = test_df.copy()
 
-    result["model_probability"] = probabilities
-    result["model_prediction"] = predictions
+    result[
+        "model_probability"
+    ] = probabilities
+
+    result[
+        "model_prediction"
+    ] = predictions
 
     return (
         model,
@@ -591,7 +719,7 @@ def train_model(
 
 
 # ============================================================
-# TOP-N
+# TOP N GEMIDDELD RENDEMENT
 # ============================================================
 
 def top_n_average(
@@ -607,18 +735,23 @@ def top_n_average(
         ascending=not descending,
     )
 
-    selected = ordered.head(n_top)
+    selected = ordered.head(
+        n_top
+    )
 
     if selected.empty:
+
         return np.nan
 
     return float(
-        selected[target_column].mean()
+        selected[
+            target_column
+        ].mean()
     )
 
 
 # ============================================================
-# FEATURE IMPORTANCE
+# FEATURE IMPORTANCE OPSLAAN
 # ============================================================
 
 def save_feature_importance(
@@ -627,15 +760,21 @@ def save_feature_importance(
     horizon,
 ):
 
-    importance = pd.DataFrame({
-        "feature": features,
-        "importance_gain": model.booster_.feature_importance(
-            importance_type="gain"
-        ),
-        "importance_split": model.booster_.feature_importance(
-            importance_type="split"
-        ),
-    })
+    importance = pd.DataFrame(
+        {
+            "feature": features,
+
+            "importance_gain":
+                model.booster_.feature_importance(
+                    importance_type="gain"
+                ),
+
+            "importance_split":
+                model.booster_.feature_importance(
+                    importance_type="split"
+                ),
+        }
+    )
 
     importance = importance.sort_values(
         "importance_gain",
@@ -653,7 +792,9 @@ def save_feature_importance(
     )
 
     print()
-    print(f"[{horizon}] Feature importance:")
+    print(
+        f"[{horizon}] Feature importance:"
+    )
 
     for _, row in importance.iterrows():
 
@@ -663,27 +804,29 @@ def save_feature_importance(
             f"split={int(row['importance_split'])}"
         )
 
-    print(
-        f"[{horizon}] Feature importance opgeslagen: "
-        f"{filename}"
-    )
-
     return importance
 
 
 # ============================================================
-# ÉÉN HORIZON
+# ÉÉN HORIZON TRAINEN
 # ============================================================
 
-def train_horizon(df, horizon):
+def train_horizon(
+    df,
+    horizon,
+):
 
     print()
     print()
     print("=" * 70)
-    print(f"LIGHTGBM — HORIZON {horizon}")
+    print(
+        f"LIGHTGBM — HORIZON {horizon}"
+    )
     print("=" * 70)
 
-    target_column = f"fwd_ret_{horizon}"
+    target_column = (
+        f"fwd_ret_{horizon}"
+    )
 
     work = prepare_horizon_data(
         df,
@@ -691,36 +834,41 @@ def train_horizon(df, horizon):
     )
 
     print(
-        f"[{horizon}] Bruikbare rijen: "
+        f"[{horizon}] "
+        f"Bruikbare rijen: "
         f"{len(work):,}"
     )
 
     print(
-        f"[{horizon}] Aantal tickers: "
+        f"[{horizon}] "
+        f"Tickers: "
         f"{work['ticker'].nunique():,}"
     )
 
-    train_df, test_df, split_date = time_split(
-        work
+    train_df, test_df, split_date = (
+        time_split(work)
     )
 
     print(
         f"[{horizon}] TRAIN: "
-        f"{len(train_df):,} rijen "
-        f"tot {split_date}"
+        f"{len(train_df):,} rijen"
     )
 
     print(
         f"[{horizon}] TEST : "
-        f"{len(test_df):,} rijen "
-        f"na {split_date}"
+        f"{len(test_df):,} rijen"
+    )
+
+    print(
+        f"[{horizon}] Splitdatum: "
+        f"{split_date}"
     )
 
     # --------------------------------------------------------
     # CORRELATIE
     # --------------------------------------------------------
 
-    correlations = calculate_correlations(
+    calculate_correlations(
         train_df,
         target_column,
         horizon,
@@ -730,9 +878,9 @@ def train_horizon(df, horizon):
     # VOLLEDIG MODEL
     # --------------------------------------------------------
 
-    print()
     print(
-        f"[{horizon}] Volledig LightGBM-model trainen..."
+        f"\n[{horizon}] "
+        "Volledig LightGBM-model trainen..."
     )
 
     (
@@ -753,7 +901,10 @@ def train_horizon(df, horizon):
 
     n_top = max(
         1,
-        int(len(test_predictions) * TOP_N_FRACTIE),
+        int(
+            len(test_predictions)
+            * TOP_N_FRACTIE
+        ),
     )
 
     top_model = top_n_average(
@@ -767,8 +918,8 @@ def train_horizon(df, horizon):
     # --------------------------------------------------------
     # BASELINE
     #
-    # Laagste pct_from_ma50 wordt eerst geselecteerd.
-    # Dit volgt exact de baseline-logica van XGBoostV3.
+    # De laagste pct_from_ma50 wordt geselecteerd.
+    # Dit volgt de XGBoostV3-baseline.
     # --------------------------------------------------------
 
     top_baseline = top_n_average(
@@ -780,17 +931,18 @@ def train_horizon(df, horizon):
     )
 
     test_average = float(
-        test_predictions[target_column].mean()
+        test_predictions[
+            target_column
+        ].mean()
     )
 
     # --------------------------------------------------------
     # CONTROLEMODEL
     # --------------------------------------------------------
 
-    print()
     print(
-        f"[{horizon}] Controlemodel trainen "
-        f"(schaalvrije features)..."
+        f"\n[{horizon}] "
+        "Controlemodel trainen..."
     )
 
     (
@@ -805,10 +957,6 @@ def train_horizon(df, horizon):
         target_column,
     )
 
-    control_predictions["model_probability"] = (
-        control_predictions["model_probability"]
-    )
-
     top_control = top_n_average(
         control_predictions,
         "model_probability",
@@ -821,7 +969,7 @@ def train_horizon(df, horizon):
     # FEATURE IMPORTANCE
     # --------------------------------------------------------
 
-    importance = save_feature_importance(
+    save_feature_importance(
         model,
         FEATURE_COLUMNS,
         horizon,
@@ -870,37 +1018,46 @@ def train_horizon(df, horizon):
     )
 
     # --------------------------------------------------------
-    # RESULTAAT
+    # AUC VERSCHIL
     # --------------------------------------------------------
-
-    auc_delta = np.nan
 
     if (
         not pd.isna(auc)
         and not pd.isna(control_auc)
     ):
-        auc_delta = auc - control_auc
+
+        auc_delta = (
+            auc - control_auc
+        )
+
+    else:
+
+        auc_delta = np.nan
+
+    # --------------------------------------------------------
+    # RESULTAAT PRINTEN
+    # --------------------------------------------------------
 
     print()
     print("-" * 70)
-    print(f"[{horizon}] RESULTAAT")
+    print(
+        f"[{horizon}] RESULTAAT"
+    )
     print("-" * 70)
 
     print(
-        f"Train              : {len(train_df):,}"
+        f"Train              : "
+        f"{len(train_df):,}"
     )
 
     print(
-        f"Test               : {len(test_df):,}"
+        f"Test               : "
+        f"{len(test_df):,}"
     )
 
     print(
         f"Tickers            : "
         f"{work['ticker'].nunique():,}"
-    )
-
-    print(
-        f"Split              : {split_date}"
     )
 
     print(
@@ -943,57 +1100,10 @@ def train_horizon(df, horizon):
         f"{pct(top_control)}"
     )
 
-    print()
     print(
-        f"Model opgeslagen als:"
+        f"\nModel opgeslagen:"
         f"\n  {model_filename}"
     )
-
-    print(
-        f"Testvoorspellingen:"
-        f"\n  {predictions_filename}"
-    )
-
-    # --------------------------------------------------------
-    # WAARSCHUWINGEN
-    # --------------------------------------------------------
-
-    warnings_list = []
-
-    if not pd.isna(auc) and auc < 0.55:
-
-        warnings_list.append(
-            "AUC ligt dicht bij 0.50."
-        )
-
-    if (
-        not pd.isna(top_model)
-        and not pd.isna(top_baseline)
-        and top_model <= top_baseline
-    ):
-
-        warnings_list.append(
-            "Model presteert in topselectie niet "
-            "beter dan de baseline."
-        )
-
-    if (
-        not pd.isna(auc_delta)
-        and auc_delta > AUC_VERSCHIL_WAARSCHUWING
-    ):
-
-        warnings_list.append(
-            "AUC valt sterk terug bij het "
-            "schaalvrije controlemodel."
-        )
-
-    if warnings_list:
-
-        print()
-        print("WAARSCHUWINGEN:")
-
-        for warning in warnings_list:
-            print(f"  ⚠ {warning}")
 
     return {
         "horizon": horizon,
@@ -1017,7 +1127,7 @@ def train_horizon(df, horizon):
 
 
 # ============================================================
-# SAMENVATTING
+# SUMMARY
 # ============================================================
 
 def write_summary(results):
@@ -1042,43 +1152,50 @@ def write_summary(results):
         )
 
         f.write(
-            f"Run: "
+            "Run: "
             f"{dt.datetime.now().isoformat()}\n\n"
         )
 
         for result in results:
 
             f.write(
-                f"HORIZON: {result['horizon']}\n"
+                f"HORIZON: "
+                f"{result['horizon']}\n"
             )
 
             f.write(
-                f"Status: {result['status']}\n"
+                f"Status: "
+                f"{result['status']}\n"
             )
 
             f.write(
-                f"Total: {result['n_total']}\n"
+                f"Total: "
+                f"{result['n_total']}\n"
             )
 
             f.write(
-                f"Train: {result['n_train']}\n"
+                f"Train: "
+                f"{result['n_train']}\n"
             )
 
             f.write(
-                f"Test: {result['n_test']}\n"
+                f"Test: "
+                f"{result['n_test']}\n"
             )
 
             f.write(
-                f"Tickers: {result['n_tickers']}\n"
+                f"Tickers: "
+                f"{result['n_tickers']}\n"
             )
 
             f.write(
-                f"Split: {result['split_date']}\n"
+                f"Split: "
+                f"{result['split_date']}\n"
             )
 
             f.write(
                 f"Accuracy: "
-                f"{result['accuracy']:.6f}\n"
+                f"{safe_float(result['accuracy'])}\n"
             )
 
             f.write(
@@ -1097,7 +1214,8 @@ def write_summary(results):
             )
 
             f.write(
-                f"Top N: {result['top_n']}\n"
+                f"Top N: "
+                f"{result['top_n']}\n"
             )
 
             f.write(
@@ -1121,13 +1239,9 @@ def write_summary(results):
             )
 
             f.write(
-                f"Model: {result['model_file']}\n\n"
+                f"Model: "
+                f"{result['model_file']}\n\n"
             )
-
-    print()
-    print(
-        f"Samenvatting opgeslagen: {filename}"
-    )
 
 
 # ============================================================
@@ -1138,12 +1252,14 @@ def main():
 
     print()
     print("=" * 70)
-    print("LIGHTGBMV1 — HISTORISCHE TRAINING")
+    print(
+        "LIGHTGBMV1 — HISTORISCHE TRAINING"
+    )
     print("=" * 70)
 
     print(
-        "Doel: leren uit ALLE historische "
-        "generieke_technicals-regels."
+        "Bron: ALLE historische "
+        "generieke_technicals-regels"
     )
 
     print(
@@ -1151,8 +1267,13 @@ def main():
     )
 
     print(
-        f"Top-selectie: {TOP_N_FRACTIE * 100:.0f}%"
+        f"Top selectie: "
+        f"{TOP_N_FRACTIE * 100:.0f}%"
     )
+
+    # --------------------------------------------------------
+    # SUPABASE
+    # --------------------------------------------------------
 
     db_url = os.environ.get(
         "SUPABASE_DB_URL"
@@ -1164,12 +1285,9 @@ def main():
             "SUPABASE_DB_URL ontbreekt."
         )
 
-    # --------------------------------------------------------
-    # DATABASE
-    # --------------------------------------------------------
-
-    print()
-    print("Verbinding maken met Supabase...")
+    print(
+        "\nVerbinding maken met Supabase..."
+    )
 
     conn = psycopg2.connect(
         db_url
@@ -1208,28 +1326,31 @@ def main():
 
             print()
             print(
-                f"ERROR [{horizon}]: {e}"
+                f"ERROR [{horizon}]: "
+                f"{e}"
             )
 
-            results.append({
-                "horizon": horizon,
-                "status": "fout",
-                "n_total": 0,
-                "n_train": 0,
-                "n_test": 0,
-                "n_tickers": 0,
-                "split_date": "",
-                "accuracy": np.nan,
-                "auc": np.nan,
-                "control_auc": np.nan,
-                "auc_delta": np.nan,
-                "top_n": 0,
-                "top_model": np.nan,
-                "top_baseline": np.nan,
-                "top_control": np.nan,
-                "test_average": np.nan,
-                "model_file": "",
-            })
+            results.append(
+                {
+                    "horizon": horizon,
+                    "status": "fout",
+                    "n_total": 0,
+                    "n_train": 0,
+                    "n_test": 0,
+                    "n_tickers": 0,
+                    "split_date": "",
+                    "accuracy": np.nan,
+                    "auc": np.nan,
+                    "control_auc": np.nan,
+                    "auc_delta": np.nan,
+                    "top_n": 0,
+                    "top_model": np.nan,
+                    "top_baseline": np.nan,
+                    "top_control": np.nan,
+                    "test_average": np.nan,
+                    "model_file": "",
+                }
+            )
 
     # --------------------------------------------------------
     # SUMMARY
@@ -1239,9 +1360,62 @@ def main():
         results
     )
 
+    # --------------------------------------------------------
+    # CONTROLEREN OF ALLE MODELLEN BESTAAN
+    # --------------------------------------------------------
+
+    print()
+    print(
+        "Controleren of alle modellen "
+        "correct zijn opgeslagen..."
+    )
+
+    required_models = [
+        os.path.join(
+            RESULTS_DIR,
+            f"{MODEL_VERSIE}_10d_model.pkl",
+        ),
+        os.path.join(
+            RESULTS_DIR,
+            f"{MODEL_VERSIE}_30d_model.pkl",
+        ),
+        os.path.join(
+            RESULTS_DIR,
+            f"{MODEL_VERSIE}_60d_model.pkl",
+        ),
+    ]
+
+    missing_models = [
+        path
+        for path in required_models
+        if not os.path.isfile(path)
+    ]
+
+    if missing_models:
+
+        print(
+            "\nOntbrekende modellen:"
+        )
+
+        for path in missing_models:
+            print(
+                f"  {path}"
+            )
+
+        raise RuntimeError(
+            "Niet alle drie LightGBM-modellen "
+            "zijn aangemaakt."
+        )
+
+    print(
+        "\nAlle drie modellen zijn aanwezig."
+    )
+
     print()
     print("=" * 70)
-    print("LIGHTGBMV1 RUN VOLTOOID")
+    print(
+        "LIGHTGBMV1 RUN VOLTOOID"
+    )
     print("=" * 70)
 
     for result in results:
@@ -1253,11 +1427,11 @@ def main():
             f"control={fmt(result['control_auc'])}"
         )
 
-    print()
     print(
-        f"Alle output staat in: {RESULTS_DIR}/"
+        f"\nOutput: {RESULTS_DIR}/"
     )
 
 
 if __name__ == "__main__":
+
     main()
