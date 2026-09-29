@@ -2,55 +2,209 @@ name: XGBoostV3 Model Retraining
 
 on:
   schedule:
-    - cron: '0 3 * * 0'  # pas aan naar je bestaande schema indien anders
+    - cron: '0 3 * * 0'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: xgboostv3-training
+  cancel-in-progress: false
+
 jobs:
+
   train-and-update:
+
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 30
 
     steps:
-    - name: Uitpakken repository code
-      uses: actions/checkout@v4
 
-    - name: Python instellen
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-        cache: 'pip'
+      # ======================================================
+      # CHECKOUT
+      # ======================================================
 
-    - name: Benodigde pakketten installeren
-      run: |
-        python -m pip install --upgrade pip
-        pip install xgboost==3.2.0 pandas scikit-learn joblib psycopg2-binary requests
+      - name: Repository uitchecken
+        uses: actions/checkout@v4
 
-    - name: Start training script
-      env:
-        SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
-        TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        EMAIL_USER:       ${{ secrets.EMAIL_USER }}
-        EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
-        EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
-      run: |
-        python xgboostV3.py
+      # ======================================================
+      # PYTHON
+      # ======================================================
 
-    - name: Commit en push de nieuwe modellen naar de repo
-      run: |
-        git config --global user.name 'GitHub Actions Bot'
-        git config --global user.email 'actions@github.com'
-        gevonden=false
-        for f in xgboostV3_10d_model.pkl xgboostV3_30d_model.pkl xgboostV3_60d_model.pkl; do
-          if [ -f "$f" ]; then
-            git add "$f"
-            gevonden=true
+      - name: Python instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      # ======================================================
+      # PACKAGES
+      # ======================================================
+
+      - name: Benodigde pakketten installeren
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            xgboost==3.2.0 \
+            pandas \
+            scikit-learn \
+            joblib \
+            psycopg2-binary \
+            requests
+
+      # ======================================================
+      # OUDE 1-BYTE PLACEHOLDERS OPRUIMEN
+      # ======================================================
+
+      - name: Oude ongeldige model-placeholders verwijderen
+        shell: bash
+        run: |
+          set -e
+
+          for f in \
+            xgboostV3_10d_model.pkl \
+            xgboostV3_30d_model.pkl \
+            xgboostV3_60d_model.pkl
+          do
+
+            if [ -f "$f" ]; then
+
+              grootte=$(stat -c%s "$f")
+
+              echo "$f: $grootte bytes"
+
+              if [ "$grootte" -lt 1000 ]; then
+                echo "Verwijder ongeldig placeholderbestand: $f"
+                rm -f "$f"
+              fi
+
+            else
+
+              echo "$f bestaat niet."
+
+            fi
+
+          done
+
+      # ======================================================
+      # TRAINING
+      # ======================================================
+
+      - name: XGBoostV3 training uitvoeren
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+
+        run: |
+          python xgboostV3.py
+
+      # ======================================================
+      # MODEL VALIDATIE
+      # ======================================================
+
+      - name: Geldige modelbestanden controleren
+        shell: bash
+        run: |
+          set -e
+
+          geldig=0
+
+          for f in \
+            xgboostV3_10d_model.pkl \
+            xgboostV3_30d_model.pkl \
+            xgboostV3_60d_model.pkl
+          do
+
+            if [ -f "$f" ]; then
+
+              grootte=$(stat -c%s "$f")
+
+              echo ""
+              echo "----------------------------------------"
+              echo "$f"
+              echo "Grootte: $grootte bytes"
+
+              if [ "$grootte" -ge 1000 ]; then
+                geldig=$((geldig + 1))
+                echo "Status: aanwezig"
+              else
+                echo "Status: ONGELDIG"
+              fi
+
+            else
+
+              echo ""
+              echo "----------------------------------------"
+              echo "$f"
+              echo "Status: niet beschikbaar"
+
+            fi
+
+          done
+
+          echo ""
+          echo "Aantal aanwezige geldige modelbestanden: $geldig"
+
+          if [ "$geldig" -eq 0 ]; then
+            echo "ERROR: geen enkel geldig model beschikbaar."
+            exit 1
           fi
-        done
-        if [ "$gevonden" = true ]; then
-          git commit -m "Auto-update: xgboostV3 modellen hertraind op actuele data" || echo "Geen wijzigingen om te committeren"
+
+      # ======================================================
+      # GIT STATUS
+      # ======================================================
+
+      - name: Toon gewijzigde modelbestanden
+        shell: bash
+        run: |
+          echo "Git status:"
+          git status --short
+
+          echo ""
+          echo "Modelbestanden:"
+          ls -lah xgboostV3_*_model.pkl 2>/dev/null || true
+
+      # ======================================================
+      # COMMIT + PUSH
+      # ======================================================
+
+      - name: Commit en push modelupdates
+        shell: bash
+        run: |
+          set -e
+
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+
+          # Nieuwe/gewijzigde modelbestanden toevoegen.
+          git add xgboostV3_10d_model.pkl 2>/dev/null || true
+          git add xgboostV3_30d_model.pkl 2>/dev/null || true
+          git add xgboostV3_60d_model.pkl 2>/dev/null || true
+
+          # Ook verwijderde oude placeholders meenemen.
+          git add -u -- \
+            xgboostV3_10d_model.pkl \
+            xgboostV3_30d_model.pkl \
+            xgboostV3_60d_model.pkl
+
+          echo ""
+          echo "Te committen wijzigingen:"
+          git status --short
+
+          if git diff --cached --quiet; then
+            echo ""
+            echo "Geen modelwijzigingen om te committen."
+            exit 0
+          fi
+
+          git commit \
+            -m "Auto-update: XGBoostV3 modellen"
+
           git push
-        else
-          echo "Geen enkel model getraind dit run â€” niets te committen."
-        fi
