@@ -2382,7 +2382,3 @@ if __name__ == "__main__":
         main()
     )
 ```
-
-**Dit is de versie die je nu kunt committen.** De belangrijke fix zit uitsluitend in `haal_nieuwe_selecties_op()`: de tekst-datumvelden worden daar expliciet als `timestamptz` vergeleken en gesorteerd.
-
-Eén aandachtspunt voor de volgende GitHub Actions-run: je zult nog steeds **`10d geldig`, `30d ontbreekt`, `60d ontbreekt`** zien zolang die twee modelbestanden niet aanwezig zijn. Dat is volgens de huidige code geen fout; de beschikbare modellen worden gewoon gebruikt.
