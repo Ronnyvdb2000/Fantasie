@@ -1,3 +1,4 @@
+```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -38,6 +39,12 @@ Database-aanpassing:
 - xgboost_scores.koers is optioneel.
 - xgboost_scores.beurs is optioneel.
 - xgboost_runs.horizon wordt gevuld wanneer deze kolom bestaat.
+
+Datum-aanpassing:
+- selecties.datum en generieke_technicals.datum kunnen
+  als TEXT in PostgreSQL staan.
+- Daarom worden datumvelden in de SQL expliciet naar
+  timestamptz gecast.
 """
 
 import os
@@ -49,7 +56,7 @@ import datetime as dt
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 import joblib
 import pandas as pd
@@ -464,14 +471,6 @@ def controleer_belangrijke_kolommen(
         "BELANGRIJKE DATABASEKOLOMMEN"
     )
 
-    # --------------------------------------------------------
-    # Deze kolommen zijn echt noodzakelijk.
-    #
-    # koers en beurs in xgboost_scores zijn bewust NIET
-    # verplicht. De huidige database bevat deze twee kolommen
-    # niet.
-    # --------------------------------------------------------
-
     vereisten_verplicht = {
 
         "generieke_technicals": [
@@ -541,10 +540,6 @@ def controleer_belangrijke_kolommen(
                 "  ✅ Verplichte kolommen aanwezig."
             )
 
-        # ----------------------------------------------------
-        # Informatieve controle van optionele kolommen
-        # ----------------------------------------------------
-
         if tabel == "xgboost_scores":
 
             for optioneel in [
@@ -566,13 +561,6 @@ def controleer_belangrijke_kolommen(
                         f"{optioneel} "
                         f"(geen probleem)"
                     )
-
-    # --------------------------------------------------------
-    # xgboost_runs
-    #
-    # Alleen controleren dat de tabel bestaat. De exacte
-    # beschikbare kolommen worden dynamisch gebruikt.
-    # --------------------------------------------------------
 
     runs_kolommen = schema.get(
         "xgboost_runs",
@@ -828,20 +816,21 @@ def haal_nieuwe_selecties_op(
 
             WHERE
                 t."ticker" = s."ticker"
-                AND t."datum" <= s."datum"
+                AND t."datum"::timestamptz
+                    <= s."datum"::timestamptz
 
             ORDER BY
-                t."datum" DESC
+                t."datum"::timestamptz DESC
 
             LIMIT 1
 
         ) t ON TRUE
 
         WHERE
-            s."datum" >= %s
+            s."datum"::timestamptz >= %s
 
         ORDER BY
-            s."datum" DESC,
+            s."datum"::timestamptz DESC,
             s."ticker" ASC
     """
 
@@ -1227,10 +1216,6 @@ def score_selecties(
             f"{rij.get('strategie', '')}"
         )
 
-        # ----------------------------------------------------
-        # Exact dezelfde featurevolgorde als het model.
-        # ----------------------------------------------------
-
         X = pd.DataFrame(
             [
                 {
@@ -1381,10 +1366,6 @@ def sla_scores_op(
         [],
     )
 
-    # --------------------------------------------------------
-    # Verplicht
-    # --------------------------------------------------------
-
     verplichte_kolommen = [
         "ticker",
         "datum",
@@ -1407,14 +1388,6 @@ def sla_scores_op(
             "kolommen: "
             + ", ".join(ontbrekend)
         )
-
-    # --------------------------------------------------------
-    # Optionele kolommen
-    #
-    # koers en beurs bestaan momenteel niet in de database.
-    # Daarom worden ze alleen toegevoegd wanneer ze werkelijk
-    # bestaan.
-    # --------------------------------------------------------
 
     optionele_kolommen = [
         "koers",
@@ -1464,10 +1437,6 @@ def sla_scores_op(
         )
         ON CONFLICT DO NOTHING
     """
-
-    # --------------------------------------------------------
-    # Alleen waarden gebruiken die in de INSERT zitten.
-    # --------------------------------------------------------
 
     insert_resultaten = []
 
@@ -1525,16 +1494,6 @@ def sla_scores_op(
 def bepaal_run_horizon(
     modellen: Dict[str, object],
 ) -> str:
-    """
-    Bepaalt een geldige horizonwaarde voor xgboost_runs.
-
-    De database heeft horizon als NOT NULL.
-    Daarom mag hier nooit None terechtkomen.
-
-    Bij meerdere modellen worden de horizons gecombineerd,
-    bijvoorbeeld:
-        10d,30d,60d
-    """
 
     beschikbare = [
         horizon
@@ -1544,9 +1503,6 @@ def bepaal_run_horizon(
 
     if not beschikbare:
 
-        # Dit is alleen een absolute fallback.
-        # Normaal kan deze functie niet zonder modellen
-        # worden aangeroepen.
         return HORIZONS[0]
 
     return ",".join(
@@ -1577,10 +1533,6 @@ def registreer_run(
 
         return
 
-    # --------------------------------------------------------
-    # Bepaal altijd een geldige horizon.
-    # --------------------------------------------------------
-
     if modellen:
 
         run_horizon = (
@@ -1591,9 +1543,6 @@ def registreer_run(
 
     else:
 
-        # Bij een fout kan het gebeuren dat modellen nog
-        # niet geladen zijn. xgboost_runs.horizon is NOT NULL,
-        # dus gebruiken we de eerste geconfigureerde horizon.
         run_horizon = HORIZONS[0]
 
     mogelijke_waarden = {
@@ -1641,12 +1590,6 @@ def registreer_run(
         for kolom in mogelijke_waarden
         if kolom in kolommen
     ]
-
-    # --------------------------------------------------------
-    # Extra veiligheid:
-    # Als horizon bestaat, moet deze altijd worden
-    # meegenomen.
-    # --------------------------------------------------------
 
     if "horizon" in kolommen:
 
@@ -1713,12 +1656,6 @@ def registreer_run(
             conn.rollback()
         except Exception:
             pass
-
-        # ----------------------------------------------------
-        # BELANGRIJK:
-        # Een fout in runregistratie mag de daadwerkelijke
-        # score niet ongeldig maken.
-        # ----------------------------------------------------
 
         print(
             f"⚠️ Runregistratie mislukt: "
@@ -2192,10 +2129,6 @@ def main() -> int:
 
     try:
 
-        # ----------------------------------------------------
-        # CONFIGURATIE
-        # ----------------------------------------------------
-
         controleer_configuratie()
 
         print("")
@@ -2204,15 +2137,7 @@ def main() -> int:
             f"{starttijd.isoformat()}"
         )
 
-        # ----------------------------------------------------
-        # MODELLEN
-        # ----------------------------------------------------
-
         modellen = laad_modellen()
-
-        # ----------------------------------------------------
-        # DATABASE
-        # ----------------------------------------------------
 
         conn = open_database()
 
@@ -2225,10 +2150,6 @@ def main() -> int:
         controleer_belangrijke_kolommen(
             schema
         )
-
-        # ----------------------------------------------------
-        # NIEUWE SELECTIES
-        # ----------------------------------------------------
 
         df_selecties = (
             haal_nieuwe_selecties_op(
@@ -2260,20 +2181,12 @@ def main() -> int:
 
             return 0
 
-        # ----------------------------------------------------
-        # BESTAANDE SCORES
-        # ----------------------------------------------------
-
         bestaande = (
             haal_bestaande_scores_op(
                 conn,
                 df_selecties,
             )
         )
-
-        # ----------------------------------------------------
-        # SCORING
-        # ----------------------------------------------------
 
         resultaten = (
             score_selecties(
@@ -2283,10 +2196,6 @@ def main() -> int:
             )
         )
 
-        # ----------------------------------------------------
-        # OPSLAAN
-        # ----------------------------------------------------
-
         opgeslagen = (
             sla_scores_op(
                 conn,
@@ -2295,19 +2204,11 @@ def main() -> int:
             )
         )
 
-        # ----------------------------------------------------
-        # TOP N
-        # ----------------------------------------------------
-
         df_top = (
             bepaal_top_resultaten(
                 resultaten
             )
         )
-
-        # ----------------------------------------------------
-        # TELEGRAM
-        # ----------------------------------------------------
 
         telegram_ok = (
             stuur_telegram(
@@ -2315,19 +2216,11 @@ def main() -> int:
             )
         )
 
-        # ----------------------------------------------------
-        # E-MAIL
-        # ----------------------------------------------------
-
         email_ok = (
             stuur_email(
                 df_top
             )
         )
-
-        # ----------------------------------------------------
-        # RUN REGISTREREN
-        # ----------------------------------------------------
 
         registreer_run(
             conn,
@@ -2339,10 +2232,6 @@ def main() -> int:
             aantal_scores=opgeslagen,
             modellen=modellen,
         )
-
-        # ----------------------------------------------------
-        # SAMENVATTING
-        # ----------------------------------------------------
 
         toon_samenvatting(
             modellen,
@@ -2435,10 +2324,6 @@ def main() -> int:
 
         traceback.print_exc()
 
-        # ----------------------------------------------------
-        # FOUTREGISTRATIE
-        # ----------------------------------------------------
-
         if conn is not None:
 
             try:
@@ -2464,11 +2349,6 @@ def main() -> int:
                     "Foutregistratie mislukt: "
                     f"{run_exc}"
                 )
-
-        # ----------------------------------------------------
-        # Heel belangrijk voor GitHub Actions:
-        # echte fout = exit code 1.
-        # ----------------------------------------------------
 
         return 1
 
@@ -2501,3 +2381,8 @@ if __name__ == "__main__":
     sys.exit(
         main()
     )
+```
+
+**Dit is de versie die je nu kunt committen.** De belangrijke fix zit uitsluitend in `haal_nieuwe_selecties_op()`: de tekst-datumvelden worden daar expliciet als `timestamptz` vergeleken en gesorteerd.
+
+Eén aandachtspunt voor de volgende GitHub Actions-run: je zult nog steeds **`10d geldig`, `30d ontbreekt`, `60d ontbreekt`** zien zolang die twee modelbestanden niet aanwezig zijn. Dat is volgens de huidige code geen fout; de beschikbare modellen worden gewoon gebruikt.
