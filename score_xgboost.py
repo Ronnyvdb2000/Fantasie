@@ -33,6 +33,11 @@ Belangrijk:
 De score is een modelscore/rangorde.
 Het is GEEN garantie en wordt niet als een gekalibreerde
 beleggingskans geïnterpreteerd.
+
+Database-aanpassing:
+- xgboost_scores.koers is optioneel.
+- xgboost_scores.beurs is optioneel.
+- xgboost_runs.horizon wordt gevuld wanneer deze kolom bestaat.
 """
 
 import os
@@ -44,7 +49,7 @@ import datetime as dt
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import joblib
 import pandas as pd
@@ -158,8 +163,7 @@ def sql_ident(naam: str) -> str:
     """
     Maakt een veilige PostgreSQL identifier.
 
-    Deze functie wordt uitsluitend gebruikt met kolomnamen
-    die vooraf via information_schema zijn gecontroleerd.
+    Alleen eenvoudige databasekolomnamen zijn toegestaan.
     """
 
     if not naam:
@@ -209,6 +213,7 @@ def format_score(score: float) -> str:
 # ============================================================
 
 def controleer_configuratie() -> None:
+
     if not SUPABASE_DB_URL:
         raise RuntimeError(
             "SUPABASE_DB_URL ontbreekt. "
@@ -284,9 +289,6 @@ def controleer_configuratie() -> None:
 # ============================================================
 
 def open_database():
-    """
-    Opent een PostgreSQL/Supabase verbinding.
-    """
 
     try:
 
@@ -318,11 +320,13 @@ def open_database():
         )
 
         if getattr(exc, "pgcode", None):
+
             print(
                 f"pgcode    : {exc.pgcode}"
             )
 
         if getattr(exc, "pgerror", None):
+
             print(
                 f"pgerror   : {exc.pgerror}"
             )
@@ -418,10 +422,13 @@ def controleer_database_schema(
     for tabel in vereiste_tabellen:
 
         if tabel in gevonden:
+
             print(
                 f"  ✅ {tabel}"
             )
+
         else:
+
             print(
                 f"  ❌ {tabel} ONTBREEKT"
             )
@@ -445,6 +452,10 @@ def controleer_database_schema(
     return schema
 
 
+# ============================================================
+# BELANGRIJKE KOLOMMEN CONTROLEREN
+# ============================================================
+
 def controleer_belangrijke_kolommen(
     schema: Dict[str, List[str]],
 ) -> None:
@@ -453,7 +464,15 @@ def controleer_belangrijke_kolommen(
         "BELANGRIJKE DATABASEKOLOMMEN"
     )
 
-    vereisten = {
+    # --------------------------------------------------------
+    # Deze kolommen zijn echt noodzakelijk.
+    #
+    # koers en beurs in xgboost_scores zijn bewust NIET
+    # verplicht. De huidige database bevat deze twee kolommen
+    # niet.
+    # --------------------------------------------------------
+
+    vereisten_verplicht = {
 
         "generieke_technicals": [
             "ticker",
@@ -476,14 +495,12 @@ def controleer_belangrijke_kolommen(
             "horizon",
             "score",
             "strategieen",
-            "koers",
-            "beurs",
         ],
     }
 
     fouten = []
 
-    for tabel, vereist in vereisten.items():
+    for tabel, vereist in vereisten_verplicht.items():
 
         werkelijk = schema.get(
             tabel,
@@ -521,7 +538,68 @@ def controleer_belangrijke_kolommen(
         else:
 
             print(
-                "  ✅ Vereiste kolommen aanwezig."
+                "  ✅ Verplichte kolommen aanwezig."
+            )
+
+        # ----------------------------------------------------
+        # Informatieve controle van optionele kolommen
+        # ----------------------------------------------------
+
+        if tabel == "xgboost_scores":
+
+            for optioneel in [
+                "koers",
+                "beurs",
+            ]:
+
+                if optioneel in werkelijk:
+
+                    print(
+                        f"  ℹ️ Optioneel aanwezig: "
+                        f"{optioneel}"
+                    )
+
+                else:
+
+                    print(
+                        f"  ℹ️ Optioneel ontbreekt: "
+                        f"{optioneel} "
+                        f"(geen probleem)"
+                    )
+
+    # --------------------------------------------------------
+    # xgboost_runs
+    #
+    # Alleen controleren dat de tabel bestaat. De exacte
+    # beschikbare kolommen worden dynamisch gebruikt.
+    # --------------------------------------------------------
+
+    runs_kolommen = schema.get(
+        "xgboost_runs",
+        [],
+    )
+
+    print("")
+    print(
+        "[xgboost_runs]"
+    )
+
+    if runs_kolommen:
+
+        print(
+            "  ✅ Tabel aanwezig."
+        )
+
+        print(
+            "  Kolommen: "
+            + ", ".join(runs_kolommen)
+        )
+
+        if "horizon" in runs_kolommen:
+
+            print(
+                "  ℹ️ horizon aanwezig — "
+                "wordt verplicht gevuld."
             )
 
     if fouten:
@@ -537,8 +615,8 @@ def controleer_belangrijke_kolommen(
             )
 
         raise RuntimeError(
-            "De database bevat niet alle vereiste "
-            "kolommen."
+            "De database bevat niet alle "
+            "vereiste kolommen."
         )
 
 
@@ -1149,7 +1227,10 @@ def score_selecties(
             f"{rij.get('strategie', '')}"
         )
 
+        # ----------------------------------------------------
         # Exact dezelfde featurevolgorde als het model.
+        # ----------------------------------------------------
+
         X = pd.DataFrame(
             [
                 {
@@ -1280,6 +1361,7 @@ def score_selecties(
 def sla_scores_op(
     conn,
     resultaten: List[Dict],
+    schema: Dict[str, List[str]],
 ) -> int:
 
     print_header(
@@ -1294,29 +1376,112 @@ def sla_scores_op(
 
         return 0
 
-    query = """
+    beschikbare_kolommen = schema.get(
+        "xgboost_scores",
+        [],
+    )
+
+    # --------------------------------------------------------
+    # Verplicht
+    # --------------------------------------------------------
+
+    verplichte_kolommen = [
+        "ticker",
+        "datum",
+        "model_versie",
+        "horizon",
+        "score",
+        "strategieen",
+    ]
+
+    ontbrekend = [
+        kolom
+        for kolom in verplichte_kolommen
+        if kolom not in beschikbare_kolommen
+    ]
+
+    if ontbrekend:
+
+        raise RuntimeError(
+            "xgboost_scores mist verplichte "
+            "kolommen: "
+            + ", ".join(ontbrekend)
+        )
+
+    # --------------------------------------------------------
+    # Optionele kolommen
+    #
+    # koers en beurs bestaan momenteel niet in de database.
+    # Daarom worden ze alleen toegevoegd wanneer ze werkelijk
+    # bestaan.
+    # --------------------------------------------------------
+
+    optionele_kolommen = [
+        "koers",
+        "beurs",
+    ]
+
+    insert_kolommen = list(
+        verplichte_kolommen
+    )
+
+    for kolom in optionele_kolommen:
+
+        if kolom in beschikbare_kolommen:
+
+            insert_kolommen.append(
+                kolom
+            )
+
+            print(
+                f"[DB] xgboost_scores.{kolom}: "
+                "aanwezig — wordt opgeslagen."
+            )
+
+        else:
+
+            print(
+                f"[DB] xgboost_scores.{kolom}: "
+                "niet aanwezig — wordt overgeslagen."
+            )
+
+    kolommen_sql = ",\n            ".join(
+        sql_ident(kolom)
+        for kolom in insert_kolommen
+    )
+
+    placeholders = ",\n            ".join(
+        f"%({kolom})s"
+        for kolom in insert_kolommen
+    )
+
+    query = f"""
         INSERT INTO public.xgboost_scores (
-            ticker,
-            datum,
-            model_versie,
-            horizon,
-            score,
-            strategieen,
-            koers,
-            beurs
+            {kolommen_sql}
         )
         VALUES (
-            %(ticker)s,
-            %(datum)s,
-            %(model_versie)s,
-            %(horizon)s,
-            %(score)s,
-            %(strategieen)s,
-            %(koers)s,
-            %(beurs)s
+            {placeholders}
         )
         ON CONFLICT DO NOTHING
     """
+
+    # --------------------------------------------------------
+    # Alleen waarden gebruiken die in de INSERT zitten.
+    # --------------------------------------------------------
+
+    insert_resultaten = []
+
+    for resultaat in resultaten:
+
+        record = {
+            kolom:
+                resultaat.get(kolom)
+            for kolom in insert_kolommen
+        }
+
+        insert_resultaten.append(
+            record
+        )
 
     try:
 
@@ -1325,7 +1490,7 @@ def sla_scores_op(
             psycopg2.extras.execute_batch(
                 cur,
                 query,
-                resultaten,
+                insert_resultaten,
                 page_size=100,
             )
 
@@ -1357,6 +1522,38 @@ def sla_scores_op(
 # RUN REGISTREREN
 # ============================================================
 
+def bepaal_run_horizon(
+    modellen: Dict[str, object],
+) -> str:
+    """
+    Bepaalt een geldige horizonwaarde voor xgboost_runs.
+
+    De database heeft horizon als NOT NULL.
+    Daarom mag hier nooit None terechtkomen.
+
+    Bij meerdere modellen worden de horizons gecombineerd,
+    bijvoorbeeld:
+        10d,30d,60d
+    """
+
+    beschikbare = [
+        horizon
+        for horizon in HORIZONS
+        if horizon in modellen
+    ]
+
+    if not beschikbare:
+
+        # Dit is alleen een absolute fallback.
+        # Normaal kan deze functie niet zonder modellen
+        # worden aangeroepen.
+        return HORIZONS[0]
+
+    return ",".join(
+        beschikbare
+    )
+
+
 def registreer_run(
     conn,
     schema: Dict[str, List[str]],
@@ -1364,6 +1561,7 @@ def registreer_run(
     aantal_selecties: int,
     aantal_scores: int,
     foutmelding: Optional[str] = None,
+    modellen: Optional[Dict[str, object]] = None,
 ) -> None:
 
     kolommen = schema.get(
@@ -1379,10 +1577,32 @@ def registreer_run(
 
         return
 
+    # --------------------------------------------------------
+    # Bepaal altijd een geldige horizon.
+    # --------------------------------------------------------
+
+    if modellen:
+
+        run_horizon = (
+            bepaal_run_horizon(
+                modellen
+            )
+        )
+
+    else:
+
+        # Bij een fout kan het gebeuren dat modellen nog
+        # niet geladen zijn. xgboost_runs.horizon is NOT NULL,
+        # dus gebruiken we de eerste geconfigureerde horizon.
+        run_horizon = HORIZONS[0]
+
     mogelijke_waarden = {
 
         "model_versie":
             MODEL_VERSIE,
+
+        "horizon":
+            run_horizon,
 
         "status":
             status,
@@ -1422,6 +1642,20 @@ def registreer_run(
         if kolom in kolommen
     ]
 
+    # --------------------------------------------------------
+    # Extra veiligheid:
+    # Als horizon bestaat, moet deze altijd worden
+    # meegenomen.
+    # --------------------------------------------------------
+
+    if "horizon" in kolommen:
+
+        if "horizon" not in bruikbaar:
+
+            bruikbaar.append(
+                "horizon"
+            )
+
     if not bruikbaar:
 
         print(
@@ -1452,7 +1686,7 @@ def registreer_run(
 
     waarden = {
         kolom:
-        mogelijke_waarden[kolom]
+            mogelijke_waarden[kolom]
         for kolom in bruikbaar
     }
 
@@ -1469,7 +1703,8 @@ def registreer_run(
 
         print(
             f"[RUN] Run geregistreerd: "
-            f"{status}"
+            f"{status} | "
+            f"horizon={run_horizon}"
         )
 
     except Exception as exc:
@@ -1479,8 +1714,12 @@ def registreer_run(
         except Exception:
             pass
 
-        # Een probleem met alleen de run-log mag
-        # de daadwerkelijke score niet ongeldig maken.
+        # ----------------------------------------------------
+        # BELANGRIJK:
+        # Een fout in runregistratie mag de daadwerkelijke
+        # score niet ongeldig maken.
+        # ----------------------------------------------------
+
         print(
             f"⚠️ Runregistratie mislukt: "
             f"{type(exc).__name__}: {exc}"
@@ -2016,6 +2255,7 @@ def main() -> int:
                 status="geen_selecties",
                 aantal_selecties=0,
                 aantal_scores=0,
+                modellen=modellen,
             )
 
             return 0
@@ -2051,6 +2291,7 @@ def main() -> int:
             sla_scores_op(
                 conn,
                 resultaten,
+                schema,
             )
         )
 
@@ -2096,6 +2337,7 @@ def main() -> int:
                 df_selecties
             ),
             aantal_scores=opgeslagen,
+            modellen=modellen,
         )
 
         # ----------------------------------------------------
@@ -2212,6 +2454,7 @@ def main() -> int:
                     foutmelding=str(
                         exc
                     )[:2000],
+                    modellen=modellen,
                 )
 
             except Exception as run_exc:
@@ -2222,8 +2465,11 @@ def main() -> int:
                     f"{run_exc}"
                 )
 
+        # ----------------------------------------------------
         # Heel belangrijk voor GitHub Actions:
         # echte fout = exit code 1.
+        # ----------------------------------------------------
+
         return 1
 
     finally:
@@ -2251,6 +2497,7 @@ def main() -> int:
 # ============================================================
 
 if __name__ == "__main__":
+
     sys.exit(
         main()
     )
