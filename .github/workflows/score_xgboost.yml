@@ -18,7 +18,7 @@ jobs:
     steps:
 
       # ======================================================
-      # REPOSITORY
+      # CHECKOUT
       # ======================================================
 
       - name: Checkout repository
@@ -39,6 +39,7 @@ jobs:
       # ======================================================
 
       - name: Install dependencies
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -86,10 +87,14 @@ jobs:
               echo "  Grootte: $grootte bytes"
 
               if [ "$grootte" -lt 1000 ]; then
+
                 echo "  ❌ Ongeldig: kleiner dan 1000 bytes"
+
               else
+
                 echo "  ✅ Bestand aanwezig"
                 geldig=$((geldig + 1))
+
               fi
 
             else
@@ -104,40 +109,45 @@ jobs:
 
           echo ""
           echo "=================================================="
-          echo "GELDIGE MODELFILES: $geldig / 3"
+          echo "BESCHIKBARE MODELFILES: $geldig / 3"
           echo "=================================================="
 
           if [ "$geldig" -eq 0 ]; then
+
             echo ""
             echo "❌ Geen enkel modelbestand beschikbaar."
             echo "Scoring kan niet worden uitgevoerd."
+
             exit 1
+
           fi
 
           echo ""
-          echo "Minstens één model beschikbaar."
-          echo "Scoring kan doorgaan."
+          echo "✅ Minstens één modelbestand beschikbaar."
 
       # ======================================================
-      # PYTHON MODEL VALIDATIE
+      # ECHTE MODELVALIDATIE
       # ======================================================
 
-      - name: Valideer modellen met joblib en XGBoost
+      - name: Valideer XGBoostV3 modellen
         shell: bash
         run: |
           set -euo pipefail
 
           python <<'PY'
+
           import os
           import sys
           import joblib
           import xgboost
+
 
           modellen = [
               "xgboostV3_10d_model.pkl",
               "xgboostV3_30d_model.pkl",
               "xgboostV3_60d_model.pkl",
           ]
+
 
           verwachte_features = [
               "atr14",
@@ -153,15 +163,21 @@ jobs:
               "pct_from_high52w",
           ]
 
+
           geldig = 0
 
+
           print("")
           print("=" * 70)
-          print("ECHTE VALIDATIE VAN SCORING MODELFILES")
+          print("ECHTE VALIDATIE VAN XGBOOSTV3 MODELFILES")
           print("=" * 70)
 
           print("")
-          print(f"XGBoost versie: {xgboost.__version__}")
+          print(
+              f"XGBoost versie: "
+              f"{xgboost.__version__}"
+          )
+
 
           for bestand in modellen:
 
@@ -169,68 +185,94 @@ jobs:
               print(f"[CONTROLE] {bestand}")
 
               if not os.path.exists(bestand):
-                  print("  ⏳ Niet aanwezig — toegestaan.")
+
+                  print(
+                      "  ⏳ Niet aanwezig — toegestaan."
+                  )
+
                   continue
+
 
               grootte = os.path.getsize(bestand)
 
               print(
-                  f"  Grootte: {grootte:,} bytes"
+                  f"  Grootte: "
+                  f"{grootte:,} bytes"
               )
 
+
               if grootte < 1000:
+
                   print(
                       "  ⚠️ Ongeldig/placeholderbestand — "
                       "wordt overgeslagen."
                   )
+
                   continue
 
+
               try:
+
                   model = joblib.load(bestand)
 
               except Exception as exc:
+
                   print(
-                      f"  ❌ joblib.load() mislukt: {exc}"
+                      f"  ❌ joblib.load() mislukt: "
+                      f"{exc}"
                   )
+
                   continue
+
 
               if not hasattr(
                   model,
-                  "predict_proba"
+                  "predict_proba",
               ):
+
                   print(
                       "  ❌ Geen predict_proba()."
                   )
+
                   continue
+
 
               if not hasattr(
                   model,
-                  "feature_names_in_"
+                  "feature_names_in_",
               ):
+
                   print(
                       "  ❌ Geen feature_names_in_()."
                   )
+
                   continue
+
 
               echte_features = list(
                   model.feature_names_in_
               )
 
+
               if echte_features != verwachte_features:
+
                   print(
-                      "  ❌ Verkeerde features/"
-                      "featurevolgorde."
+                      "  ❌ Verkeerde "
+                      "features/featurevolgorde."
                   )
 
                   print(
-                      f"  Verwacht: {verwachte_features}"
+                      f"  Verwacht: "
+                      f"{verwachte_features}"
                   )
 
                   print(
-                      f"  Gevonden: {echte_features}"
+                      f"  Gevonden: "
+                      f"{echte_features}"
                   )
 
                   continue
+
 
               print(
                   "  ✅ Geldig model."
@@ -238,38 +280,45 @@ jobs:
 
               geldig += 1
 
+
           print("")
           print("=" * 70)
           print(
-              f"GELDIGE MODELLEN: {geldig} / 3"
+              f"GELDIGE MODELLEN: "
+              f"{geldig} / 3"
           )
           print("=" * 70)
 
+
           if geldig == 0:
+
               print("")
               print(
                   "❌ Geen enkel geldig model."
               )
+
               print(
                   "Scoring wordt gestopt."
               )
+
               sys.exit(1)
+
 
           print("")
           print(
-              "Minstens één geldig model beschikbaar."
+              "✅ Minstens één geldig model "
+              "beschikbaar."
           )
-          print(
-              "Scoring kan doorgaan."
-          )
+
           PY
 
       # ======================================================
-      # SCORING
+      # SCORE NIEUWE SELECTIES
       # ======================================================
 
       - name: Run score_xgboost
         env:
+
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -282,6 +331,7 @@ jobs:
           TOP_N: "10"
           LOOKBACK_DAGEN: "3"
 
+        shell: bash
         run: |
           set -euo pipefail
 
