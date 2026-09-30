@@ -12,9 +12,7 @@ Modellen:
     xgboostV3_30d_model.pkl
     xgboostV3_60d_model.pkl
 
-Werking
-=======
-
+Werking:
 - Beschikbare geldige modellen worden geladen.
 - Ontbrekende modellen worden overgeslagen.
 - Nieuwe selecties worden uit:
@@ -23,63 +21,30 @@ Werking
   gehaald.
 - Alleen selecties binnen LOOKBACK_DAGEN worden verwerkt.
 - Reeds opgeslagen combinaties worden niet opnieuw gescoord.
-- Alle succesvolle scores worden opgeslagen.
-- Alleen TOP_N wordt naar Telegram/e-mail gestuurd.
-- Features en volgorde worden rechtstreeks gecontroleerd tegen
+- Features en volgorde worden gecontroleerd tegen
   model.feature_names_in_.
-- Minstens één geldig model is vereist.
+- Nieuwe scores worden opgeslagen in xgboost_scores.
+- TOP_N wordt naar Telegram/e-mail gestuurd.
+- Een run wordt geregistreerd in xgboost_runs wanneer
+  daarvoor geschikte kolommen aanwezig zijn.
+- Echte fouten eindigen met exit code 1.
 
-Omgevingsvariabelen
-===================
-
-Verplicht:
-    SUPABASE_DB_URL
-
-Optioneel:
-    TELEGRAM_TOKEN
-    TELEGRAM_CHAT_ID
-
-    EMAIL_USER
-    EMAIL_PASS
-    EMAIL_RECEIVER
-
-    TOP_N
-        standaard: 10
-
-    LOOKBACK_DAGEN
-        standaard: 3
-
-Vereiste features
-=================
-
-    atr14
-    atr14_pct
-    rsi14
-    ibs
-    ma50
-    ma200
-    pct_from_ma50
-    pct_from_ma200
-    vol_ratio_20d
-    high52w
-    pct_from_high52w
-
-Score
-=====
-
+Belangrijk:
 De score is een modelscore/rangorde.
 Het is GEEN garantie en wordt niet als een gekalibreerde
 beleggingskans geïnterpreteerd.
 """
 
 import os
+import sys
 import smtplib
+import traceback
 import warnings
 import datetime as dt
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional
 
 import joblib
 import pandas as pd
@@ -145,8 +110,24 @@ EMAIL_RECEIVER = os.getenv(
     ""
 ).strip()
 
+MODEL_DIR = os.getenv(
+    "XGBOOST_MODEL_DIR",
+    "."
+).strip() or "."
 
-# Exact dezelfde features als tijdens training.
+MODEL_FILES = {
+    horizon: os.path.join(
+        MODEL_DIR,
+        f"{MODEL_VERSIE}_{horizon}_model.pkl",
+    )
+    for horizon in HORIZONS
+}
+
+
+# ============================================================
+# EXACTE FEATURES UIT TRAINING
+# ============================================================
+
 VERWACHTE_FEATURES = [
     "atr14",
     "atr14_pct",
@@ -163,12 +144,71 @@ VERWACHTE_FEATURES = [
 
 
 # ============================================================
+# ALGEMENE HULPFUNCTIES
+# ============================================================
+
+def print_header(titel: str) -> None:
+    print("")
+    print("=" * 70)
+    print(titel)
+    print("=" * 70)
+
+
+def sql_ident(naam: str) -> str:
+    """
+    Maakt een veilige PostgreSQL identifier.
+
+    Deze functie wordt uitsluitend gebruikt met kolomnamen
+    die vooraf via information_schema zijn gecontroleerd.
+    """
+
+    if not naam:
+        raise ValueError(
+            "Lege SQL identifier."
+        )
+
+    if not naam.replace("_", "").isalnum():
+        raise ValueError(
+            f"Ongeldige SQL identifier: {naam!r}"
+        )
+
+    return '"' + naam.replace('"', '""') + '"'
+
+
+def normaliseer_datum(waarde):
+    if waarde is None:
+        return None
+
+    try:
+        if pd.isna(waarde):
+            return None
+    except Exception:
+        pass
+
+    try:
+        ts = pd.to_datetime(
+            waarde,
+            errors="coerce",
+        )
+
+        if pd.isna(ts):
+            return None
+
+        return ts.to_pydatetime()
+
+    except Exception:
+        return waarde
+
+
+def format_score(score: float) -> str:
+    return f"{float(score):.4f}"
+
+
+# ============================================================
 # CONFIGURATIE CONTROLEREN
 # ============================================================
 
 def controleer_configuratie() -> None:
-    """Controleert de belangrijkste instellingen."""
-
     if not SUPABASE_DB_URL:
         raise RuntimeError(
             "SUPABASE_DB_URL ontbreekt. "
@@ -186,17 +226,17 @@ def controleer_configuratie() -> None:
             "LOOKBACK_DAGEN mag niet negatief zijn."
         )
 
-    print("")
-    print("=" * 70)
-    print("CONFIGURATIE")
-    print("=" * 70)
+    print_header(
+        "XGBOOSTV3 SCORING"
+    )
 
     print(
         f"Modelversie       : {MODEL_VERSIE}"
     )
 
     print(
-        f"Horizons          : {', '.join(HORIZONS)}"
+        f"Horizons          : "
+        f"{', '.join(HORIZONS)}"
     )
 
     print(
@@ -208,14 +248,21 @@ def controleer_configuratie() -> None:
     )
 
     print(
-        f"XGBoost versie     : {xgboost.__version__}"
+        f"Modelmap          : "
+        f"{os.path.abspath(MODEL_DIR)}"
+    )
+
+    print(
+        f"XGBoost versie    : "
+        f"{xgboost.__version__}"
     )
 
     print(
         "Telegram          : "
         + (
             "geconfigureerd"
-            if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID
+            if TELEGRAM_TOKEN
+            and TELEGRAM_CHAT_ID
             else "niet geconfigureerd"
         )
     )
@@ -233,11 +280,13 @@ def controleer_configuratie() -> None:
 
 
 # ============================================================
-# DATABASE
+# DATABASE VERBINDING
 # ============================================================
 
 def open_database():
-    """Opent een PostgreSQL/Supabase verbinding."""
+    """
+    Opent een PostgreSQL/Supabase verbinding.
+    """
 
     try:
 
@@ -256,10 +305,9 @@ def open_database():
 
     except Exception as exc:
 
-        print("")
-        print("=" * 70)
-        print("❌ DATABASEVERBINDING MISLUKT")
-        print("=" * 70)
+        print_header(
+            "DATABASEVERBINDING MISLUKT"
+        )
 
         print(
             f"Type fout : {type(exc).__name__}"
@@ -269,12 +317,12 @@ def open_database():
             f"Fout      : {exc}"
         )
 
-        if hasattr(exc, "pgcode"):
+        if getattr(exc, "pgcode", None):
             print(
                 f"pgcode    : {exc.pgcode}"
             )
 
-        if hasattr(exc, "pgerror"):
+        if getattr(exc, "pgerror", None):
             print(
                 f"pgerror   : {exc.pgerror}"
             )
@@ -285,114 +333,13 @@ def open_database():
 
 
 # ============================================================
-# DATABASE SCHEMA DIAGNOSTIEK
+# DATABASE SCHEMA
 # ============================================================
-
-def controleer_database_schema(conn) -> None:
-    """
-    Controleert vooraf of de belangrijkste tabellen bestaan.
-
-    Dit voorkomt dat een onduidelijke SQL-fout pas midden
-    in de scoring zichtbaar wordt.
-    """
-
-    vereiste_tabellen = [
-        "generieke_technicals",
-        "selecties",
-        "xgboost_scores",
-        "xgboost_runs",
-    ]
-
-    print("")
-    print("=" * 70)
-    print("DATABASE SCHEMA CONTROLEREN")
-    print("=" * 70)
-
-    try:
-
-        with conn.cursor() as cur:
-
-            cur.execute(
-                """
-                SELECT
-                    table_name
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                  AND table_name = ANY(%s)
-                ORDER BY table_name
-                """,
-                (
-                    vereiste_tabellen,
-                ),
-            )
-
-            gevonden = {
-                row[0]
-                for row in cur.fetchall()
-            }
-
-        for tabel in vereiste_tabellen:
-
-            if tabel in gevonden:
-                print(
-                    f"  ✅ {tabel}"
-                )
-            else:
-                print(
-                    f"  ❌ {tabel} ONTBREEKT"
-                )
-
-        ontbrekend = [
-            tabel
-            for tabel in vereiste_tabellen
-            if tabel not in gevonden
-        ]
-
-        if ontbrekend:
-
-            raise RuntimeError(
-                "Ontbrekende databasetabellen: "
-                + ", ".join(ontbrekend)
-            )
-
-    except Exception as exc:
-
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-
-        print("")
-        print(
-            "[DB SCHEMA FOUT]"
-        )
-
-        print(
-            f"Type    : {type(exc).__name__}"
-        )
-
-        print(
-            f"Fout    : {exc}"
-        )
-
-        if hasattr(exc, "pgcode"):
-            print(
-                f"pgcode  : {exc.pgcode}"
-            )
-
-        if hasattr(exc, "pgerror"):
-            print(
-                f"pgerror : {exc.pgerror}"
-            )
-
-        raise
-
 
 def haal_kolommen_op(
     conn,
     tabel: str,
 ) -> List[str]:
-    """Geeft de kolommen van een public-tabel terug."""
 
     try:
 
@@ -422,31 +369,98 @@ def haal_kolommen_op(
         except Exception:
             pass
 
-        print(
-            f"[DB] Kolommen van {tabel} konden "
+        raise RuntimeError(
+            f"Kolommen van {tabel} konden "
             f"niet worden gelezen: {exc}"
+        ) from exc
+
+
+def controleer_database_schema(
+    conn,
+) -> Dict[str, List[str]]:
+
+    vereiste_tabellen = [
+        "generieke_technicals",
+        "selecties",
+        "xgboost_scores",
+        "xgboost_runs",
+    ]
+
+    print_header(
+        "DATABASE SCHEMA CONTROLEREN"
+    )
+
+    with conn.cursor() as cur:
+
+        cur.execute(
+            """
+            SELECT
+                table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = ANY(%s)
+            ORDER BY table_name
+            """,
+            (vereiste_tabellen,),
         )
 
-        return []
+        gevonden = {
+            row[0]
+            for row in cur.fetchall()
+        }
+
+    ontbrekend = [
+        tabel
+        for tabel in vereiste_tabellen
+        if tabel not in gevonden
+    ]
+
+    for tabel in vereiste_tabellen:
+
+        if tabel in gevonden:
+            print(
+                f"  ✅ {tabel}"
+            )
+        else:
+            print(
+                f"  ❌ {tabel} ONTBREEKT"
+            )
+
+    if ontbrekend:
+
+        raise RuntimeError(
+            "Ontbrekende databasetabellen: "
+            + ", ".join(ontbrekend)
+        )
+
+    schema = {}
+
+    for tabel in vereiste_tabellen:
+
+        schema[tabel] = haal_kolommen_op(
+            conn,
+            tabel,
+        )
+
+    return schema
 
 
 def controleer_belangrijke_kolommen(
-    conn,
+    schema: Dict[str, List[str]],
 ) -> None:
-    """
-    Laat de werkelijke kolommen zien van de tabellen die
-    door score_xgboost.py worden gebruikt.
 
-    Dit is vooral bedoeld om schema-afwijkingen onmiddellijk
-    zichtbaar te maken.
-    """
+    print_header(
+        "BELANGRIJKE DATABASEKOLOMMEN"
+    )
 
     vereisten = {
+
         "generieke_technicals": [
             "ticker",
             "datum",
             *VERWACHTE_FEATURES,
         ],
+
         "selecties": [
             "ticker",
             "datum",
@@ -454,6 +468,7 @@ def controleer_belangrijke_kolommen(
             "koers",
             "beurs",
         ],
+
         "xgboost_scores": [
             "ticker",
             "datum",
@@ -466,32 +481,19 @@ def controleer_belangrijke_kolommen(
         ],
     }
 
-    print("")
-    print("=" * 70)
-    print("BELANGRIJKE DATABASEKOLOMMEN")
-    print("=" * 70)
-
     fouten = []
 
     for tabel, vereist in vereisten.items():
 
-        werkelijk = haal_kolommen_op(
-            conn,
+        werkelijk = schema.get(
             tabel,
+            [],
         )
 
         print("")
         print(
             f"[{tabel}]"
         )
-
-        if not werkelijk:
-
-            fouten.append(
-                f"{tabel}: geen kolommen gevonden"
-            )
-
-            continue
 
         ontbrekend = [
             kolom
@@ -506,6 +508,7 @@ def controleer_belangrijke_kolommen(
             )
 
             for kolom in ontbrekend:
+
                 print(
                     f"     - {kolom}"
                 )
@@ -523,19 +526,1731 @@ def controleer_belangrijke_kolommen(
 
     if fouten:
 
-        print("")
-        print("=" * 70)
-        print("❌ DATABASESCHEMA PAST NIET BIJ SCORE SCRIPT")
-        print("=" * 70)
+        print_header(
+            "DATABASESCHEMA PAST NIET BIJ SCORE SCRIPT"
+        )
 
         for fout in fouten:
+
             print(
                 f"  - {fout}"
             )
 
         raise RuntimeError(
             "De database bevat niet alle vereiste "
-            "kolommen. Zie bovenstaande diagnose."
+            "kolommen."
         )
 
-   
+
+# ============================================================
+# MODELLEN LADEN
+# ============================================================
+
+def laad_modellen() -> Dict[str, object]:
+
+    print_header(
+        "XGBOOSTV3 MODELLEN LADEN"
+    )
+
+    modellen = {}
+
+    for horizon in HORIZONS:
+
+        bestand = MODEL_FILES[horizon]
+
+        print("")
+        print(
+            f"[{horizon}]"
+        )
+
+        print(
+            f"  Bestand: {bestand}"
+        )
+
+        if not os.path.exists(bestand):
+
+            print(
+                "  ⏭️ Ontbreekt — wordt overgeslagen."
+            )
+
+            continue
+
+        grootte = os.path.getsize(
+            bestand
+        )
+
+        print(
+            f"  Grootte: {grootte:,} bytes"
+        )
+
+        if grootte == 0:
+
+            print(
+                "  ❌ Bestand is leeg."
+            )
+
+            continue
+
+        try:
+
+            model = joblib.load(
+                bestand
+            )
+
+            if not hasattr(
+                model,
+                "predict_proba",
+            ):
+
+                print(
+                    "  ❌ Model heeft geen "
+                    "predict_proba()."
+                )
+
+                continue
+
+            if not hasattr(
+                model,
+                "feature_names_in_",
+            ):
+
+                print(
+                    "  ❌ Model heeft geen "
+                    "feature_names_in_."
+                )
+
+                continue
+
+            model_features = list(
+                model.feature_names_in_
+            )
+
+            if model_features != VERWACHTE_FEATURES:
+
+                print(
+                    "  ❌ Featurevolgorde komt "
+                    "niet overeen."
+                )
+
+                print(
+                    f"     Model    : "
+                    f"{model_features}"
+                )
+
+                print(
+                    f"     Verwacht : "
+                    f"{VERWACHTE_FEATURES}"
+                )
+
+                continue
+
+            print(
+                "  ✅ Model geldig."
+            )
+
+            print(
+                f"  Features: "
+                f"{model_features}"
+            )
+
+            modellen[horizon] = model
+
+        except Exception as exc:
+
+            print(
+                f"  ❌ Laden mislukt: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+    if not modellen:
+
+        raise RuntimeError(
+            "Geen enkel geldig "
+            "XGBoostV3-model beschikbaar."
+        )
+
+    print("")
+    print(
+        "Beschikbare modellen: "
+        + ", ".join(
+            modellen.keys()
+        )
+    )
+
+    ontbrekend = [
+        horizon
+        for horizon in HORIZONS
+        if horizon not in modellen
+    ]
+
+    if ontbrekend:
+
+        print(
+            "Overgeslagen horizons: "
+            + ", ".join(ontbrekend)
+        )
+
+    return modellen
+
+
+# ============================================================
+# NIEUWE SELECTIES OPHALEN
+# ============================================================
+
+def haal_nieuwe_selecties_op(
+    conn,
+) -> pd.DataFrame:
+
+    print_header(
+        "NIEUWE SELECTIES OPHALEN"
+    )
+
+    grensdatum = (
+        dt.datetime.now(
+            dt.timezone.utc
+        )
+        - dt.timedelta(
+            days=LOOKBACK_DAGEN
+        )
+    )
+
+    print(
+        f"Vanaf datum/tijd : "
+        f"{grensdatum.isoformat()}"
+    )
+
+    technische_features = ",\n".join(
+        f't.{sql_ident(feature)}'
+        for feature in VERWACHTE_FEATURES
+    )
+
+    query = f"""
+        SELECT
+            s."ticker" AS ticker,
+            s."datum" AS selectie_datum,
+            s."strategie" AS strategie,
+            s."koers" AS selectie_koers,
+            s."beurs" AS beurs,
+            t."datum" AS technische_datum,
+            {technische_features}
+        FROM public."selecties" s
+
+        JOIN LATERAL (
+
+            SELECT
+                t."datum",
+                {
+                    ", ".join(
+                        f't.{sql_ident(feature)}'
+                        for feature in VERWACHTE_FEATURES
+                    )
+                }
+
+            FROM public."generieke_technicals" t
+
+            WHERE
+                t."ticker" = s."ticker"
+                AND t."datum" <= s."datum"
+
+            ORDER BY
+                t."datum" DESC
+
+            LIMIT 1
+
+        ) t ON TRUE
+
+        WHERE
+            s."datum" >= %s
+
+        ORDER BY
+            s."datum" DESC,
+            s."ticker" ASC
+    """
+
+    try:
+
+        df = pd.read_sql_query(
+            query,
+            conn,
+            params=(grensdatum,),
+        )
+
+    except Exception as exc:
+
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+        raise RuntimeError(
+            "Ophalen van nieuwe selecties "
+            f"mislukt: {exc}"
+        ) from exc
+
+    if df.empty:
+
+        print(
+            "⚠️ Geen selecties gevonden "
+            "binnen LOOKBACK_DAGEN."
+        )
+
+        return df
+
+    print(
+        f"Ruwe selectie-rijen : "
+        f"{len(df)}"
+    )
+
+    df["ticker"] = (
+        df["ticker"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    df["strategie"] = (
+        df["strategie"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    df = df[
+        df["ticker"] != ""
+    ].copy()
+
+    # --------------------------------------------------------
+    # FEATURES NUMERIEK MAKEN
+    # --------------------------------------------------------
+
+    for feature in VERWACHTE_FEATURES:
+
+        df[feature] = pd.to_numeric(
+            df[feature],
+            errors="coerce",
+        )
+
+    before = len(df)
+
+    df = df.dropna(
+        subset=VERWACHTE_FEATURES
+    ).copy()
+
+    dropped = (
+        before - len(df)
+    )
+
+    if dropped:
+
+        print(
+            f"⚠️ {dropped} selectie(s) "
+            "verwijderd wegens ontbrekende "
+            "features."
+        )
+
+    if df.empty:
+
+        print(
+            "⚠️ Geen bruikbare selecties "
+            "na featurecontrole."
+        )
+
+        return df
+
+    # --------------------------------------------------------
+    # DATUM NORMALISEREN
+    # --------------------------------------------------------
+
+    df["selectie_datum"] = pd.to_datetime(
+        df["selectie_datum"],
+        errors="coerce",
+    )
+
+    df = df.dropna(
+        subset=["selectie_datum"]
+    ).copy()
+
+    # --------------------------------------------------------
+    # MEERDERE STRATEGIEËN COMBINEREN
+    # --------------------------------------------------------
+
+    def combine_strategies(series):
+
+        waarden = sorted(
+            {
+                str(value).strip()
+                for value in series
+                if str(value).strip()
+            }
+        )
+
+        return "; ".join(
+            waarden
+        )
+
+    aggregaties = {
+
+        "strategie":
+            combine_strategies,
+
+        "selectie_koers":
+            "first",
+
+        "beurs":
+            "first",
+
+        "technische_datum":
+            "max",
+    }
+
+    for feature in VERWACHTE_FEATURES:
+
+        aggregaties[feature] = "first"
+
+    df = (
+        df
+        .groupby(
+            [
+                "ticker",
+                "selectie_datum",
+            ],
+            as_index=False,
+        )
+        .agg(aggregaties)
+    )
+
+    print(
+        f"Bruikbare unieke selecties: "
+        f"{len(df)}"
+    )
+
+    return df
+
+
+# ============================================================
+# BESTAANDE SCORES OPHALEN
+# ============================================================
+
+def haal_bestaande_scores_op(
+    conn,
+    df_selecties: pd.DataFrame,
+) -> set:
+
+    if df_selecties.empty:
+
+        return set()
+
+    min_datum = (
+        df_selecties[
+            "selectie_datum"
+        ].min()
+    )
+
+    query = """
+        SELECT
+            ticker,
+            datum,
+            model_versie,
+            horizon
+        FROM public.xgboost_scores
+        WHERE datum >= %s
+    """
+
+    try:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                query,
+                (min_datum,),
+            )
+
+            rows = cur.fetchall()
+
+    except Exception as exc:
+
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+        raise RuntimeError(
+            "Bestaande XGBoost-scores "
+            "konden niet worden gelezen: "
+            f"{exc}"
+        ) from exc
+
+    bestaande = set()
+
+    for (
+        ticker,
+        datum,
+        model_versie,
+        horizon,
+    ) in rows:
+
+        datum_norm = (
+            normaliseer_datum(
+                datum
+            )
+        )
+
+        if datum_norm is not None:
+
+            datum_key = (
+                pd.Timestamp(
+                    datum_norm
+                ).date()
+            )
+
+        else:
+
+            datum_key = datum
+
+        bestaande.add(
+            (
+                str(ticker).strip(),
+                datum_key,
+                str(model_versie).strip(),
+                str(horizon).strip(),
+            )
+        )
+
+    print(
+        f"[DB] Bestaande scorecombinaties: "
+        f"{len(bestaande)}"
+    )
+
+    return bestaande
+
+
+# ============================================================
+# SCORE BEREKENEN
+# ============================================================
+
+def positieve_score(
+    model,
+    X: pd.DataFrame,
+) -> float:
+
+    probabilities = model.predict_proba(
+        X
+    )
+
+    if getattr(
+        probabilities,
+        "ndim",
+        0,
+    ) != 2:
+
+        raise RuntimeError(
+            "predict_proba() gaf geen "
+            "2D-array terug."
+        )
+
+    if probabilities.shape[1] == 1:
+
+        return float(
+            probabilities[0, 0]
+        )
+
+    classes = list(
+        getattr(
+            model,
+            "classes_",
+            range(
+                probabilities.shape[1]
+            ),
+        )
+    )
+
+    if 1 in classes:
+
+        index = classes.index(1)
+
+    else:
+
+        index = (
+            probabilities.shape[1] - 1
+        )
+
+        print(
+            "[MODEL] Klasse 1 niet expliciet "
+            "gevonden; laatste probability "
+            "wordt gebruikt."
+        )
+
+    return float(
+        probabilities[0, index]
+    )
+
+
+# ============================================================
+# SELECTIES SCOREN
+# ============================================================
+
+def score_selecties(
+    df_selecties: pd.DataFrame,
+    modellen: Dict[str, object],
+    bestaande: set,
+) -> List[Dict]:
+
+    print_header(
+        "SELECTIES SCOREN"
+    )
+
+    resultaten = []
+
+    if df_selecties.empty:
+
+        print(
+            "Geen selecties om te scoren."
+        )
+
+        return resultaten
+
+    totaal = len(
+        df_selecties
+    )
+
+    for positie, (_, rij) in enumerate(
+        df_selecties.iterrows(),
+        start=1,
+    ):
+
+        ticker = str(
+            rij["ticker"]
+        ).strip()
+
+        selectie_datum_ts = pd.to_datetime(
+            rij["selectie_datum"],
+            errors="coerce",
+        )
+
+        if pd.isna(
+            selectie_datum_ts
+        ):
+
+            print(
+                f"[{positie}/{totaal}] "
+                f"{ticker}: ongeldige datum."
+            )
+
+            continue
+
+        datum_key = (
+            selectie_datum_ts.date()
+        )
+
+        print(
+            f"[{positie}/{totaal}] "
+            f"{ticker} | "
+            f"{datum_key} | "
+            f"{rij.get('strategie', '')}"
+        )
+
+        # Exact dezelfde featurevolgorde als het model.
+        X = pd.DataFrame(
+            [
+                {
+                    feature:
+                    float(rij[feature])
+                    for feature
+                    in VERWACHTE_FEATURES
+                }
+            ],
+            columns=VERWACHTE_FEATURES,
+        )
+
+        for horizon, model in modellen.items():
+
+            sleutel = (
+                ticker,
+                datum_key,
+                MODEL_VERSIE,
+                horizon,
+            )
+
+            if sleutel in bestaande:
+
+                print(
+                    f"   ⏭️ {horizon}: "
+                    "al gescoord."
+                )
+
+                continue
+
+            try:
+
+                score = positieve_score(
+                    model,
+                    X,
+                )
+
+                if not pd.notna(
+                    score
+                ):
+
+                    print(
+                        f"   ❌ {horizon}: "
+                        "score is NaN."
+                    )
+
+                    continue
+
+                resultaat = {
+
+                    "ticker":
+                        ticker,
+
+                    "datum":
+                        selectie_datum_ts.to_pydatetime(),
+
+                    "model_versie":
+                        MODEL_VERSIE,
+
+                    "horizon":
+                        horizon,
+
+                    "score":
+                        float(score),
+
+                    "strategieen":
+                        str(
+                            rij.get(
+                                "strategie",
+                                "",
+                            )
+                        ),
+
+                    "koers":
+                        (
+                            float(
+                                rij[
+                                    "selectie_koers"
+                                ]
+                            )
+                            if pd.notna(
+                                rij.get(
+                                    "selectie_koers"
+                                )
+                            )
+                            else None
+                        ),
+
+                    "beurs":
+                        str(
+                            rij.get(
+                                "beurs",
+                                "",
+                            )
+                        ).strip(),
+                }
+
+                resultaten.append(
+                    resultaat
+                )
+
+                print(
+                    f"   ✅ {horizon}: "
+                    f"{format_score(score)}"
+                )
+
+            except Exception as exc:
+
+                print(
+                    f"   ❌ {horizon}: "
+                    f"{type(exc).__name__}: "
+                    f"{exc}"
+                )
+
+    print("")
+    print(
+        f"Nieuwe scores berekend: "
+        f"{len(resultaten)}"
+    )
+
+    return resultaten
+
+
+# ============================================================
+# SCORES OPSLAAN
+# ============================================================
+
+def sla_scores_op(
+    conn,
+    resultaten: List[Dict],
+) -> int:
+
+    print_header(
+        "SCORES OPSLAAN"
+    )
+
+    if not resultaten:
+
+        print(
+            "Geen nieuwe scores om op te slaan."
+        )
+
+        return 0
+
+    query = """
+        INSERT INTO public.xgboost_scores (
+            ticker,
+            datum,
+            model_versie,
+            horizon,
+            score,
+            strategieen,
+            koers,
+            beurs
+        )
+        VALUES (
+            %(ticker)s,
+            %(datum)s,
+            %(model_versie)s,
+            %(horizon)s,
+            %(score)s,
+            %(strategieen)s,
+            %(koers)s,
+            %(beurs)s
+        )
+        ON CONFLICT DO NOTHING
+    """
+
+    try:
+
+        with conn.cursor() as cur:
+
+            psycopg2.extras.execute_batch(
+                cur,
+                query,
+                resultaten,
+                page_size=100,
+            )
+
+        conn.commit()
+
+        print(
+            f"✅ {len(resultaten)} score(s) "
+            "naar xgboost_scores geschreven."
+        )
+
+        return len(resultaten)
+
+    except Exception as exc:
+
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+        print(
+            f"❌ Opslaan scores mislukt: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        raise
+
+
+# ============================================================
+# RUN REGISTREREN
+# ============================================================
+
+def registreer_run(
+    conn,
+    schema: Dict[str, List[str]],
+    status: str,
+    aantal_selecties: int,
+    aantal_scores: int,
+    foutmelding: Optional[str] = None,
+) -> None:
+
+    kolommen = schema.get(
+        "xgboost_runs",
+        [],
+    )
+
+    if not kolommen:
+
+        print(
+            "[RUN] Geen kolommen beschikbaar."
+        )
+
+        return
+
+    mogelijke_waarden = {
+
+        "model_versie":
+            MODEL_VERSIE,
+
+        "status":
+            status,
+
+        "aantal_selecties":
+            int(aantal_selecties),
+
+        "aantal_scores":
+            int(aantal_scores),
+
+        "foutmelding":
+            (
+                str(foutmelding)[:2000]
+                if foutmelding
+                else None
+            ),
+
+        "gestart_op":
+            dt.datetime.now(
+                dt.timezone.utc
+            ),
+
+        "voltooid_op":
+            dt.datetime.now(
+                dt.timezone.utc
+            ),
+
+        "datum":
+            dt.datetime.now(
+                dt.timezone.utc
+            ),
+    }
+
+    bruikbaar = [
+        kolom
+        for kolom in mogelijke_waarden
+        if kolom in kolommen
+    ]
+
+    if not bruikbaar:
+
+        print(
+            "[RUN] Geen herkenbare kolommen "
+            "om run te registreren."
+        )
+
+        return
+
+    kolommen_sql = ", ".join(
+        sql_ident(kolom)
+        for kolom in bruikbaar
+    )
+
+    placeholders = ", ".join(
+        f"%({kolom})s"
+        for kolom in bruikbaar
+    )
+
+    query = f"""
+        INSERT INTO public.xgboost_runs (
+            {kolommen_sql}
+        )
+        VALUES (
+            {placeholders}
+        )
+    """
+
+    waarden = {
+        kolom:
+        mogelijke_waarden[kolom]
+        for kolom in bruikbaar
+    }
+
+    try:
+
+        with conn.cursor() as cur:
+
+            cur.execute(
+                query,
+                waarden,
+            )
+
+        conn.commit()
+
+        print(
+            f"[RUN] Run geregistreerd: "
+            f"{status}"
+        )
+
+    except Exception as exc:
+
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+        # Een probleem met alleen de run-log mag
+        # de daadwerkelijke score niet ongeldig maken.
+        print(
+            f"⚠️ Runregistratie mislukt: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+
+# ============================================================
+# TOP RESULTATEN
+# ============================================================
+
+def bepaal_top_resultaten(
+    resultaten: List[Dict],
+) -> pd.DataFrame:
+
+    if not resultaten:
+
+        return pd.DataFrame()
+
+    df = pd.DataFrame(
+        resultaten
+    )
+
+    if df.empty:
+
+        return df
+
+    df["score"] = pd.to_numeric(
+        df["score"],
+        errors="coerce",
+    )
+
+    df = df.dropna(
+        subset=["score"]
+    ).copy()
+
+    if df.empty:
+
+        return df
+
+    df = df.sort_values(
+        by=[
+            "score",
+            "ticker",
+        ],
+        ascending=[
+            False,
+            True,
+        ],
+    )
+
+    return (
+        df
+        .head(TOP_N)
+        .reset_index(drop=True)
+    )
+
+
+# ============================================================
+# TELEGRAM
+# ============================================================
+
+def stuur_telegram(
+    df_top: pd.DataFrame,
+) -> bool:
+
+    if not (
+        TELEGRAM_TOKEN
+        and TELEGRAM_CHAT_ID
+    ):
+
+        print(
+            "[Telegram] Niet geconfigureerd "
+            "— overgeslagen."
+        )
+
+        return False
+
+    if df_top.empty:
+
+        print(
+            "[Telegram] Geen TOP-resultaten."
+        )
+
+        return False
+
+    regels = [
+
+        "📊 XGBoostV3 — TOP nieuwe selecties",
+
+        "",
+
+        (
+            "Modellen: "
+            + ", ".join(
+                sorted(
+                    df_top[
+                        "horizon"
+                    ].unique()
+                )
+            )
+        ),
+
+        f"TOP_N: {TOP_N}",
+
+        "",
+    ]
+
+    for index, rij in df_top.iterrows():
+
+        ticker = str(
+            rij["ticker"]
+        )
+
+        horizon = str(
+            rij["horizon"]
+        )
+
+        score = float(
+            rij["score"]
+        )
+
+        koers = rij.get(
+            "koers"
+        )
+
+        beurs = str(
+            rij.get(
+                "beurs",
+                "",
+            )
+            or ""
+        )
+
+        strategieen = str(
+            rij.get(
+                "strategieen",
+                "",
+            )
+            or ""
+        )
+
+        if pd.notna(koers):
+
+            koers_txt = (
+                f"{float(koers):.2f}"
+            )
+
+        else:
+
+            koers_txt = "-"
+
+        regels.append(
+            f"{index + 1}. "
+            f"{ticker} | "
+            f"{horizon} | "
+            f"score {score:.4f} | "
+            f"koers {koers_txt}"
+        )
+
+        if beurs:
+
+            regels.append(
+                f"   Beurs: {beurs}"
+            )
+
+        if strategieen:
+
+            regels.append(
+                f"   Strategie: "
+                f"{strategieen}"
+            )
+
+    bericht = "\n".join(
+        regels
+    )
+
+    if len(bericht) > 3900:
+
+        bericht = (
+            bericht[:3900]
+            + "\n…"
+        )
+
+    url = (
+        "https://api.telegram.org/bot"
+        f"{TELEGRAM_TOKEN}"
+        "/sendMessage"
+    )
+
+    try:
+
+        response = requests.post(
+            url,
+            data={
+                "chat_id":
+                    TELEGRAM_CHAT_ID,
+
+                "text":
+                    bericht,
+            },
+            timeout=20,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if not data.get("ok"):
+
+            raise RuntimeError(
+                f"Telegram antwoordde "
+                f"met fout: {data}"
+            )
+
+        print(
+            "✅ Telegrambericht verzonden."
+        )
+
+        return True
+
+    except Exception as exc:
+
+        print(
+            f"❌ Telegram verzenden mislukt: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        return False
+
+
+# ============================================================
+# E-MAIL
+# ============================================================
+
+def stuur_email(
+    df_top: pd.DataFrame,
+) -> bool:
+
+    if not (
+        EMAIL_USER
+        and EMAIL_PASS
+        and EMAIL_RECEIVER
+    ):
+
+        print(
+            "[E-mail] Niet geconfigureerd "
+            "— overgeslagen."
+        )
+
+        return False
+
+    if df_top.empty:
+
+        print(
+            "[E-mail] Geen TOP-resultaten."
+        )
+
+        return False
+
+    onderwerp = (
+        f"XGBoostV3 TOP "
+        f"{len(df_top)} nieuwe selecties"
+    )
+
+    regels = [
+
+        "XGBoostV3 — TOP nieuwe selecties",
+
+        "",
+
+        f"Modelversie: {MODEL_VERSIE}",
+
+        (
+            "Datum: "
+            f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        ),
+
+        "",
+    ]
+
+    for index, rij in df_top.iterrows():
+
+        koers = rij.get(
+            "koers"
+        )
+
+        if pd.notna(koers):
+
+            koers_txt = (
+                f"{float(koers):.2f}"
+            )
+
+        else:
+
+            koers_txt = "-"
+
+        regels.extend([
+
+            f"{index + 1}. "
+            f"{rij['ticker']}",
+
+            f"   Horizon: "
+            f"{rij['horizon']}",
+
+            f"   Score: "
+            f"{float(rij['score']):.4f}",
+
+            f"   Koers: "
+            f"{koers_txt}",
+
+            f"   Beurs: "
+            f"{rij.get('beurs', '') or '-'}",
+
+            f"   Strategie: "
+            f"{rij.get('strategieen', '') or '-'}",
+
+            "",
+        ])
+
+    body = "\n".join(
+        regels
+    )
+
+    message = MIMEMultipart()
+
+    message["From"] = EMAIL_USER
+    message["To"] = EMAIL_RECEIVER
+    message["Subject"] = onderwerp
+
+    message.attach(
+        MIMEText(
+            body,
+            "plain",
+            "utf-8",
+        )
+    )
+
+    try:
+
+        with smtplib.SMTP(
+            "smtp.gmail.com",
+            587,
+            timeout=20,
+        ) as server:
+
+            server.ehlo()
+
+            server.starttls()
+
+            server.ehlo()
+
+            server.login(
+                EMAIL_USER,
+                EMAIL_PASS,
+            )
+
+            server.send_message(
+                message
+            )
+
+        print(
+            "✅ E-mail verzonden."
+        )
+
+        return True
+
+    except Exception as exc:
+
+        print(
+            f"❌ E-mail verzenden mislukt: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        return False
+
+
+# ============================================================
+# SAMENVATTING
+# ============================================================
+
+def toon_samenvatting(
+    modellen: Dict[str, object],
+    df_selecties: pd.DataFrame,
+    resultaten: List[Dict],
+    opgeslagen: int,
+    df_top: pd.DataFrame,
+) -> None:
+
+    print_header(
+        "EINDRESULTAAT"
+    )
+
+    print(
+        "Beschikbare modellen : "
+        + ", ".join(
+            modellen.keys()
+        )
+    )
+
+    print(
+        f"Selecties gevonden   : "
+        f"{len(df_selecties)}"
+    )
+
+    print(
+        f"Nieuwe scores        : "
+        f"{len(resultaten)}"
+    )
+
+    print(
+        f"Scores opgeslagen    : "
+        f"{opgeslagen}"
+    )
+
+    print(
+        f"TOP_N                : "
+        f"{len(df_top)}"
+    )
+
+    if not df_top.empty:
+
+        print("")
+        print(
+            "TOP RESULTATEN:"
+        )
+
+        for index, rij in df_top.iterrows():
+
+            print(
+                f"  {index + 1:2d}. "
+                f"{str(rij['ticker']):12s} "
+                f"{str(rij['horizon']):4s} "
+                f"score="
+                f"{float(rij['score']):.4f}"
+            )
+
+    else:
+
+        print("")
+        print(
+            "Geen TOP-resultaten beschikbaar."
+        )
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main() -> int:
+
+    starttijd = (
+        dt.datetime.now(
+            dt.timezone.utc
+        )
+    )
+
+    conn = None
+
+    modellen = {}
+
+    schema = {}
+
+    df_selecties = (
+        pd.DataFrame()
+    )
+
+    resultaten = []
+
+    opgeslagen = 0
+
+    try:
+
+        # ----------------------------------------------------
+        # CONFIGURATIE
+        # ----------------------------------------------------
+
+        controleer_configuratie()
+
+        print("")
+        print(
+            f"[START] "
+            f"{starttijd.isoformat()}"
+        )
+
+        # ----------------------------------------------------
+        # MODELLEN
+        # ----------------------------------------------------
+
+        modellen = laad_modellen()
+
+        # ----------------------------------------------------
+        # DATABASE
+        # ----------------------------------------------------
+
+        conn = open_database()
+
+        schema = (
+            controleer_database_schema(
+                conn
+            )
+        )
+
+        controleer_belangrijke_kolommen(
+            schema
+        )
+
+        # ----------------------------------------------------
+        # NIEUWE SELECTIES
+        # ----------------------------------------------------
+
+        df_selecties = (
+            haal_nieuwe_selecties_op(
+                conn
+            )
+        )
+
+        if df_selecties.empty:
+
+            print_header(
+                "GEEN NIEUWE SELECTIES"
+            )
+
+            print(
+                "Er zijn binnen "
+                "LOOKBACK_DAGEN geen "
+                "bruikbare nieuwe "
+                "selecties gevonden."
+            )
+
+            registreer_run(
+                conn,
+                schema,
+                status="geen_selecties",
+                aantal_selecties=0,
+                aantal_scores=0,
+            )
+
+            return 0
+
+        # ----------------------------------------------------
+        # BESTAANDE SCORES
+        # ----------------------------------------------------
+
+        bestaande = (
+            haal_bestaande_scores_op(
+                conn,
+                df_selecties,
+            )
+        )
+
+        # ----------------------------------------------------
+        # SCORING
+        # ----------------------------------------------------
+
+        resultaten = (
+            score_selecties(
+                df_selecties,
+                modellen,
+                bestaande,
+            )
+        )
+
+        # ----------------------------------------------------
+        # OPSLAAN
+        # ----------------------------------------------------
+
+        opgeslagen = (
+            sla_scores_op(
+                conn,
+                resultaten,
+            )
+        )
+
+        # ----------------------------------------------------
+        # TOP N
+        # ----------------------------------------------------
+
+        df_top = (
+            bepaal_top_resultaten(
+                resultaten
+            )
+        )
+
+        # ----------------------------------------------------
+        # TELEGRAM
+        # ----------------------------------------------------
+
+        telegram_ok = (
+            stuur_telegram(
+                df_top
+            )
+        )
+
+        # ----------------------------------------------------
+        # E-MAIL
+        # ----------------------------------------------------
+
+        email_ok = (
+            stuur_email(
+                df_top
+            )
+        )
+
+        # ----------------------------------------------------
+        # RUN REGISTREREN
+        # ----------------------------------------------------
+
+        registreer_run(
+            conn,
+            schema,
+            status="succes",
+            aantal_selecties=len(
+                df_selecties
+            ),
+            aantal_scores=opgeslagen,
+        )
+
+        # ----------------------------------------------------
+        # SAMENVATTING
+        # ----------------------------------------------------
+
+        toon_samenvatting(
+            modellen,
+            df_selecties,
+            resultaten,
+            opgeslagen,
+            df_top,
+        )
+
+        eindtijd = (
+            dt.datetime.now(
+                dt.timezone.utc
+            )
+        )
+
+        duur = (
+            eindtijd - starttijd
+        )
+
+        print("")
+        print(
+            f"[KLAAR] "
+            f"{eindtijd.isoformat()}"
+        )
+
+        print(
+            f"[DUUR] {duur}"
+        )
+
+        if df_top.empty:
+
+            print(
+                "[INFO] Geen nieuwe "
+                "TOP-resultaten."
+            )
+
+        if (
+            TELEGRAM_TOKEN
+            and TELEGRAM_CHAT_ID
+        ):
+
+            print(
+                "[INFO] Telegram status: "
+                + (
+                    "OK"
+                    if telegram_ok
+                    else "niet verzonden"
+                )
+            )
+
+        if (
+            EMAIL_USER
+            and EMAIL_PASS
+            and EMAIL_RECEIVER
+        ):
+
+            print(
+                "[INFO] E-mail status: "
+                + (
+                    "OK"
+                    if email_ok
+                    else "niet verzonden"
+                )
+            )
+
+        return 0
+
+    except Exception as exc:
+
+        print("")
+        print("=" * 70)
+        print(
+            "❌ XGBOOSTV3 SCORING MISLUKT"
+        )
+        print("=" * 70)
+
+        print(
+            f"Type fout : "
+            f"{type(exc).__name__}"
+        )
+
+        print(
+            f"Fout      : {exc}"
+        )
+
+        print("")
+        print(
+            "VOLLEDIGE TRACEBACK:"
+        )
+
+        traceback.print_exc()
+
+        # ----------------------------------------------------
+        # FOUTREGISTRATIE
+        # ----------------------------------------------------
+
+        if conn is not None:
+
+            try:
+
+                registreer_run(
+                    conn,
+                    schema,
+                    status="fout",
+                    aantal_selecties=len(
+                        df_selecties
+                    ),
+                    aantal_scores=opgeslagen,
+                    foutmelding=str(
+                        exc
+                    )[:2000],
+                )
+
+            except Exception as run_exc:
+
+                print(
+                    "[RUN] "
+                    "Foutregistratie mislukt: "
+                    f"{run_exc}"
+                )
+
+        # Heel belangrijk voor GitHub Actions:
+        # echte fout = exit code 1.
+        return 1
+
+    finally:
+
+        if conn is not None:
+
+            try:
+
+                conn.close()
+
+                print(
+                    "[DB] Verbinding gesloten."
+                )
+
+            except Exception as exc:
+
+                print(
+                    "[DB] Sluiten verbinding "
+                    f"mislukt: {exc}"
+                )
+
+
+# ============================================================
+# PROGRAMMA START HIER
+# ============================================================
+
+if __name__ == "__main__":
+    sys.exit(
+        main()
+    )
