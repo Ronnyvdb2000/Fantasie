@@ -1,4 +1,4 @@
-name: "XLightGBM V1 Trading Model"
+name: "XLightGBM V2 Trading Model"
 
 on:
 
@@ -32,7 +32,7 @@ jobs:
       # ======================================================
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
 
       # ======================================================
@@ -40,7 +40,7 @@ jobs:
       # ======================================================
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
 
         with:
           python-version: "3.11"
@@ -108,7 +108,7 @@ jobs:
 
         run: |
 
-          python lightgbmV1.py
+          python xLightgbmV2.py
 
 
       # ======================================================
