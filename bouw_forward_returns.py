@@ -158,10 +158,14 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
     v1.2: een forward-koers die NaN/inf is of <= 0 wordt behandeld als
     ONTBREKEND (None -> NULL). Zo komt er nooit NaN in forward_returns
     (NaN is geen NULL, dus die rijen werden nooit meer opgepikt) en
-    schrijven we geen onmogelijke rendementen (bv. MOL.WA) weg."""
+    schrijven we geen onmogelijke rendementen (bv. MOL.WA) weg."""      
+        # v1.2: hist = yf.Ticker(ticker).history(start=vroegste, auto_adjust=True)
+        # v1.3: ruwe slotkoersen (alleen gecorrigeerd voor splits), consistent met
+        # entry_koers (onaangepaste koers op selectiemoment). auto_adjust=True
+        # corrigeert achteraf voor dividenden en gaf voor MOL.WA negatieve koersen.
     vroegste = min(r["datum"] for r in rijen)
     try:
-        hist = yf.Ticker(ticker).history(start=vroegste, auto_adjust=True)
+        hist = yf.Ticker(ticker).history(start=vroegste, auto_adjust=False)
     except Exception as e:
         print(f"  [WARN] {ticker}: download mislukt ({e})")
         return []
