@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bouw_forward_returns.py  —  FEATURE STORE: selecties -> forward-rendement  v1.1
+bouw_forward_returns.py  —  FEATURE STORE: selecties -> forward-rendement  v1.2
 
 DOEL
 ====
@@ -39,6 +39,12 @@ INCREMENTEEL EN IDEMPOTENT
   horizon -- niet pas wanneer de LANGSTE horizon (bv. 60d) matuur is. Zo
   hoeft fwd_ret_30d niet nodeloos ~48 dagen langer te wachten dan nodig,
   enkel omdat er ook een 60d-horizon in de lijst staat.
+- ONBRUIKBARE KOERS = ONTBREKEND (v1.2): een forward-koers die NaN/inf is of
+  <= 0 wordt als None (NULL) weggeschreven. In v1.1 liep zo'n waarde
+  ongehinderd door: NaN kwam in forward_returns terecht, en omdat de
+  selectie op `IS NULL` filtert (NaN is geen NULL) werd zo'n rij daarna nooit
+  meer opgepikt. Negatieve koersen (bv. MOL.WA) gaven bovendien onmogelijke
+  rendementen (-490% .. -543%).
 
 GEBRUIK
 =======
@@ -147,7 +153,12 @@ def haal_openstaande_rijen(conn) -> List[dict]:
 # --------------------------------------------------------------------------
 def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
     """rijen = alle openstaande (datum, strategie, beurs, koers)-combinaties
-    voor deze ene ticker. Geeft een lijst dicts terug, klaar voor upsert."""
+    voor deze ene ticker. Geeft een lijst dicts terug, klaar voor upsert.
+
+    v1.2: een forward-koers die NaN/inf is of <= 0 wordt behandeld als
+    ONTBREKEND (None -> NULL). Zo komt er nooit NaN in forward_returns
+    (NaN is geen NULL, dus die rijen werden nooit meer opgepikt) en
+    schrijven we geen onmogelijke rendementen (bv. MOL.WA) weg."""
     vroegste = min(r["datum"] for r in rijen)
     try:
         hist = yf.Ticker(ticker).history(start=vroegste, auto_adjust=True)
@@ -182,105 +193,7 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
                 idx = pos_kandidaten + h
                 if idx < len(closes):
                     fwd_close = float(closes.iloc[idx])
-                    rij[f"fwd_close_{h}d"] = fwd_close
-                    rij[f"fwd_ret_{h}d"] = round((fwd_close / entry_koers - 1) * 100, 3)
-                else:
-                    rij[f"fwd_close_{h}d"] = None
-                    rij[f"fwd_ret_{h}d"] = None
-            resultaten.append(rij)
-        except Exception as e:
-            print(f"  [WARN] {ticker} {r['datum']}/{r['strategie']}: {e}")
-            continue
 
-    return resultaten
-
-
-# --------------------------------------------------------------------------
-# Stap 3: upsert naar forward_returns
-# --------------------------------------------------------------------------
-def upsert_labels(conn, rijen: List[dict]) -> int:
-    if not rijen:
-        return 0
-    kolommen = ["ticker", "datum", "strategie", "beurs", "entry_koers"]
-    for h in HORIZONS:
-        kolommen += [f"fwd_close_{h}d", f"fwd_ret_{h}d"]
-
-    kolom_lijst = ", ".join(kolommen)
-    placeholders = ", ".join(f"%({k})s" for k in kolommen)
-    update_lijst = ", ".join(f"{k} = EXCLUDED.{k}" for k in kolommen if k not in ("ticker", "datum", "strategie"))
-    update_lijst += ", bijgewerkt_op = now()"
-
-    query = f"""
-        INSERT INTO forward_returns ({kolom_lijst})
-        VALUES ({placeholders})
-        ON CONFLICT (ticker, datum, strategie)
-        DO UPDATE SET {update_lijst};
-    """
-    with conn.cursor() as cur:
-        for rij in rijen:
-            volledige_rij = {k: rij.get(k) for k in kolommen}
-            cur.execute(query, volledige_rij)
-    conn.commit()
-    return len(rijen)
-
-
-# --------------------------------------------------------------------------
-# Main
-# --------------------------------------------------------------------------
-def run_build():
-    if not SUPABASE_DB_URL:
-        print("FOUT: SUPABASE_DB_URL ontbreekt.", file=sys.stderr)
-        sys.exit(1)
-
-    conn = psycopg2.connect(SUPABASE_DB_URL)
-    try:
-        open_rijen = haal_openstaande_rijen(conn)
-        print(f"{len(open_rijen)} (ticker, datum, strategie)-rijen wachten op een (bijgewerkt) label.")
-
-        per_ticker: Dict[str, List[dict]] = {}
-        for r in open_rijen:
-            per_ticker.setdefault(r["ticker"], []).append(r)
-
-        # Prioriteer tickers op hun OUDSTE nog openstaande datum (langst
-        # wachtend eerst) i.p.v. alfabetisch -- anders blijft een ticker als
-        # AAPL (bijna dagelijks opnieuw geselecteerd door meerdere
-        # strategieën) elke run in de eerste MAX_TICKERS_PER_RUN vallen, en
-        # komen alfabetisch latere tickers structureel nooit aan de beurt.
-        oudste_datum_per_ticker = {
-            t: min(r["datum"] for r in rijen) for t, rijen in per_ticker.items()
-        }
-        alle_tickers_gesorteerd = sorted(per_ticker.keys(), key=lambda t: oudste_datum_per_ticker[t])
-        tickers = alle_tickers_gesorteerd[:MAX_TICKERS_PER_RUN]
-        overgeslagen = len(per_ticker) - len(tickers)
-        print(f"{len(tickers)} unieke tickers te verwerken dit run"
-              + (f" ({overgeslagen} tickers volgen in een volgend run, MAX_TICKERS_PER_RUN bereikt)" if overgeslagen > 0 else ""))
-
-        totaal_bijgewerkt = 0
-        totaal_compleet = 0
-        for i, ticker in enumerate(tickers, start=1):
-            labels = bereken_labels_voor_ticker(ticker, per_ticker[ticker])
-            aantal = upsert_labels(conn, labels)
-            totaal_bijgewerkt += aantal
-            totaal_compleet += sum(1 for l in labels if l.get(f"fwd_ret_{HORIZONS[-1]}d") is not None)
-            if i % 25 == 0 or i == len(tickers):
-                print(f"  {i}/{len(tickers)} tickers verwerkt...")
-            time.sleep(0.1)
-
-        nog_wachtend = len(open_rijen) - totaal_bijgewerkt
-
-        bericht = (
-            f"📊 *Forward-Returns Feature Store — {vandaag()}*\n\n"
-            f"{totaal_bijgewerkt} rijen bijgewerkt in forward_returns "
-            f"({totaal_compleet} daarvan nu volledig, alle {HORIZONS[-1]} handelsdagen ingevuld)\n"
-            f"{len(tickers)} unieke tickers verwerkt dit run"
-            + (f" ({overgeslagen} tickers nog te gaan)" if overgeslagen > 0 else "")
-        )
-        send_telegram(bericht)
-        print(f"\nKlaar. {totaal_bijgewerkt} rijen bijgewerkt.")
-    finally:
-        conn.close()
-
-
-if __name__ == "__main__":
-    mode = sys.argv[1].lower() if len(sys.argv) > 1 else "build"
-    run_build()
+                    # v1.2: onbruikbare koers (NaN/inf of <= 0) = ontbrekend (NULL).
+                    if not math.isfinite(fwd_close) or fwd_close <= 0:
+                        rij[f"fwd_close_{h}d"] = None
