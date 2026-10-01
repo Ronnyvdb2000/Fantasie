@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bouw_forward_returns.py  —  FEATURE STORE: selecties -> forward-rendement  v1.3
+bouw_forward_returns.py  —  FEATURE STORE: selecties -> forward-rendement  v1.4
 
 DOEL
 ====
@@ -39,17 +39,31 @@ INCREMENTEEL EN IDEMPOTENT
   horizon -- niet pas wanneer de LANGSTE horizon (bv. 60d) matuur is. Zo
   hoeft fwd_ret_30d niet nodeloos ~48 dagen langer te wachten dan nodig,
   enkel omdat er ook een 60d-horizon in de lijst staat.
-- ONBRUIKBARE KOERS = ONTBREKEND (v1.2): een forward-koers die NaN/inf is of
+
+KWALITEIT VAN HET LABEL (v1.2 - v1.4)
+=====================================
+- v1.2 ONBRUIKBARE KOERS = ONTBREKEND: een forward-koers die NaN/inf is of
   <= 0 wordt als None (NULL) weggeschreven. In v1.1 liep zo'n waarde
   ongehinderd door: NaN kwam in forward_returns terecht, en omdat de
   selectie op `IS NULL` filtert (NaN is geen NULL) werd zo'n rij daarna nooit
-  meer opgepikt. Negatieve koersen (bv. MOL.WA) gaven bovendien onmogelijke
-  rendementen (-490% .. -543%).
-- RUWE KOERSEN (v1.3): history(auto_adjust=False) i.p.v. True. entry_koers is
-  de onaangepaste koers op selectiemoment; auto_adjust=True corrigeert
-  achteraf voor dividenden (Yahoo gaf voor MOL.WA hierdoor negatieve koersen
-  vóór de ex-dividenddatum). 'Close' is bij auto_adjust=False nog wel
-  gecorrigeerd voor splits.
+  meer opgepikt.
+- v1.3 RUWE KOERSEN: history(auto_adjust=False). entry_koers is de
+  onaangepaste koers op selectiemoment; auto_adjust=True corrigeert achteraf
+  voor dividenden (Yahoo gaf voor MOL.WA hierdoor negatieve koersen).
+- v1.4 SPLIT-CORRECTIE: 'Close' is bij auto_adjust=False nog WEL achteraf
+  gecorrigeerd voor splits, terwijl entry_koers de koers van toen is. Een
+  split tussen selectiedatum en vandaag gaf dus een nep-rendement (APH, 2:1
+  op 2026-09-03: -50% op alle rijen van daarvoor). Nu wordt de entry-koers
+  gedeeld door het product van alle split-ratio's met ex-datum NA de
+  prijsdatum van de entry. Splits met ex-datum <= prijsdatum veranderen
+  niets (de entry-koers is dan al de nieuwe koers). `entry_koers` in de
+  tabel blijft de gelogde koers; `fwd_ret_<h>d` is de gezaghebbende waarde.
+- v1.4 EENHEIDSBREUK: Yahoo kan een reeks plots in een andere eenheid geven
+  (BCG.L: pence tot 2026-08-21, ponden daarna: factor 100). Een
+  forward-koers waarvan de verhouding tot de (split-gecorrigeerde) entry
+  tussen 70x en 150x of tussen 1/150 en 1/70 ligt, wordt met 100 vermenigvuldigd
+  of gedeeld. Zulke verhoudingen komen in echte koersen niet voor.
+  De opgeslagen fwd_close_<h>d staat dan in de eenheid van entry_koers.
 
 GEBRUIK
 =======
@@ -89,6 +103,11 @@ MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "400"))
 # in deze lijst) -- de kolomnamen hier worden dynamisch opgebouwd, maar
 # de tabel zelf niet automatisch.
 HORIZONS = sorted(int(h) for h in os.environ.get("HORIZONS", "5,10,20").split(","))
+
+# Eenheidsbreuk (pence <-> ponden e.d.): verhouding fwd_close / entry buiten
+# elke realistische koersbeweging, maar vlak bij een factor 100.
+EENHEID_RATIO_MIN = 70.0
+EENHEID_RATIO_MAX = 150.0
 
 
 def vandaag() -> str:
@@ -154,6 +173,32 @@ def haal_openstaande_rijen(conn) -> List[dict]:
 
 
 # --------------------------------------------------------------------------
+# Hulpfuncties voor de kwaliteit van het label (v1.4)
+# --------------------------------------------------------------------------
+def split_factor_na(splits: pd.Series, prijsdatum: pd.Timestamp) -> float:
+    """Product van alle split-ratio's met ex-datum STRIKT NA prijsdatum.
+    splits: Series (index = ex-datum, waarde = ratio, bv. 2.0 voor 2:1,
+    0.1 voor een omgekeerde 1:10). Lege reeks -> 1.0."""
+    if splits is None or splits.empty:
+        return 1.0
+    na = splits[splits.index > prijsdatum]
+    if na.empty:
+        return 1.0
+    return float(na.prod())
+
+
+def corrigeer_eenheid(fwd_close: float, entry_adj: float) -> Tuple[float, bool]:
+    """Corrigeert een factor-100 eenheidsbreuk (pence <-> ponden).
+    Geeft (gecorrigeerde_koers, is_gecorrigeerd) terug."""
+    ratio = fwd_close / entry_adj
+    if EENHEID_RATIO_MIN <= ratio <= EENHEID_RATIO_MAX:
+        return fwd_close / 100.0, True
+    if (1.0 / EENHEID_RATIO_MAX) <= ratio <= (1.0 / EENHEID_RATIO_MIN):
+        return fwd_close * 100.0, True
+    return fwd_close, False
+
+
+# --------------------------------------------------------------------------
 # Stap 2: per ticker het koersverloop ophalen en de horizons berekenen
 # --------------------------------------------------------------------------
 def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
@@ -161,11 +206,10 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
     voor deze ene ticker. Geeft een lijst dicts terug, klaar voor upsert.
 
     v1.2: een forward-koers die NaN/inf is of <= 0 wordt behandeld als
-    ONTBREKEND (None -> NULL). Zo komt er nooit NaN in forward_returns
-    (NaN is geen NULL, dus die rijen werden nooit meer opgepikt) en
-    schrijven we geen onmogelijke rendementen (bv. MOL.WA) weg.
-
-    v1.3: ruwe slotkoersen (auto_adjust=False), consistent met entry_koers."""
+    ONTBREKEND (None -> NULL).
+    v1.3: ruwe slotkoersen (auto_adjust=False), consistent met entry_koers.
+    v1.4: entry_koers wordt gecorrigeerd voor splits na de prijsdatum, en
+    een factor-100 eenheidsbreuk in de koersreeks wordt hersteld."""
     vroegste = min(r["datum"] for r in rijen)
     try:
         # v1.2: hist = yf.Ticker(ticker).history(start=vroegste, auto_adjust=True)
@@ -182,6 +226,16 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
     closes.index = pd.to_datetime(closes.index).tz_localize(None)
     datums = closes.index
 
+    # v1.4: splits (ex-datum -> ratio). Ontbreekt de kolom, dan geen correctie.
+    splits = None
+    if "Stock Splits" in hist.columns:
+        sp = hist["Stock Splits"].copy()
+        sp.index = pd.to_datetime(sp.index).tz_localize(None)
+        splits = sp[sp > 0]
+
+    n_split_gecorr = 0
+    n_eenheid_gecorr = 0
+
     resultaten = []
     for r in rijen:
         try:
@@ -192,6 +246,17 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
             entry_koers = float(r["koers"])
             if not entry_koers or math.isnan(entry_koers) or entry_koers <= 0:
                 continue
+
+            # v1.4: prijsdatum = laatste handelsdag <= datum (een weekend-
+            # selectie logt de slotkoers van vrijdag). Ligt er geen
+            # handelsdag voor `datum` in de reeks, dan gebruiken we `datum`.
+            pos_vorige = datums.searchsorted(doel, side="right") - 1
+            prijsdatum = datums[pos_vorige] if pos_vorige >= 0 else doel
+
+            factor = split_factor_na(splits, prijsdatum)
+            entry_adj = entry_koers / factor
+            if factor != 1.0:
+                n_split_gecorr += 1
 
             rij = {
                 "ticker": ticker, "datum": r["datum"], "strategie": r["strategie"],
@@ -208,11 +273,15 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
                         rij[f"fwd_ret_{h}d"] = None
                         continue
 
-                    # v1.1 (zonder guard; liet NaN en negatieve koersen door):
-                    # rij[f"fwd_close_{h}d"] = fwd_close
+                    # v1.4: factor-100 eenheidsbreuk herstellen.
+                    fwd_close, hersteld = corrigeer_eenheid(fwd_close, entry_adj)
+                    if hersteld:
+                        n_eenheid_gecorr += 1
+
+                    # v1.3 (zonder split-correctie):
                     # rij[f"fwd_ret_{h}d"] = round((fwd_close / entry_koers - 1) * 100, 3)
                     rij[f"fwd_close_{h}d"] = fwd_close
-                    rij[f"fwd_ret_{h}d"] = round((fwd_close / entry_koers - 1) * 100, 3)
+                    rij[f"fwd_ret_{h}d"] = round((fwd_close / entry_adj - 1) * 100, 3)
                 else:
                     rij[f"fwd_close_{h}d"] = None
                     rij[f"fwd_ret_{h}d"] = None
@@ -220,6 +289,10 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
         except Exception as e:
             print(f"  [WARN] {ticker} {r['datum']}/{r['strategie']}: {e}")
             continue
+
+    if n_split_gecorr or n_eenheid_gecorr:
+        print(f"  [INFO] {ticker}: {n_split_gecorr} rijen split-gecorrigeerd, "
+              f"{n_eenheid_gecorr} koersen eenheid-gecorrigeerd")
 
     return resultaten
 
