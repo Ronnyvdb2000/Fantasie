@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
-lightgbmV2.py
-=============
+xLightgbmV2.py
+==============
 
 LightGBM trainingsengine, opvolger van lightgbmV1 (methodiek xgboostV3).
 
@@ -29,17 +29,21 @@ WIJZIGINGEN T.O.V. V1
        model_full   -> hertraind op ALLE rijen (voor productie)
        features, horizon, target_mode, split_date, best_iteration, ...
 8. AUC_VERSCHIL_WAARSCHUWING wordt nu echt gebruikt.
-9. Een horizon zonder genoeg data geeft status "fout" in de summary maar
-   laat de run niet meer crashen; de run faalt alleen als GEEN enkele
-   horizon getraind kon worden.
+9. PREFLIGHT: per horizon wordt vooraf gerapporteerd of er genoeg data is.
+   Een horizon zonder genoeg data krijgt status "overgeslagen" en blokkeert
+   de rest niet meer. Met --strict faalt de run wel als niet alles lukt.
+10. Een horizon zonder genoeg data geeft status "overgeslagen" in de summary
+    maar laat de run niet meer crashen; de run faalt alleen als GEEN enkele
+    horizon getraind kon worden (of met --strict bij gedeeltelijk succes).
 
 GEBRUIK
 -------
-    python lightgbmV2.py
-    python lightgbmV2.py --horizons 10d
-    python lightgbmV2.py --target abs
-    python lightgbmV2.py --exclude-strategie bot_00db
-    python lightgbmV2.py --exclude-strategie bot_00db,bot_00vcp
+    python xLightgbmV2.py
+    python xLightgbmV2.py --horizons 10d
+    python xLightgbmV2.py --target abs
+    python xLightgbmV2.py --exclude-strategie bot_00db
+    python xLightgbmV2.py --exclude-strategie bot_00db,bot_00vcp
+    python xLightgbmV2.py --strict
 
 DATABASE
 --------
@@ -285,6 +289,55 @@ def get_training_data(conn, uitsluiten):
             print(f"Rijen met {kolom:<11}: {df[kolom].notna().sum():,}")
 
     return df
+
+
+# ============================================================
+# PREFLIGHT
+# ============================================================
+
+def preflight_report(df, horizons):
+    """
+    Rapporteert per horizon of er genoeg data is voor training.
+    Retourneert {horizon: (kan_trainen, reden, n_rijen, n_datums)}.
+    """
+    rapport = {}
+
+    print()
+    print("=" * 70)
+    print("PREFLIGHT — DATA-BESCHIKBAARHEID PER HORIZON")
+    print("=" * 70)
+    print(f"{'Horizon':>8} | {'Rijen':>9} | {'Datums':>7} | Status")
+    print("-" * 70)
+
+    min_rijen = MIN_RIJEN_TRAINING + MIN_RIJEN_TEST
+
+    for horizon in horizons:
+        kolom = f"fwd_ret_{horizon}"
+
+        if kolom not in df.columns:
+            rapport[horizon] = (False, f"kolom {kolom} ontbreekt", 0, 0)
+            print(f"{horizon:>8} | {'-':>9} | {'-':>7} | KOLOM ONTBREEKT")
+            continue
+
+        mask = df[kolom].notna()
+        n_rijen = int(mask.sum())
+        n_datums = int(df.loc[mask, "datum"].nunique()) if n_rijen else 0
+
+        if n_rijen < min_rijen:
+            status = f"TE WEINIG RIJEN (min {min_rijen})"
+            reden = f"te weinig bruikbare rijen: {n_rijen}"
+        elif n_datums < MIN_DATUMS:
+            status = f"TE WEINIG DATUMS (min {MIN_DATUMS})"
+            reden = f"slechts {n_datums} verschillende datums"
+        else:
+            status = "OK"
+            reden = ""
+
+        rapport[horizon] = (status == "OK", reden, n_rijen, n_datums)
+        print(f"{horizon:>8} | {n_rijen:>9,} | {n_datums:>7,} | {status}")
+
+    print("=" * 70)
+    return rapport
 
 
 # ============================================================
@@ -818,6 +871,7 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
     return {
         "horizon": horizon,
         "status": "getraind",
+        "reden": "",
         "target_mode": target_mode,
         "n_total": len(work),
         "n_train": len(train_df),
@@ -850,9 +904,11 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
 
 def fout_resultaat(horizon, target_mode, fout):
     """Resultaat-dict voor een horizon die niet getraind kon worden."""
+    reden = str(fout)
     leeg = {
         "horizon": horizon,
-        "status": "fout",
+        "status": "overgeslagen",
+        "reden": reden,
         "target_mode": target_mode,
         "n_total": 0,
         "n_train": 0,
@@ -862,7 +918,7 @@ def fout_resultaat(horizon, target_mode, fout):
         "auc_waarschuwing": False,
         "top_n": 0,
         "model_file": "",
-        "fout": str(fout),
+        "fout": reden,  # behouden voor compatibiliteit
     }
     for sleutel in (
         "accuracy", "auc", "auc_abs", "auc_datum", "ic_datum",
@@ -929,6 +985,11 @@ def parse_args():
         action="store_true",
         help="zet de embargo uit (gedrag van V1)",
     )
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit met code 1 als niet ALLE opgegeven horizons getraind zijn",
+    )
     return ap.parse_args()
 
 
@@ -947,6 +1008,7 @@ def main():
     print(f"Target   : {args.target}")
     print(f"Embargo  : {embargo}")
     print(f"Top      : {TOP_N_FRACTIE * 100:.0f}%")
+    print(f"Strict   : {args.strict}")
 
     db_url = os.environ.get("SUPABASE_DB_URL")
     if not db_url:
@@ -960,9 +1022,19 @@ def main():
     finally:
         conn.close()
 
+    # Preflight: welke horizons zijn überhaupt kansrijk?
+    rapport = preflight_report(df, horizons)
+
     results = []
 
     for horizon in horizons:
+        kan_trainen, reden, _, _ = rapport[horizon]
+        if not kan_trainen:
+            print()
+            print(f"OVERGESLAGEN [{horizon}]: {reden}")
+            results.append(fout_resultaat(horizon, args.target, reden))
+            continue
+
         try:
             results.append(
                 train_horizon(df, horizon, args.target, embargo, uitsluiten)
@@ -974,37 +1046,50 @@ def main():
 
     write_summary(results, args)
 
-    # V1 eiste dat ALLE drie modellen bestonden en gooide anders een
-    # RuntimeError. Dat laten we los: een horizon die nog niet genoeg
-    # gelabelde data heeft (bv. 60d) mag de rest niet blokkeren.
-    #
-    # required_models = [... 10d, 30d, 60d ...]
-    # missing_models = [p for p in required_models if not os.path.isfile(p)]
-    # if missing_models:
-    #     raise RuntimeError("Niet alle drie LightGBM-modellen zijn aangemaakt.")
-
     getraind = [r for r in results if r["status"] == "getraind"]
+    n_getraind = len(getraind)
+    n_totaal = len(results)
 
     print()
-    print("=" * 70)
+    print("=" * 78)
     print("LIGHTGBMV2 RUN VOLTOOID")
-    print("=" * 70)
+    print("=" * 78)
+    print(
+        f"{'Hor':>4} | {'Status':<12} | {'AUC':>6} | {'AUC/d':>6} | "
+        f"{'IC/d':>7} | {'Ctrl':>6} | Reden"
+    )
+    print("-" * 78)
 
     for r in results:
         if r["status"] == "getraind":
             print(
-                f"{r['horizon']:>4} | getraind | "
-                f"AUC={fmt(r['auc'])} | "
-                f"AUC/datum={fmt(r['auc_datum'])} | "
-                f"IC/datum={fmt(r['ic_datum'])} | "
-                f"control={fmt(r['control_auc'])}"
+                f"{r['horizon']:>4} | getraind     | "
+                f"{fmt(r['auc']):>6} | {fmt(r['auc_datum']):>6} | "
+                f"{fmt(r['ic_datum']):>7} | {fmt(r['control_auc']):>6} | -"
             )
         else:
-            print(f"{r['horizon']:>4} | fout     | {r['fout']}")
+            reden = str(r.get("reden", r.get("fout", "")))
+            if len(reden) > 40:
+                reden = reden[:37] + "..."
+            print(
+                f"{r['horizon']:>4} | overgeslagen | "
+                f"{'-':>6} | {'-':>6} | {'-':>7} | {'-':>6} | {reden}"
+            )
 
-    print(f"\nOutput: {RESULTS_DIR}/")
+    print("-" * 78)
+    print(f"Modellen : {n_getraind}/{n_totaal} getraind")
+    print(f"Output   : {RESULTS_DIR}/")
 
-    if not getraind:
+    # Exit-semantiek:
+    #  - default: alleen falen als GEEN enkele horizon lukte.
+    #  - --strict: falen zodra niet alles lukte.
+    if args.strict and n_getraind < n_totaal:
+        raise SystemExit(
+            f"STRIKT: {n_totaal - n_getraind} van {n_totaal} horizons "
+            f"niet getraind."
+        )
+
+    if n_getraind == 0:
         raise SystemExit("Geen enkele horizon kon getraind worden.")
 
 
