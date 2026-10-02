@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bouw_forward_returns.py  —  FEATURE STORE: selecties -> forward-rendement  v1.4
+bouw_forward_returns.py  —  FEATURE STORE: selecties -> forward-rendement  v1.5
 
 DOEL
 ====
@@ -65,6 +65,16 @@ KWALITEIT VAN HET LABEL (v1.2 - v1.4)
   of gedeeld. Zulke verhoudingen komen in echte koersen niet voor.
   De opgeslagen fwd_close_<h>d staat dan in de eenheid van entry_koers.
 
+- v1.5 DUBBELE SELECTIES: `selecties` bevat meerdere rijen voor dezelfde
+  (ticker, datum, strategie) met verschillende koers (691 van ~29.600
+  combinaties; mediaan 0,76%, max 9,7%; vooral marktsent, kasstr, db,
+  graham, hoogl). Bij de upsert won de laatst verwerkte rij, en dat was
+  willekeurig. Nu wordt per combinatie EEN rij gekozen (DISTINCT ON): de
+  eerst gelogde (created_at, id), want dat is de koers waarop je het signaal
+  had kunnen handelen. Met DUBBELE_SELECTIE=laatste kies je de laatst
+  gelogde. Een bijkomend voordeel: elke combinatie wordt nog maar een keer
+  berekend.
+
 GEBRUIK
 =======
   python bouw_forward_returns.py build
@@ -79,6 +89,9 @@ Env vars:
                         runs (default 400)
   HORIZONS            - komma-gescheiden lijst handelsdagen (default
                         "5,10,20")
+  DUBBELE_SELECTIE    - "eerste" (default) of "laatste": welke rij van
+                        dubbele selecties-rijen (zelfde ticker/datum/
+                        strategie) de entry-koers levert
 """
 
 import os
@@ -108,6 +121,11 @@ HORIZONS = sorted(int(h) for h in os.environ.get("HORIZONS", "5,10,20").split(",
 # elke realistische koersbeweging, maar vlak bij een factor 100.
 EENHEID_RATIO_MIN = 70.0
 EENHEID_RATIO_MAX = 150.0
+
+# v1.5: welke rij bij dubbele selecties-rijen (zelfde ticker/datum/strategie).
+DUBBELE_SELECTIE = os.environ.get("DUBBELE_SELECTIE", "eerste").strip().lower()
+if DUBBELE_SELECTIE not in ("eerste", "laatste"):
+    raise SystemExit(f"DUBBELE_SELECTIE moet 'eerste' of 'laatste' zijn, niet {DUBBELE_SELECTIE!r}")
 
 
 def vandaag() -> str:
@@ -157,14 +175,39 @@ def haal_openstaande_rijen(conn) -> List[dict]:
     # echte prijs, dus een forward-rendement erop zou toch niet zinvol zijn.
     # De %% (i.p.v. losse %) is nodig omdat psycopg2 een bare % anders
     # verwart met zijn eigen %(naam)s-placeholder-syntax.
+    # v1.5: per (ticker, datum, strategie) EEN selecties-rij (DISTINCT ON),
+    # deterministisch gekozen op created_at/id. NULLS LAST zodat een rij zonder
+    # created_at nooit voor een rij met tijdstip wordt gekozen.
+    if DUBBELE_SELECTIE == "eerste":
+        volgorde_dubbel = "created_at ASC NULLS LAST, id ASC"
+    else:
+        volgorde_dubbel = "created_at DESC NULLS LAST, id DESC"
+
+    # v1.4 (alle selecties-rijen; bij dubbelen won de laatst verwerkte rij):
+    # query = f"""
+    #     SELECT s.ticker, s.datum, s.strategie, s.beurs, s.koers
+    #     FROM selecties s
+    #     LEFT JOIN forward_returns f
+    #       ON s.ticker = f.ticker AND s.datum = f.datum AND s.strategie = f.strategie
+    #     WHERE s.koers IS NOT NULL
+    #       AND s.ticker NOT LIKE '%%/%%'
+    #       AND ({horizon_filter})
+    #     ORDER BY s.ticker, s.datum;
+    # """
     query = f"""
+        WITH s AS (
+            SELECT DISTINCT ON (ticker, datum, strategie)
+                   ticker, datum, strategie, beurs, koers
+            FROM selecties
+            WHERE koers IS NOT NULL
+              AND ticker NOT LIKE '%%/%%'
+            ORDER BY ticker, datum, strategie, {volgorde_dubbel}
+        )
         SELECT s.ticker, s.datum, s.strategie, s.beurs, s.koers
-        FROM selecties s
+        FROM s
         LEFT JOIN forward_returns f
           ON s.ticker = f.ticker AND s.datum = f.datum AND s.strategie = f.strategie
-        WHERE s.koers IS NOT NULL
-          AND s.ticker NOT LIKE '%%/%%'
-          AND ({horizon_filter})
+        WHERE ({horizon_filter})
         ORDER BY s.ticker, s.datum;
     """
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
