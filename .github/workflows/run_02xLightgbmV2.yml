@@ -53,6 +53,14 @@ jobs:
           python -c "import joblib;      print('joblib',      joblib.__version__)"
           python -c "import psycopg2;    print('psycopg2 OK')"
 
+      - name: Check secret
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "FOUT: SUPABASE_DB_URL secret ontbreekt"
+            exit 1
+          fi
+          echo "SUPABASE_DB_URL is gezet (lengte: ${#SUPABASE_DB_URL})"
+
       - name: Run LightGBM V2 training
         run: |
           mkdir -p results
