@@ -14,27 +14,28 @@ WIJZIGINGEN T.O.V. V1
    Uitzetten kan met --geen-embargo (= gedrag van V1).
 2. TARGET: standaard marktneutraal ("excess"):
        1 = forward return > mediaan van dezelfde datum
-   Met --target abs krijg je het V1-target (forward return > 0), zodat je
-   eerlijk kunt vergelijken met xgboostV3.
+   Met --target abs krijg je het V1-target (forward return > 0).
 3. EVALUATIE PER DATUM: gemiddelde AUC per datum en gemiddelde Spearman IC
    per datum, naast de gepoolde AUC.
 4. UITSCHIETERS: top-20% rapporteert gemiddelde, mediaan EN getrimd gemiddelde.
-5. STRATEGIE-FILTER: --exclude-strategie bot_00db sluit selecties van die
-   strategie(en) uit (alleen als forward_returns een kolom `strategie` heeft;
-   dat wordt bij het opstarten gecontroleerd in information_schema).
+5. STRATEGIE-FILTER: --exclude-strategie sluit selecties van die strategie(en)
+   uit (alleen als forward_returns een kolom `strategie` heeft).
 6. EARLY STOPPING op een tijdsgebonden validatieset (laatste 15% van de
    trainingsdatums, met embargo).
 7. OPSLAG: per horizon een pkl-bundel met:
        model        -> getraind op TRAIN (voor evaluatie)
        model_full   -> hertraind op ALLE rijen (voor productie)
-       features, horizon, target_mode, split_date, best_iteration, ...
 8. AUC_VERSCHIL_WAARSCHUWING wordt nu echt gebruikt.
 9. PREFLIGHT: per horizon wordt vooraf gerapporteerd of er genoeg data is.
-   Een horizon zonder genoeg data krijgt status "overgeslagen" en blokkeert
-   de rest niet meer. Met --strict faalt de run wel als niet alles lukt.
-10. Een horizon zonder genoeg data geeft status "overgeslagen" in de summary
-    maar laat de run niet meer crashen; de run faalt alleen als GEEN enkele
-    horizon getraind kon worden (of met --strict bij gedeeltelijk succes).
+   Een horizon zonder genoeg data krijgt status "overgeslagen".
+   Met --strict faalt de run wel als niet alles lukt.
+10. NOTIFICATIES: aan het einde wordt een rapport gestuurd naar Telegram
+    (HTML, emojis) en e-mail (HTML). Zelfde secrets als a_trade.py:
+        TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
+        EMAIL_USER, EMAIL_PASS, EMAIL_RECEIVER
+    Optioneel: RUN_URL, ARTIFACT_URL voor links in het bericht.
+    Notificaties falen nooit hard -- een falend kanaal blokkeert de
+    trainingsrun niet. Uitzetten kan met --geen-notify.
 
 GEBRUIK
 -------
@@ -42,8 +43,8 @@ GEBRUIK
     python xLightgbmV2.py --horizons 10d
     python xLightgbmV2.py --target abs
     python xLightgbmV2.py --exclude-strategie bot_00db
-    python xLightgbmV2.py --exclude-strategie bot_00db,bot_00vcp
     python xLightgbmV2.py --strict
+    python xLightgbmV2.py --geen-notify
 
 DATABASE
 --------
@@ -51,7 +52,7 @@ Environment variable: SUPABASE_DB_URL
 
 OUTPUT (results/)
 -----------------
-    lightgbmV2_<h>_model.pkl              (bundel, zie hierboven)
+    lightgbmV2_<h>_model.pkl
     lightgbmV2_<h>_feature_importance.csv
     lightgbmV2_<h>_correlations.csv
     lightgbmV2_<h>_test_predictions.csv
@@ -60,14 +61,20 @@ OUTPUT (results/)
 
 import argparse
 import datetime as dt
+import html
 import os
+import smtplib
+import sys
 import warnings
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import joblib
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import psycopg2
+import requests
 from scipy.stats import trim_mean
 from sklearn.metrics import accuracy_score, roc_auc_score
 
@@ -91,12 +98,12 @@ VALIDATIE_FRACTIE = 0.15      # laatste deel van de trainingsdatums
 MIN_RIJEN_TRAINING = 100
 MIN_RIJEN_TEST = 30
 MIN_RIJEN_VALIDATIE = 50
-MIN_RIJEN_PER_DATUM = 10      # voor median-target en per-datum metrics
-MIN_DATUMS = 20               # minder verschillende datums = geen split
-DATUMS_WAARSCHUWING = 60      # minder dan dit = waarschuwing, geen fout
+MIN_RIJEN_PER_DATUM = 10
+MIN_DATUMS = 20
+DATUMS_WAARSCHUWING = 60
 
-MAX_BOMEN = 1000              # met early stopping
-BOMEN_ZONDER_VALIDATIE = 400  # V1-waarde, fallback
+MAX_BOMEN = 1000
+BOMEN_ZONDER_VALIDATIE = 400
 EARLY_STOPPING_RONDES = 50
 
 RANDOM_STATE = 42
@@ -118,7 +125,6 @@ FEATURE_COLUMNS = [
     "pct_from_high52w",
 ]
 
-# Schaalvrij controlemodel: zonder absolute prijsniveaus.
 FEATURE_COLUMNS_RELATIEF = [
     "atr14_pct",
     "rsi14",
@@ -129,9 +135,13 @@ FEATURE_COLUMNS_RELATIEF = [
     "pct_from_high52w",
 ]
 
-BASELINE_KOLOM = "pct_from_ma50"     # laagste waarde = geselecteerd
+BASELINE_KOLOM = "pct_from_ma50"
 
 AUC_VERSCHIL_WAARSCHUWING = 0.10
+
+# Notificatie-drempels
+AUC_ALARM = 0.50
+AUC_GOED = 0.55
 
 
 # ============================================================
@@ -166,12 +176,10 @@ def safe_float(value):
 
 
 def horizon_dagen(horizon):
-    """'30d' -> 30 (handelsdagen)."""
     return int(str(horizon).lower().replace("d", ""))
 
 
 def embargo_kalenderdagen(horizon):
-    """Handelsdagen -> kalenderdagen (x 7/5) + buffer voor feestdagen."""
     return int(np.ceil(horizon_dagen(horizon) * 7 / 5)) + 2
 
 
@@ -180,7 +188,6 @@ def embargo_kalenderdagen(horizon):
 # ============================================================
 
 def heeft_kolom(conn, tabel, kolom):
-    """Controleert via information_schema of een kolom bestaat."""
     with conn.cursor() as cur:
         cur.execute(
             "SELECT 1 FROM information_schema.columns "
@@ -191,13 +198,6 @@ def heeft_kolom(conn, tabel, kolom):
 
 
 def bouw_query(met_strategie, uitsluiten):
-    """
-    Bouwt de JOIN-query.
-
-    met_strategie: forward_returns heeft een kolom `strategie`
-        -> deterministische dedup (ORDER BY ... strategie) en optionele
-           uitsluiting van strategieen VOOR de dedup.
-    """
     where = ""
     params = None
     order = "ORDER BY ticker, datum"
@@ -296,10 +296,6 @@ def get_training_data(conn, uitsluiten):
 # ============================================================
 
 def preflight_report(df, horizons):
-    """
-    Rapporteert per horizon of er genoeg data is voor training.
-    Retourneert {horizon: (kan_trainen, reden, n_rijen, n_datums)}.
-    """
     rapport = {}
 
     print()
@@ -352,8 +348,6 @@ def prepare_horizon_data(df, horizon, target_mode):
 
     work = df.copy()
     work["datum"] = pd.to_datetime(work["datum"], errors="coerce")
-
-    # Eén observatie per ticker/datum.
     work = work.drop_duplicates(subset=["ticker", "datum"], keep="first")
 
     work[target_column] = pd.to_numeric(work[target_column], errors="coerce")
@@ -364,11 +358,9 @@ def prepare_horizon_data(df, horizon, target_mode):
 
     work = work.dropna(subset=FEATURE_COLUMNS)
 
-    # Absoluut label (V1-target). Blijft altijd beschikbaar als diagnose.
     work["is_profitable"] = (work[target_column] > 0).astype(int)
 
     if target_mode == "excess":
-        # Marktneutraal: boven de mediaan van dezelfde datum.
         aantal = work.groupby("datum")[target_column].transform("size")
         work = work[aantal >= MIN_RIJEN_PER_DATUM].copy()
 
@@ -390,9 +382,7 @@ def time_split(df, horizon, embargo=True):
     if len(df) < (MIN_RIJEN_TRAINING + MIN_RIJEN_TEST):
         raise RuntimeError(
             f"Te weinig bruikbare rijen: {len(df)}. "
-            f"Minimaal {MIN_RIJEN_TRAINING + MIN_RIJEN_TEST} vereist "
-            f"(waarschijnlijk is {horizon} nog niet genoeg gevuld in "
-            f"forward_returns)."
+            f"Minimaal {MIN_RIJEN_TRAINING + MIN_RIJEN_TEST} vereist."
         )
 
     dates = (
@@ -422,8 +412,6 @@ def time_split(df, horizon, embargo=True):
     else:
         train_einde = split_date
 
-    # V1 (zonder embargo):
-    # train_df = df[df["datum"] <= split_date].copy()
     train_df = df[df["datum"] <= train_einde].copy()
     test_df = df[df["datum"] > split_date].copy()
 
@@ -440,11 +428,6 @@ def time_split(df, horizon, embargo=True):
 
 
 def split_validatie(train_df, horizon, embargo=True):
-    """
-    Splitst de trainingsset chronologisch in fit + validatie (voor early
-    stopping). Geeft (train_df, None) terug als een degelijke validatieset
-    niet mogelijk is; dan wordt met een vast aantal bomen getraind.
-    """
     dates = (
         train_df["datum"].drop_duplicates().sort_values().reset_index(drop=True)
     )
@@ -475,7 +458,7 @@ def split_validatie(train_df, horizon, embargo=True):
 
 
 # ============================================================
-# CORRELATIE (alleen TRAINING)
+# CORRELATIE
 # ============================================================
 
 def calculate_correlations(train_df, target_column, horizon):
@@ -513,8 +496,6 @@ def calculate_correlations(train_df, target_column, horizon):
     )
     result.to_csv(filename, index=False)
 
-    # Pearson is gevoelig voor uitschieters (bv. split-artefacten);
-    # Spearman is hier de betrouwbaardere maat.
     for _, row in result.head(10).iterrows():
         print(
             f"  {row['feature']:<22} "
@@ -534,7 +515,7 @@ def create_lightgbm_model(n_estimators):
         boosting_type="gbdt",
         n_estimators=int(n_estimators),
         learning_rate=0.03,
-        num_leaves=31,        # eventueel lager (15) bij weinig data
+        num_leaves=31,
         max_depth=6,
         min_child_samples=40,
         subsample=0.80,
@@ -550,11 +531,6 @@ def create_lightgbm_model(n_estimators):
 
 
 def per_datum_metrics(df, prob_col, ret_col, target_col):
-    """
-    Gemiddelde AUC en gemiddelde Spearman IC (prob vs forward return),
-    berekend PER DATUM en daarna gemiddeld. Dit meet cross-sectionele
-    selectiekracht, los van de richting van de markt.
-    """
     aucs = []
     ics = []
 
@@ -577,8 +553,6 @@ def per_datum_metrics(df, prob_col, ret_col, target_col):
 
 
 def train_model(train_df, test_df, features, target_column, horizon, embargo):
-    """Traint op TRAIN (met early stopping indien mogelijk), evalueert op TEST."""
-
     fit_df, val_df = split_validatie(train_df, horizon, embargo)
 
     if val_df is not None:
@@ -638,7 +612,6 @@ def train_model(train_df, test_df, features, target_column, horizon, embargo):
 
 
 def top_n_stats(df, sort_column, target_column, n_top, descending=True):
-    """Gemiddelde, mediaan en getrimd gemiddelde van de top-n."""
     ordered = df.sort_values(sort_column, ascending=not descending)
     selected = ordered.head(n_top)[target_column]
 
@@ -719,9 +692,6 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
 
     calculate_correlations(train_df, target_column, horizon)
 
-    # --------------------------------------------------------
-    # VOLLEDIG MODEL
-    # --------------------------------------------------------
     print(f"\n[{horizon}] Volledig LightGBM-model trainen...")
 
     model, test_predictions, metrics, best_iteration = train_model(
@@ -734,7 +704,6 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
         test_predictions, "model_probability", target_column, n_top, True
     )
 
-    # Baseline: laagste pct_from_ma50 (mean-reversion, zoals xgboostV3).
     top_baseline = top_n_stats(
         test_predictions, BASELINE_KOLOM, target_column, n_top, False
     )
@@ -747,9 +716,6 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
         ),
     }
 
-    # --------------------------------------------------------
-    # CONTROLEMODEL (schaalvrij)
-    # --------------------------------------------------------
     print(f"\n[{horizon}] Controlemodel trainen...")
 
     control_model, control_predictions, control_metrics, _ = train_model(
@@ -767,16 +733,10 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
 
     save_feature_importance(model, FEATURE_COLUMNS, horizon)
 
-    # --------------------------------------------------------
-    # HERTRAINEN OP ALLE DATA (productiemodel)
-    # --------------------------------------------------------
     n_full = max(50, int(best_iteration * 1.10))
     model_full = create_lightgbm_model(n_full)
     model_full.fit(work[FEATURE_COLUMNS], work["target"])
 
-    # --------------------------------------------------------
-    # OPSLAAN
-    # --------------------------------------------------------
     bundle = {
         "versie": MODEL_VERSIE,
         "horizon": horizon,
@@ -786,8 +746,8 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
         "embargo": bool(embargo),
         "best_iteration": best_iteration,
         "uitgesloten_strategieen": list(uitgesloten),
-        "model": model,              # getraind op TRAIN
-        "model_full": model_full,    # getraind op alle rijen
+        "model": model,
+        "model_full": model_full,
     }
 
     model_filename = os.path.join(
@@ -813,9 +773,6 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
         "model_probability", ascending=False
     ).to_csv(predictions_filename, index=False)
 
-    # --------------------------------------------------------
-    # AUC-VERSCHIL
-    # --------------------------------------------------------
     if not pd.isna(metrics["auc"]) and not pd.isna(control_metrics["auc"]):
         auc_delta = metrics["auc"] - control_metrics["auc"]
     else:
@@ -825,9 +782,6 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
         (not pd.isna(auc_delta)) and abs(auc_delta) > AUC_VERSCHIL_WAARSCHUWING
     )
 
-    # --------------------------------------------------------
-    # PRINTEN
-    # --------------------------------------------------------
     print()
     print("-" * 70)
     print(f"[{horizon}] RESULTAAT")
@@ -849,8 +803,7 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
     if auc_waarschuwing:
         print(
             f"  !! WAARSCHUWING: |AUC verschil| > {AUC_VERSCHIL_WAARSCHUWING:.2f}: "
-            f"het volledige model leunt mogelijk op absolute prijsniveaus "
-            f"(ticker-identiteit) in plaats van op echte signalen."
+            f"het volledige model leunt mogelijk op absolute prijsniveaus."
         )
 
     print()
@@ -903,7 +856,6 @@ def train_horizon(df, horizon, target_mode, embargo, uitgesloten):
 
 
 def fout_resultaat(horizon, target_mode, fout):
-    """Resultaat-dict voor een horizon die niet getraind kon worden."""
     reden = str(fout)
     leeg = {
         "horizon": horizon,
@@ -918,7 +870,7 @@ def fout_resultaat(horizon, target_mode, fout):
         "auc_waarschuwing": False,
         "top_n": 0,
         "model_file": "",
-        "fout": reden,  # behouden voor compatibiliteit
+        "fout": reden,
     }
     for sleutel in (
         "accuracy", "auc", "auc_abs", "auc_datum", "ic_datum",
@@ -932,7 +884,7 @@ def fout_resultaat(horizon, target_mode, fout):
 
 
 # ============================================================
-# SUMMARY
+# SUMMARY FILE
 # ============================================================
 
 def write_summary(results, args):
@@ -955,6 +907,304 @@ def write_summary(results, args):
                     waarde = safe_float(waarde)
                 f.write(f"  {sleutel}: {waarde}\n")
             f.write("\n")
+
+    return filename
+
+
+# ============================================================
+# NOTIFICATIES — TELEGRAM
+# ============================================================
+
+def _esc(s):
+    return html.escape(str(s))
+
+
+def _status_emoji(result):
+    if result["status"] != "getraind":
+        return "⏭️", "overgeslagen"
+    auc = result.get("auc")
+    if is_nan(auc):
+        return "⚠️", "getraind (AUC onbekend)"
+    auc = float(auc)
+    if auc >= AUC_GOED:
+        return "🟢", "getraind"
+    if auc >= AUC_ALARM:
+        return "🟡", "getraind (zwak)"
+    return "🔴", "getraind (AUC < 0.50)"
+
+
+def maak_telegram_bericht(results, args):
+    vandaag = dt.datetime.now().strftime("%Y-%m-%d")
+    n_ok = sum(1 for r in results if r["status"] == "getraind")
+    n_tot = len(results)
+
+    run_url = os.environ.get("RUN_URL", "")
+    artifact_url = os.environ.get("ARTIFACT_URL", "")
+
+    lijnen = [
+        "🤖🤖🤖 <b>LIGHTGBM V2 — TRAININGSRAPPORT</b> 🤖🤖🤖",
+        f"<i>{vandaag}</i>",
+        "",
+        f"✅ <b>{n_ok}/{n_tot}</b> horizons getraind  "
+        f"<i>(target={_esc(args.target)})</i>",
+    ]
+
+    for r in results:
+        naam = _esc(r["horizon"])
+        emoji, kort = _status_emoji(r)
+
+        lijnen.append("")
+        lijnen.append(f"{emoji} <b>{naam}</b> — {_esc(kort)}")
+
+        if r["status"] == "getraind":
+            auc = fmt(r.get("auc"))
+            auc_d = fmt(r.get("auc_datum"))
+            ic_d = fmt(r.get("ic_datum"))
+            ctrl = fmt(r.get("control_auc"))
+
+            lijnen.append(f"  📊 AUC: <b>{_esc(auc)}</b>  (per datum: {_esc(auc_d)})")
+            lijnen.append(f"  📈 IC/datum: <b>{_esc(ic_d)}</b>")
+            lijnen.append(f"  🎯 Controle AUC: {_esc(ctrl)}")
+
+            top_gem = pct(r.get("top_model_gem"))
+            base_gem = pct(r.get("top_baseline_gem"))
+            test_gem = pct(r.get("test_gem"))
+            lijnen.append(
+                f"  🥇 Top-20%: <b>{_esc(top_gem)}</b>  "
+                f"(baseline: {_esc(base_gem)}, testset: {_esc(test_gem)})"
+            )
+
+            if r.get("auc_waarschuwing"):
+                lijnen.append(
+                    "  ⚠️ <i>AUC-verschil t.o.v. controlemodel groot — "
+                    "model leunt mogelijk op prijsniveau i.p.v. signaal</i>"
+                )
+
+            test_gem_f = r.get("test_gem")
+            if not is_nan(test_gem_f) and float(test_gem_f) < 0:
+                lijnen.append("  🔻 <i>Testset gem. rendement negatief</i>")
+        else:
+            reden = _esc(r.get("reden", ""))
+            if len(reden) > 100:
+                reden = reden[:97] + "..."
+            lijnen.append(f"  <i>{reden}</i>")
+
+    if run_url:
+        lijnen.append("")
+        lijnen.append(f'🔗 <a href="{_esc(run_url)}">Bekijk volledige run</a>')
+
+    if artifact_url:
+        lijnen.append(f'📦 <a href="{_esc(artifact_url)}">Download artifact</a>')
+
+    return "\n".join(lijnen)
+
+
+def stuur_telegram(tekst):
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+
+    if not token or not chat_id:
+        print("Telegram-secrets ontbreken, overslaan.", file=sys.stderr)
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": tekst,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    try:
+        resp = requests.post(url, json=payload, timeout=30)
+        if not resp.ok:
+            print(
+                f"Telegram-fout: {resp.status_code} {resp.text}",
+                file=sys.stderr,
+            )
+            return False
+        print("Telegram verzonden.")
+        return True
+    except Exception as e:
+        print(f"Telegram-exception: {e}", file=sys.stderr)
+        return False
+
+
+# ============================================================
+# NOTIFICATIES — E-MAIL
+# ============================================================
+
+def _horizon_blok_html(r):
+    naam = r["horizon"]
+    emoji, kort = _status_emoji(r)
+
+    if r["status"] != "getraind":
+        reden = r.get("reden", "onbekende reden")
+        return f"""
+        <div style="background:#f5f5f5; border-left:6px solid #999;
+                    border-radius:6px; padding:14px; margin-bottom:12px;">
+          <h3 style="margin:0 0 6px 0;">{emoji} {naam} — {kort}</h3>
+          <p style="margin:0; color:#555;">{reden}</p>
+        </div>
+        """
+
+    auc = r.get("auc")
+    if is_nan(auc):
+        kleur = "#999"
+    elif float(auc) >= AUC_GOED:
+        kleur = "#2e7d32"
+    elif float(auc) >= AUC_ALARM:
+        kleur = "#f9a825"
+    else:
+        kleur = "#c62828"
+
+    rijen = [
+        ("AUC (target)", fmt(r.get("auc"))),
+        ("AUC per datum", fmt(r.get("auc_datum"))),
+        ("IC per datum", fmt(r.get("ic_datum"))),
+        ("Controle AUC", fmt(r.get("control_auc"))),
+        ("AUC-verschil", fmt(r.get("auc_delta"))),
+        ("Accuracy", pct(r.get("accuracy"), 1)),
+        ("Train / Test", f"{r.get('n_train')} / {r.get('n_test')}"),
+        ("Tickers", r.get("n_tickers")),
+        ("Split-datum", r.get("split_date")),
+        ("Top-20% gem.", pct(r.get("top_model_gem"))),
+        ("Top-20% mediaan", pct(r.get("top_model_med"))),
+        ("Baseline gem.", pct(r.get("top_baseline_gem"))),
+        ("Testset gem.", pct(r.get("test_gem"))),
+    ]
+
+    rijen_html = "".join(
+        f"<tr><td style='padding:4px 10px; color:#555;'>{k}</td>"
+        f"<td style='padding:4px 10px;'><b>{v}</b></td></tr>"
+        for k, v in rijen
+    )
+
+    waarschuwing_html = ""
+    if not is_nan(auc) and float(auc) < AUC_ALARM:
+        waarschuwing_html = (
+            "<p style='color:#c62828; margin:8px 0 0 0;'>"
+            "⚠️ AUC onder 0.50 — model presteert slechter dan willekeurig. "
+            "Controleer features, target-definitie en embargo."
+            "</p>"
+        )
+    if r.get("auc_waarschuwing"):
+        waarschuwing_html += (
+            "<p style='color:#e65100; margin:8px 0 0 0;'>"
+            "⚠️ Groot AUC-verschil met controlemodel — mogelijk "
+            "overfit op absolute prijsniveaus."
+            "</p>"
+        )
+
+    return f"""
+    <div style="background:#fff; border-left:6px solid {kleur};
+                border-radius:6px; padding:16px; margin-bottom:16px;
+                box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+      <h3 style="margin:0 0 10px 0;">{emoji} {naam} — {kort}</h3>
+      <table style="border-collapse:collapse; font-family:Arial,sans-serif;
+                    font-size:14px;">{rijen_html}</table>
+      {waarschuwing_html}
+    </div>
+    """
+
+
+def maak_email_html(results, args):
+    vandaag = dt.datetime.now().strftime("%Y-%m-%d")
+    n_ok = sum(1 for r in results if r["status"] == "getraind")
+    n_tot = len(results)
+
+    run_url = os.environ.get("RUN_URL", "")
+    artifact_url = os.environ.get("ARTIFACT_URL", "")
+
+    blokken = "".join(_horizon_blok_html(r) for r in results)
+
+    run_html = (
+        f'<p><a href="{run_url}">🔗 Bekijk run op GitHub</a></p>'
+        if run_url else ""
+    )
+    artifact_html = (
+        f'<p><a href="{artifact_url}">📦 Download artifact</a></p>'
+        if artifact_url else ""
+    )
+
+    return f"""
+    <html>
+      <body style="font-family:Arial,sans-serif; background:#fafafa; padding:20px;">
+        <div style="max-width:680px; margin:0 auto;">
+          <div style="background:#e3f2fd; border:3px solid #1976d2;
+                      border-radius:10px; padding:20px; margin-bottom:20px;">
+            <h1 style="color:#0d47a1; margin-top:0;">🤖 LIGHTGBM V2</h1>
+            <p style="color:#555; margin:0;">{vandaag} — target={args.target}</p>
+            <p style="font-size:18px; margin:10px 0 0 0;">
+              ✅ <b>{n_ok}/{n_tot}</b> horizons getraind
+            </p>
+          </div>
+          {blokken}
+          {run_html}
+          {artifact_html}
+        </div>
+      </body>
+    </html>
+    """
+
+
+def stuur_email(html_body, heeft_modellen):
+    user = os.environ.get("EMAIL_USER")
+    password = os.environ.get("EMAIL_PASS")
+    receiver = os.environ.get("EMAIL_RECEIVER")
+
+    if not user or not password or not receiver:
+        print("Email-secrets ontbreken, overslaan.", file=sys.stderr)
+        return False
+
+    onderwerp = (
+        "🤖 LightGBM V2 — trainingsrapport"
+        if heeft_modellen
+        else "⚠️ LightGBM V2 — geen resultaten"
+    )
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = onderwerp
+    msg["From"] = user
+    msg["To"] = receiver
+    msg.attach(MIMEText(html_body, "html"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(user, password)
+            server.sendmail(user, receiver, msg.as_string())
+        print(f"E-mail verzonden naar {receiver}.")
+        return True
+    except Exception as e:
+        print(f"Email-exception: {e}", file=sys.stderr)
+        return False
+
+
+def stuur_notificaties(results, args):
+    """Stuurt Telegram + e-mail. Faalt nooit hard."""
+    if getattr(args, "geen_notify", False):
+        print("Notificaties uitgeschakeld via --geen-notify.")
+        return
+
+    try:
+        telegram_tekst = maak_telegram_bericht(results, args)
+        ok_tg = stuur_telegram(telegram_tekst)
+    except Exception as e:
+        print(f"Telegram-voorbereiding faalde: {e}", file=sys.stderr)
+        ok_tg = False
+
+    try:
+        email_html = maak_email_html(results, args)
+        n_ok = sum(1 for r in results if r["status"] == "getraind")
+        ok_mail = stuur_email(email_html, heeft_modellen=(n_ok > 0))
+    except Exception as e:
+        print(f"E-mail-voorbereiding faalde: {e}", file=sys.stderr)
+        ok_mail = False
+
+    print(
+        f"Notificaties: Telegram={'OK' if ok_tg else 'skip/fout'}, "
+        f"mail={'OK' if ok_mail else 'skip/fout'}."
+    )
 
 
 # ============================================================
@@ -990,6 +1240,11 @@ def parse_args():
         action="store_true",
         help="exit met code 1 als niet ALLE opgegeven horizons getraind zijn",
     )
+    ap.add_argument(
+        "--geen-notify",
+        action="store_true",
+        help="stuur geen Telegram/e-mail notificatie",
+    )
     return ap.parse_args()
 
 
@@ -1009,6 +1264,7 @@ def main():
     print(f"Embargo  : {embargo}")
     print(f"Top      : {TOP_N_FRACTIE * 100:.0f}%")
     print(f"Strict   : {args.strict}")
+    print(f"Notify   : {not args.geen_notify}")
 
     db_url = os.environ.get("SUPABASE_DB_URL")
     if not db_url:
@@ -1022,7 +1278,6 @@ def main():
     finally:
         conn.close()
 
-    # Preflight: welke horizons zijn überhaupt kansrijk?
     rapport = preflight_report(df, horizons)
 
     results = []
@@ -1080,9 +1335,9 @@ def main():
     print(f"Modellen : {n_getraind}/{n_totaal} getraind")
     print(f"Output   : {RESULTS_DIR}/")
 
-    # Exit-semantiek:
-    #  - default: alleen falen als GEEN enkele horizon lukte.
-    #  - --strict: falen zodra niet alles lukte.
+    # Notificaties sturen (tenzij uitgeschakeld)
+    stuur_notificaties(results, args)
+
     if args.strict and n_getraind < n_totaal:
         raise SystemExit(
             f"STRIKT: {n_totaal - n_getraind} van {n_totaal} horizons "
