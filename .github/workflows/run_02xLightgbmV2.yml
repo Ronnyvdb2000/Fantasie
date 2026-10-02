@@ -1,61 +1,40 @@
-name: "XLightGBM V2 Trading Model"
+name: LightGBM V2 training
 
 on:
-
-  # Handmatig starten vanuit GitHub Actions
   workflow_dispatch:
-
-  # Bij wijzigingen aan de main branch
-  push:
-    branches:
-      - main
-
-  # Wekelijkse retraining
-  #
-  # GitHub Actions gebruikt UTC.
-  # 02:00 UTC = 03:00 Belgische wintertijd
-  # en 04:00 Belgische zomertijd.
   schedule:
-    - cron: "0 2 * * 0"
+    # Elke dag om 06:00 UTC
+    - cron: "0 6 * * *"
+  push:
+    paths:
+      - "xLightgbmV2.py"
+      - ".github/workflows/lightgbm.yml"
 
+permissions:
+  contents: read
 
 jobs:
-
   run-lightgbm:
+    name: run-lightgbm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
-    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
     steps:
-
-      # ======================================================
-      # CHECKOUT
-      # ======================================================
-
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v5
 
-
-      # ======================================================
-      # PYTHON
-      # ======================================================
-
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v6
-
         with:
           python-version: "3.11"
-          cache: "pip"
-
-
-      # ======================================================
-      # DEPENDENCIES
-      # ======================================================
+          cache: pip
 
       - name: Install dependencies
         run: |
-
           python -m pip install --upgrade pip
-
           pip install \
             numpy==1.26.4 \
             pandas==2.2.3 \
@@ -64,123 +43,42 @@ jobs:
             joblib==1.4.2 \
             psycopg2-binary==2.9.10
 
-
-      # ======================================================
-      # ENVIRONMENT CHECK
-      # ======================================================
-
-      - name: Check Python environment
+      - name: Verify installed versions
         run: |
-
           python --version
+          python -c "import numpy;       print('numpy',       numpy.__version__)"
+          python -c "import pandas;      print('pandas',      pandas.__version__)"
+          python -c "import sklearn;     print('scikit-learn',sklearn.__version__)"
+          python -c "import lightgbm;    print('lightgbm',    lightgbm.__version__)"
+          python -c "import joblib;      print('joblib',      joblib.__version__)"
+          python -c "import psycopg2;    print('psycopg2 OK')"
 
-          python -c "import numpy; print('numpy', numpy.__version__)"
-
-          python -c "import pandas; print('pandas', pandas.__version__)"
-
-          python -c "import sklearn; print('scikit-learn', sklearn.__version__)"
-
-          python -c "import lightgbm; print('lightgbm', lightgbm.__version__)"
-
-          python -c "import joblib; print('joblib', joblib.__version__)"
-
-          python -c "import psycopg2; print('psycopg2 OK')"
-
-
-      # ======================================================
-      # RESULT DIRECTORY
-      # ======================================================
-
-      - name: Create results directory
+      - name: Run LightGBM V2 training
         run: |
-
           mkdir -p results
-
-
-      # ======================================================
-      # LIGHTGBM TRAINING
-      # ======================================================
-
-      - name: Train LightGBM V1
-        env:
-
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-
-        run: |
-
           python xLightgbmV2.py
 
-
-      # ======================================================
-      # MODEL CHECK
-      # ======================================================
-
-      - name: Verify trained models
+      - name: Controle LightGBM modellen
         run: |
-
           echo "Controle LightGBM modellen:"
-
-          test -f results/lightgbmV1_10d_model.pkl
-          echo "OK: 10d model"
-
-          test -f results/lightgbmV1_30d_model.pkl
-          echo "OK: 30d model"
-
-          test -f results/lightgbmV1_60d_model.pkl
-          echo "OK: 60d model"
-
-          echo ""
-          echo "Bestanden:"
-          ls -lh results/
-
-
-      # ======================================================
-      # CURRENT PREDICTOR
-      # ======================================================
-
-      - name: Run current LightGBM predictor
-        env:
-
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-
-        run: |
-
-          python xLightgbm_predictor.py
-
-
-      # ======================================================
-      # SHOW PREDICTIONS
-      # ======================================================
-
-      - name: Show prediction output
-        run: |
-
-          echo ""
-          echo "=============================================="
-          echo "LIGHTGBM CURRENT PREDICTIONS"
-          echo "=============================================="
-
-          if [ -f results/lightgbmV1_current_predictions.csv ]; then
-            head -n 31 results/lightgbmV1_current_predictions.csv
-          else
-            echo "Prediction CSV ontbreekt."
+          shopt -s nullglob
+          modellen=(results/lightgbmV2_*_model.pkl)
+          if [ ${#modellen[@]} -eq 0 ]; then
+            echo "FOUT: geen enkel model gegenereerd."
             exit 1
           fi
+          for m in "${modellen[@]}"; do
+            echo "OK: $(basename "$m")"
+          done
+          echo ""
+          echo "Bestanden in results/:"
+          ls -lh results/
 
-
-      # ======================================================
-      # UPLOAD RESULTS
-      # ======================================================
-
-      - name: Upload LightGBM results
+      - name: Upload artifact
         if: always()
-        uses: actions/upload-artifact@v4
-
+        uses: actions/upload-artifact@v5
         with:
-
-          name: lightgbmV1-results
-
-          path: |
-            results/
-
+          name: lightgbmV2-results
+          path: results/
           retention-days: 30
+          if-no-files-found: warn
