@@ -42,6 +42,10 @@ H. WAARSCHUWING als het hoofdmodel de baseline niet verslaat op AUC
    berekend op IDENTIEKE testrijen (auc_main_gem vs auc_baseline_gem).
    Dit vangt het geval dat top-20% toevallig goed scoort maar de
    ranking-kwaliteit niet beter is dan mean-reversion.
+I. WAARSCHUWING H vergelijkt nu OOK op de VOLLEDIGE testset (auc vs
+   auc_baseline, beide berekend op test_df). Voorheen werd H stil
+   overgeslagen als het fundamentals-blok niet draaide (auc_main_gem en
+   auc_baseline_gem bleven dan NaN).
 
 Belangrijk:
 - Een horizon met onvoldoende data geeft status "overgeslagen".
@@ -677,7 +681,8 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
     # WIJZIGING B: geen dropna meer op de technische features. XGBoost kan
     # NaN zelf aan; weggooien van rijen met één ontbrekende feature verkleint
     # de set en verschuift de steekproef naar bepaalde periodes.
-    # Alleen rijen zonder target, datum of baseline-kolom vallen af.
+    # Alleen rijen zonder target, datum of baseline-kolom vallen af
+    # (de baseline heeft de waarde nodig voor een zuivere vergelijking).
     #
     # OUDE CODE (V4 origineel), bewust bewaard als documentatie:
     # df_clean = df_h.dropna(subset=tech_bruikbaar + [target_column, "datum"])
@@ -698,16 +703,23 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
                               "onvoldoende datums voor split")
 
     # WIJZIGING F: gebruik TRAIN_FRACTIE (default 0.80, override via env).
+    # OUDE CODE (vaste 0.80), bewust bewaard als documentatie:
+    # split_idx = min(max(int(len(unieke_datums) * 0.80), 1),
+    #                 len(unieke_datums) - 1)
     split_idx = min(
         max(int(len(unieke_datums) * TRAIN_FRACTIE), 1),
         len(unieke_datums) - 1,
     )
     split_datum = unieke_datums[split_idx]
 
-    # WIJZIGING A: embargo.
+    # WIJZIGING A: embargo. Een trainrij van datum d heeft een label dat
+    # reikt tot d + horizon (handelsdagen). Is d + horizon >= split_datum dan
+    # kijkt het label in de testperiode. Die rijen gaan uit de trainset.
     embargo_dagen = embargo_kalenderdagen(horizon)
     embargo_start = split_datum - pd.Timedelta(days=embargo_dagen)
 
+    # OUDE CODE (zonder embargo), bewust bewaard als documentatie:
+    # train_df = df_clean[df_clean["datum"] < split_datum].copy()
     train_df = df_clean[df_clean["datum"] < embargo_start].copy()
     test_df = df_clean[df_clean["datum"] >= split_datum].copy()
     n_embargo = int(
@@ -732,7 +744,8 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
 
     print(f"[{horizon}] Start: train={len(train_df)}, test={len(test_df)}, "
           f"split={split_datum.date()} (ratio={TRAIN_FRACTIE:.2f}), "
-          f"embargo={embargo_dagen}d ({n_embargo} rijen), target={TARGET_MODE}")
+          f"embargo={embargo_dagen}d ({n_embargo} rijen), "
+          f"target={TARGET_MODE}")
 
     # ---- Baseline ----
     top_baseline = top_n_gemiddelde(
@@ -772,7 +785,11 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
     except Exception as e:
         print(f"[{horizon}] technisch model faalde: {e}")
 
-    # ---- Fundamenteel-only (zelfde testrijen voor eerlijke vergelijking) ----
+    # ---- Fundamenteel-only (alleen als genoeg bruikbare features) ----
+    # WIJZIGING C: het fund-only model traint op train_f (rijen met alle
+    # fundamentele features), maar wordt beoordeeld op test_f. Dezelfde
+    # test_f gebruiken we voor het hoofdmodel, het technische model en de
+    # baseline, zodat de AUC's over identieke testrijen gaan.
     auc_fund, top_fund = NAN, NAN
     n_test_fund = None
     auc_main_gem, auc_tech_gem, auc_base_gem = NAN, NAN, NAN
@@ -795,6 +812,7 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
             print(f"[{horizon}] fundamenteel model faalde: {e}")
 
     # ---- Opslaan van het hoofdmodel ----
+    # WIJZIGING E: variantnaam eerlijk als er geen fundamentele features zijn.
     variant = "tech_fund" if fund_bruikbaar else "tech"
     try:
         sla_model_veilig_op(
@@ -935,14 +953,32 @@ def waarschuwingen(res: Dict) -> List[str]:
         if res["auc"] < res["auc_technisch"] - 0.02:
             w.append("fundamentele features verslechteren het model")
 
-    # WIJZIGING H: hoofdmodel vs baseline op IDENTIEKE testrijen (AUC).
-    # Dit is een zuiverder signaal dan de top-20%-vergelijking hierboven.
+    # WIJZIGING H/I: hoofdmodel vs baseline op IDENTIEKE testrijen (AUC).
+    # 1) Volledige testset: auc en auc_baseline zijn beide op test_df
+    #    berekend, dus altijd vergelijkbaar (ook zonder fundamentals).
+    if (not _is_nan(res.get("auc"))
+            and not _is_nan(res.get("auc_baseline"))):
+        if res["auc"] <= res["auc_baseline"]:
+            w.append(
+                "hoofdmodel verslaat baseline niet op AUC (volledige "
+                "testset) — geen meerwaarde boven mean-reversion"
+            )
+    # 2) Fund-subset: alleen beschikbaar als het fundamentals-blok draaide.
+    #
+    # OUDE CODE (H origineel, alleen fund-subset), bewust bewaard:
+    # if (not _is_nan(res.get("auc_main_gem"))
+    #         and not _is_nan(res.get("auc_baseline_gem"))):
+    #     if res["auc_main_gem"] <= res["auc_baseline_gem"]:
+    #         w.append(
+    #             "hoofdmodel verslaat baseline niet op AUC (zelfde testrijen) "
+    #             "— model heeft geen meerwaarde boven mean-reversion"
+    #         )
     if (not _is_nan(res.get("auc_main_gem"))
             and not _is_nan(res.get("auc_baseline_gem"))):
         if res["auc_main_gem"] <= res["auc_baseline_gem"]:
             w.append(
-                "hoofdmodel verslaat baseline niet op AUC (zelfde testrijen) "
-                "— model heeft geen meerwaarde boven mean-reversion"
+                "hoofdmodel verslaat baseline niet op AUC "
+                f"(fund-subset, n={res.get('n_test_fund')})"
             )
 
     # Fundamenteel-only scoort beter dan hoofdmodel op dezelfde testrijen
@@ -964,8 +1000,9 @@ def waarschuwingen(res: Dict) -> List[str]:
             "— fund-cijfers met voorzichtigheid lezen"
         )
 
-    # WIJZIGING G: kleine testset → AUC indicatief
-    if res.get("n_test") is not None and res["n_test"] < MIN_TEST_RIJEN_WAARSCHUWING:
+    # WIJZIGING G: kleine testset -> AUC indicatief
+    if (res.get("n_test") is not None
+            and res["n_test"] < MIN_TEST_RIJEN_WAARSCHUWING):
         w.append(
             f"testset heeft maar {res['n_test']} rijen — AUC is indicatief, "
             "niet statistisch betrouwbaar"
