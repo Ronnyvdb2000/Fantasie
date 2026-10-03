@@ -20,6 +20,29 @@ NIEUW t.o.v. V3:
    door één all-NaN kolom zoals hv60 of dagen_sinds_low52w)
 6. Feature-diagnose per horizon: toont per feature de dekking
 
+WIJZIGINGEN NA REVIEW (2026-10-03):
+A. EMBARGO bij de train/test-split: trainrijen waarvan het label (10/30/60
+   handelsdagen vooruit) tot in de testperiode reikt, worden uit de trainset
+   gehaald. Voorkomt lekkage via overlappende forward returns.
+B. GEEN dropna meer op de technische features: XGBoost kan NaN zelf aan.
+   Alleen rijen zonder target, datum of baseline-kolom vallen af. De oude
+   dropna staat gedocumenteerd in commentaar bij train_voor_horizon().
+C. EERLIJKE VERGELIJKING: het fundamenteel-only model wordt beoordeeld op
+   dezelfde testrijen (test_f) als het hoofdmodel, het technische model en
+   de baseline. De waarschuwing "fundamenteel beter" gebruikt die cijfers.
+D. De AUC van de vorige run (V3 én V4) staat nu in het bericht.
+E. Variantnaam van het opgeslagen model is "tech" i.p.v. "tech_fund" als er
+   geen enkele fundamentele feature bruikbaar was.
+
+WIJZIGINGEN NA TWEEDE REVIEW (2026-10-03):
+F. INSTELBARE SPLITRATIO via XGB_TRAIN_FRACTIE (default 0.80). Met weinig
+   datums kun je 0.70 gebruiken om een grotere testset te krijgen.
+G. WAARSCHUWING bij kleine testset (< 30 rijen): AUC is dan indicatief.
+H. WAARSCHUWING als het hoofdmodel de baseline niet verslaat op AUC
+   berekend op IDENTIEKE testrijen (auc_main_gem vs auc_baseline_gem).
+   Dit vangt het geval dat top-20% toevallig goed scoort maar de
+   ranking-kwaliteit niet beter is dan mean-reversion.
+
 Belangrijk:
 - Een horizon met onvoldoende data geeft status "overgeslagen".
 - Een bestaand geldig model blijft behouden als een nieuwe training
@@ -54,7 +77,11 @@ warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
 # ============================================================
 
 MODEL_VERSIE = "xgboostV4"
+VORIGE_VERSIE_VERGELIJK = "xgboostV3"   # voor vergelijking in het bericht
 HORIZONS = ["10d", "30d", "60d"]
+
+# Horizon in HANDELSDAGEN (voor de embargo bij de split)
+HORIZON_HANDELSDAGEN = {"10d": 10, "30d": 30, "60d": 60}
 
 # Uitgebreide technische features (bron: generieke_technicals)
 FEATURE_TECHNISCH = [
@@ -100,6 +127,17 @@ AUC_VERSCHIL_WAARSCHUWING = 0.10
 MIN_RIJEN_TRAINING = 30
 MIN_RIJEN_TEST = 10
 MIN_MODEL_BYTES = 1000
+
+# WIJZIGING F: instelbare splitratio. Default 0.80, override via
+# XGB_TRAIN_FRACTIE=0.70 (grotere testset, kleinere trainset).
+try:
+    TRAIN_FRACTIE = float(os.environ.get("XGB_TRAIN_FRACTIE", "0.80"))
+except ValueError:
+    TRAIN_FRACTIE = 0.80
+TRAIN_FRACTIE = min(max(TRAIN_FRACTIE, 0.50), 0.90)
+
+# WIJZIGING G: drempel voor "kleine testset"-waarschuwing.
+MIN_TEST_RIJEN_WAARSCHUWING = 30
 
 # Ranking-target optie: "abs" = fwd_ret > 0 (V3), "top25" = top 25% per dag
 TARGET_MODE = os.environ.get("XGB_TARGET_MODE", "abs")
@@ -197,6 +235,18 @@ def _f(v, decimalen: int = 3) -> str:
 
 def _pr(v) -> str:
     return "n.v.t." if _is_nan(v) else f"{v:+.2f}%"
+
+
+def embargo_kalenderdagen(horizon: str) -> int:
+    """
+    Aantal KALENDERdagen dat voor de split uit de trainset wordt gehaald.
+    Horizon staat in handelsdagen: x 7/5 naar kalenderdagen, +2 dagen marge
+    (feestdagen / weekend rond de splitdatum).
+    """
+    n = HORIZON_HANDELSDAGEN.get(horizon, 0)
+    if n <= 0:
+        return 0
+    return int(np.ceil(n * 7 / 5)) + 2
 
 
 # ============================================================
@@ -360,18 +410,34 @@ def top_n_gemiddelde(df, sorteer_kolom, target, n_top, aflopend) -> float:
 
 
 def baseline_auc(df, target_col, baseline_kolom) -> float:
-    """AUC van de baseline als ranking (laagste pct_from_ma50 = hoogste prob)."""
-    if df["is_profitable"].nunique() < 2:
+    """
+    AUC van de baseline als ranking (laagste pct_from_ma50 = hoogste prob).
+    Rijen zonder waarde in de baseline-kolom worden overgeslagen
+    (roc_auc_score accepteert geen NaN).
+    """
+    d = df.dropna(subset=[baseline_kolom])
+    if len(d) == 0 or d["is_profitable"].nunique() < 2:
         return NAN
-    prob_baseline = -df[baseline_kolom].rank(pct=True)
-    return float(roc_auc_score(df["is_profitable"], prob_baseline))
+    prob_baseline = -d[baseline_kolom].rank(pct=True)
+    return float(roc_auc_score(d["is_profitable"], prob_baseline))
+
+
+def auc_op_subset(model, subset_df, features) -> float:
+    """AUC van een reeds getraind model op een gegeven (sub)testset."""
+    if model is None or len(subset_df) == 0:
+        return NAN
+    if subset_df["is_profitable"].nunique() < 2:
+        return NAN
+    proba = model.predict_proba(subset_df[features])[:, 1]
+    return float(roc_auc_score(subset_df["is_profitable"], proba))
 
 
 # ============================================================
 # MODEL TRAINEN
 # ============================================================
 
-def train_en_evalueer(train_df, test_df, features, target_column, n_top):
+def train_model(train_df, features):
+    """Traint één XGBClassifier. NaN's worden door XGBoost zelf afgehandeld."""
     model = xgb.XGBClassifier(
         n_estimators=150,
         learning_rate=0.03,
@@ -382,9 +448,12 @@ def train_en_evalueer(train_df, test_df, features, target_column, n_top):
         eval_metric="logloss",
         missing=np.nan,
     )
-
     model.fit(train_df[features], train_df["is_profitable"])
+    return model
 
+
+def evalueer_model(model, test_df, features, target_column, n_top):
+    """Retourneert (accuratesse, auc, top_rendement) op test_df."""
     proba = model.predict_proba(test_df[features])[:, 1]
 
     accuratesse = float(model.score(test_df[features], test_df["is_profitable"]))
@@ -396,6 +465,15 @@ def train_en_evalueer(train_df, test_df, features, target_column, n_top):
     eval_df = test_df.assign(proba=proba)
     top_rendement = top_n_gemiddelde(eval_df, "proba", target_column, n_top, True)
 
+    return accuratesse, auc, top_rendement
+
+
+def train_en_evalueer(train_df, test_df, features, target_column, n_top):
+    """Compatibiliteitswrapper (V3-signatuur): train + evalueer in één stap."""
+    model = train_model(train_df, features)
+    accuratesse, auc, top_rendement = evalueer_model(
+        model, test_df, features, target_column, n_top,
+    )
     return model, accuratesse, auc, top_rendement
 
 
@@ -407,8 +485,11 @@ def leeg_resultaat(horizon, status, opmerking) -> Dict:
     return {
         "horizon": horizon, "status": status, "opmerking": opmerking,
         "n_train": None, "n_test": None, "split_datum": None,
+        "embargo_dagen": None, "n_embargo": None,
         "accuratesse": NAN, "auc": NAN, "auc_relatief": NAN,
         "auc_technisch": NAN, "auc_fundamenteel": NAN, "auc_baseline": NAN,
+        "n_test_fund": None,
+        "auc_main_gem": NAN, "auc_tech_gem": NAN, "auc_baseline_gem": NAN,
         "top_n": None,
         "top_model": NAN, "top_baseline": NAN, "top_relatief": NAN,
         "top_technisch": NAN, "top_fundamenteel": NAN,
@@ -544,6 +625,10 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
         return leeg_resultaat(horizon, "geen_doelkolom",
                               f"doelkolom '{target_column}' ontbreekt")
 
+    if BASELINE_KOLOM not in df.columns:
+        return leeg_resultaat(horizon, "geen_features",
+                              f"baseline-kolom '{BASELINE_KOLOM}' ontbreekt")
+
     df_h = df.copy()
     if int(df_h[target_column].notna().sum()) == 0:
         return leeg_resultaat(horizon, "onvoldoende_data",
@@ -588,8 +673,15 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
             f"({len(tech_bruikbaar)} < {MIN_FEATURES_TECHNISCH})"
         )
 
-    # ---- Basissplit: dropna op alleen de BRUIKBARE tech features ----
-    df_clean = df_h.dropna(subset=tech_bruikbaar + [target_column, "datum"])
+    # ---- Basisset ----
+    # WIJZIGING B: geen dropna meer op de technische features. XGBoost kan
+    # NaN zelf aan; weggooien van rijen met één ontbrekende feature verkleint
+    # de set en verschuift de steekproef naar bepaalde periodes.
+    # Alleen rijen zonder target, datum of baseline-kolom vallen af.
+    #
+    # OUDE CODE (V4 origineel), bewust bewaard als documentatie:
+    # df_clean = df_h.dropna(subset=tech_bruikbaar + [target_column, "datum"])
+    df_clean = df_h.dropna(subset=[target_column, "datum", BASELINE_KOLOM])
     if len(df_clean) < MIN_RIJEN_TRAINING:
         return leeg_resultaat(horizon, "onvoldoende_data",
                               f"te weinig rijen na dropna ({len(df_clean)})")
@@ -605,19 +697,33 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
         return leeg_resultaat(horizon, "onvoldoende_datums",
                               "onvoldoende datums voor split")
 
-    split_idx = min(max(int(len(unieke_datums) * 0.80), 1),
-                    len(unieke_datums) - 1)
+    # WIJZIGING F: gebruik TRAIN_FRACTIE (default 0.80, override via env).
+    split_idx = min(
+        max(int(len(unieke_datums) * TRAIN_FRACTIE), 1),
+        len(unieke_datums) - 1,
+    )
     split_datum = unieke_datums[split_idx]
 
-    train_df = df_clean[df_clean["datum"] < split_datum].copy()
+    # WIJZIGING A: embargo.
+    embargo_dagen = embargo_kalenderdagen(horizon)
+    embargo_start = split_datum - pd.Timedelta(days=embargo_dagen)
+
+    train_df = df_clean[df_clean["datum"] < embargo_start].copy()
     test_df = df_clean[df_clean["datum"] >= split_datum].copy()
+    n_embargo = int(
+        ((df_clean["datum"] >= embargo_start)
+         & (df_clean["datum"] < split_datum)).sum()
+    )
 
     if len(test_df) < MIN_RIJEN_TEST:
         return leeg_resultaat(horizon, "te_weinig_testdata",
                               f"te weinig testdata ({len(test_df)})")
     if len(train_df) < MIN_RIJEN_TRAINING:
-        return leeg_resultaat(horizon, "te_weinig_trainingdata",
-                              f"te weinig traindata ({len(train_df)})")
+        return leeg_resultaat(
+            horizon, "te_weinig_trainingdata",
+            f"te weinig traindata ({len(train_df)}) na embargo van "
+            f"{embargo_dagen} dagen ({n_embargo} rijen verwijderd)"
+        )
     if train_df["is_profitable"].nunique() < 2:
         return leeg_resultaat(horizon, "een_klasse",
                               "trainingsset bevat maar 1 klasse")
@@ -625,7 +731,8 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
     n_top = max(1, int(len(test_df) * TOP_N_FRACTIE))
 
     print(f"[{horizon}] Start: train={len(train_df)}, test={len(test_df)}, "
-          f"split={split_datum.date()}, target={TARGET_MODE}")
+          f"split={split_datum.date()} (ratio={TRAIN_FRACTIE:.2f}), "
+          f"embargo={embargo_dagen}d ({n_embargo} rijen), target={TARGET_MODE}")
 
     # ---- Baseline ----
     top_baseline = top_n_gemiddelde(
@@ -636,8 +743,9 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
 
     # ---- Hoofdmodel (tech + fund, alleen bruikbare) ----
     try:
-        model_main, acc, auc, top_main = train_en_evalueer(
-            train_df, test_df, alles_bruikbaar, target_column, n_top,
+        model_main = train_model(train_df, alles_bruikbaar)
+        acc, auc, top_main = evalueer_model(
+            model_main, test_df, alles_bruikbaar, target_column, n_top,
         )
     except Exception as e:
         print(f"[{horizon}] hoofdmodel faalde: {e}")
@@ -650,47 +758,63 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
             _, _, auc_rel, top_rel = train_en_evalueer(
                 train_df, test_df, rel_bruikbaar, target_column, n_top,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[{horizon}] relatief model faalde: {e}")
 
     # ---- Technisch-only model ----
+    model_tech = None
     auc_tech, top_tech = NAN, NAN
     try:
-        _, _, auc_tech, top_tech = train_en_evalueer(
-            train_df, test_df, tech_bruikbaar, target_column, n_top,
+        model_tech = train_model(train_df, tech_bruikbaar)
+        _, auc_tech, top_tech = evalueer_model(
+            model_tech, test_df, tech_bruikbaar, target_column, n_top,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[{horizon}] technisch model faalde: {e}")
 
-    # ---- Fundamenteel-only (alleen als genoeg bruikbare features) ----
+    # ---- Fundamenteel-only (zelfde testrijen voor eerlijke vergelijking) ----
     auc_fund, top_fund = NAN, NAN
+    n_test_fund = None
+    auc_main_gem, auc_tech_gem, auc_base_gem = NAN, NAN, NAN
     if len(fund_bruikbaar) >= MIN_FEATURES_FUNDAMENTEEL:
         try:
             train_f = train_df.dropna(subset=fund_bruikbaar)
             test_f = test_df.dropna(subset=fund_bruikbaar)
             if (len(train_f) >= MIN_RIJEN_TRAINING
                     and len(test_f) >= MIN_RIJEN_TEST):
-                _, _, auc_fund, top_fund = train_en_evalueer(
-                    train_f, test_f, fund_bruikbaar, target_column,
-                    max(1, int(len(test_f) * TOP_N_FRACTIE)),
+                n_top_f = max(1, int(len(test_f) * TOP_N_FRACTIE))
+                model_fund = train_model(train_f, fund_bruikbaar)
+                _, auc_fund, top_fund = evalueer_model(
+                    model_fund, test_f, fund_bruikbaar, target_column, n_top_f,
                 )
-        except Exception:
-            pass
+                auc_main_gem = auc_op_subset(model_main, test_f, alles_bruikbaar)
+                auc_tech_gem = auc_op_subset(model_tech, test_f, tech_bruikbaar)
+                auc_base_gem = baseline_auc(test_f, target_column, BASELINE_KOLOM)
+                n_test_fund = int(len(test_f))
+        except Exception as e:
+            print(f"[{horizon}] fundamenteel model faalde: {e}")
 
     # ---- Opslaan van het hoofdmodel ----
+    variant = "tech_fund" if fund_bruikbaar else "tech"
     try:
         sla_model_veilig_op(
-            model_main, horizon, alles_bruikbaar, variant="tech_fund",
+            model_main, horizon, alles_bruikbaar, variant=variant,
         )
     except Exception as e:
         print(f"[{horizon}] ❌ model niet gepubliceerd: {e}")
         return leeg_resultaat(horizon, "opslag_fout", str(e))
 
     print(
-        f"[{horizon}] AUC tech+fund={_f(auc)} | "
+        f"[{horizon}] AUC {variant}={_f(auc)} | "
         f"tech={_f(auc_tech)} | fund={_f(auc_fund)} | "
         f"relatief={_f(auc_rel)} | baseline={_f(auc_baseline)}"
     )
+    if n_test_fund is not None:
+        print(
+            f"[{horizon}] Zelfde testrijen (n={n_test_fund}, alle fund-features "
+            f"aanwezig): hoofd={_f(auc_main_gem)} | tech={_f(auc_tech_gem)} | "
+            f"fund={_f(auc_fund)} | baseline={_f(auc_base_gem)}"
+        )
     print(
         f"[{horizon}] Top {n_top}: model={_pr(top_main)} | "
         f"baseline={_pr(top_baseline)} | test={_pr(test_gem)}"
@@ -703,12 +827,18 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
         "n_train": int(len(train_df)),
         "n_test": int(len(test_df)),
         "split_datum": str(split_datum.date()),
+        "embargo_dagen": int(embargo_dagen),
+        "n_embargo": n_embargo,
         "accuratesse": acc,
         "auc": auc,
         "auc_relatief": auc_rel,
         "auc_technisch": auc_tech,
         "auc_fundamenteel": auc_fund,
         "auc_baseline": auc_baseline,
+        "n_test_fund": n_test_fund,
+        "auc_main_gem": auc_main_gem,
+        "auc_tech_gem": auc_tech_gem,
+        "auc_baseline_gem": auc_base_gem,
         "top_n": int(n_top),
         "top_model": top_main,
         "top_baseline": top_baseline,
@@ -724,7 +854,8 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
 # VORIGE RUNS + LOGGING
 # ============================================================
 
-def haal_vorige_runs(conn) -> Dict[str, Dict]:
+def haal_vorige_runs(conn, model_versie: str) -> Dict[str, Dict]:
+    """Laatste geslaagde run per horizon voor de opgegeven modelversie."""
     vorige = {}
     query = """
         SELECT auc, run_datum FROM xgboost_runs
@@ -734,7 +865,7 @@ def haal_vorige_runs(conn) -> Dict[str, Dict]:
     """
     for h in HORIZONS:
         with conn.cursor() as cur:
-            cur.execute(query, {"mv": "xgboostV3", "h": h})
+            cur.execute(query, {"mv": model_versie, "h": h})
             rij = cur.fetchone()
         if rij:
             vorige[h] = {
@@ -769,6 +900,13 @@ def log_runs(conn, resultaten: List[Dict]) -> None:
                     f"AUC_tech={_f(res.get('auc_technisch'))} "
                     f"AUC_fund={_f(res.get('auc_fundamenteel'))} "
                     f"AUC_baseline={_f(res.get('auc_baseline'))} "
+                    f"AUC_gem(hoofd/tech/base)="
+                    f"{_f(res.get('auc_main_gem'))}/"
+                    f"{_f(res.get('auc_tech_gem'))}/"
+                    f"{_f(res.get('auc_baseline_gem'))} "
+                    f"n_test_fund={res.get('n_test_fund')} "
+                    f"embargo={res.get('embargo_dagen')}d "
+                    f"ratio={TRAIN_FRACTIE:.2f} "
                     f"target={res.get('target_mode')}"
                 )
                 params["opmerking"] = extra
@@ -782,17 +920,57 @@ def log_runs(conn, resultaten: List[Dict]) -> None:
 
 def waarschuwingen(res: Dict) -> List[str]:
     w = []
+
+    # Basischeck op top-20% van het hoofdmodel vs baseline
     if not _is_nan(res["top_model"]) and not _is_nan(res["top_baseline"]):
         if res["top_model"] <= res["top_baseline"]:
-            w.append("model doet het niet beter dan baseline")
+            w.append("model doet het niet beter dan baseline (top-20%)")
+
+    # AUC-waarschuwing algemeen
     if not _is_nan(res["auc"]) and res["auc"] < 0.55:
         w.append("AUC dicht bij 0.50: weinig voorspellende waarde")
+
+    # Technische features verslechteren het model
     if not _is_nan(res.get("auc_technisch")) and not _is_nan(res.get("auc")):
         if res["auc"] < res["auc_technisch"] - 0.02:
             w.append("fundamentele features verslechteren het model")
-    if not _is_nan(res.get("auc_fundamenteel")):
-        if res["auc_fundamenteel"] > res["auc"] + 0.02:
-            w.append("fundamenteel-only presteert beter — overweeg dat als hoofdmodel")
+
+    # WIJZIGING H: hoofdmodel vs baseline op IDENTIEKE testrijen (AUC).
+    # Dit is een zuiverder signaal dan de top-20%-vergelijking hierboven.
+    if (not _is_nan(res.get("auc_main_gem"))
+            and not _is_nan(res.get("auc_baseline_gem"))):
+        if res["auc_main_gem"] <= res["auc_baseline_gem"]:
+            w.append(
+                "hoofdmodel verslaat baseline niet op AUC (zelfde testrijen) "
+                "— model heeft geen meerwaarde boven mean-reversion"
+            )
+
+    # Fundamenteel-only scoort beter dan hoofdmodel op dezelfde testrijen
+    if (not _is_nan(res.get("auc_fundamenteel"))
+            and not _is_nan(res.get("auc_main_gem"))):
+        if res["auc_fundamenteel"] > res["auc_main_gem"] + 0.02:
+            w.append(
+                "fundamenteel-only scoort beter dan het hoofdmodel op "
+                f"dezelfde testrijen (n={res.get('n_test_fund')}) — "
+                "overweeg dat als hoofdmodel"
+            )
+
+    # Lage fundamentele dekking in de testset
+    n_test = res.get("n_test")
+    n_fund = res.get("n_test_fund")
+    if n_test and n_fund is not None and n_fund < 0.5 * n_test:
+        w.append(
+            f"fundamentele data voor slechts {n_fund} van {n_test} testrijen "
+            "— fund-cijfers met voorzichtigheid lezen"
+        )
+
+    # WIJZIGING G: kleine testset → AUC indicatief
+    if res.get("n_test") is not None and res["n_test"] < MIN_TEST_RIJEN_WAARSCHUWING:
+        w.append(
+            f"testset heeft maar {res['n_test']} rijen — AUC is indicatief, "
+            "niet statistisch betrouwbaar"
+        )
+
     return w
 
 
@@ -800,8 +978,24 @@ def waarschuwingen(res: Dict) -> List[str]:
 # BERICHT
 # ============================================================
 
-def bouw_bericht(resultaten: List[Dict], vorige: Dict, datum: str) -> str:
+def _vergelijk_regel(auc_nu, vorige: Dict, horizon: str,
+                     label: str) -> Optional[str]:
+    """Eén regel met de AUC van een vorige run, of None als die ontbreekt."""
+    v = vorige.get(horizon)
+    if not v or _is_nan(auc_nu):
+        return None
+    verschil = auc_nu - v["auc"]
+    return (
+        f"  vs {label} ({v['run_datum']}): "
+        f"AUC {v['auc']:.3f} → {auc_nu:.3f} ({verschil:+.3f})"
+    )
+
+
+def bouw_bericht(resultaten: List[Dict], vorige_v4: Dict, vorige_v3: Dict,
+                 datum: str) -> str:
     regels = [f"🤖 XGBoostV4 — hertraining ({datum})", ""]
+    toon_testset_opmerking = False
+
     for res in resultaten:
         h = res["horizon"]
         if res["status"] != "getraind":
@@ -811,21 +1005,42 @@ def bouw_bericht(resultaten: List[Dict], vorige: Dict, datum: str) -> str:
 
         regels.append(
             f"[{h}] ✅ train {res['n_train']} | test {res['n_test']} "
-            f"(vanaf {res['split_datum']})"
+            f"(vanaf {res['split_datum']}, embargo {res['embargo_dagen']}d)"
         )
         regels.append(
-            f"  AUC tech+fund={_f(res['auc'])} | "
+            f"  AUC hoofd={_f(res['auc'])} | "
             f"tech={_f(res['auc_technisch'])} | "
             f"fund={_f(res['auc_fundamenteel'])} | "
             f"baseline={_f(res['auc_baseline'])}"
         )
+        if res.get("n_test_fund") is not None:
+            regels.append(
+                f"  Zelfde {res['n_test_fund']} testrijen: "
+                f"hoofd={_f(res['auc_main_gem'])} | "
+                f"tech={_f(res['auc_tech_gem'])} | "
+                f"fund={_f(res['auc_fundamenteel'])} | "
+                f"baseline={_f(res['auc_baseline_gem'])}"
+            )
         regels.append(
             f"  Top {res['top_n']}: model={_pr(res['top_model'])} | "
             f"baseline={_pr(res['top_baseline'])} | test={_pr(res['test_gem'])}"
         )
+
+        for vorige, label in ((vorige_v4, "vorige V4"), (vorige_v3, "V3")):
+            regel = _vergelijk_regel(res["auc"], vorige, h, label)
+            if regel:
+                regels.append(regel)
+                toon_testset_opmerking = True
+
         for w in waarschuwingen(res):
             regels.append(f"  ⚠️ {w}")
         regels.append("")
+
+    if toon_testset_opmerking:
+        regels.append(
+            "ℹ️ Vergelijking met eerdere runs: testsets en embargo verschillen, "
+            "dus de AUC-verschillen zijn indicatief."
+        )
 
     return "\n".join(regels)
 
@@ -840,11 +1055,13 @@ def train_xgboost4() -> None:
         raise RuntimeError("SUPABASE_DB_URL ontbreekt")
 
     datum = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
-    print(f"XGBoostV4 training — {datum} (target_mode={TARGET_MODE})")
+    print(f"XGBoostV4 training — {datum} "
+          f"(target_mode={TARGET_MODE}, train_ratio={TRAIN_FRACTIE:.2f})")
 
     conn = psycopg2.connect(db_url)
     resultaten = []
-    vorige = {}
+    vorige_v4: Dict[str, Dict] = {}
+    vorige_v3: Dict[str, Dict] = {}
 
     try:
         df = get_training_data(conn)
@@ -866,11 +1083,18 @@ def train_xgboost4() -> None:
                 print(f"[{horizon}] onverwachte fout: {e}")
                 resultaten.append(leeg_resultaat(horizon, "fout", str(e)))
 
+        # Vorige runs ophalen VOOR het loggen van de huidige run, anders is
+        # de "vorige V4" de run van nu. Beide apart afgevangen.
         try:
-            vorige = haal_vorige_runs(conn)
+            vorige_v4 = haal_vorige_runs(conn, MODEL_VERSIE)
         except Exception as e:
             conn.rollback()
-            print(f"[WARN] vorige runs niet op te halen: {e}")
+            print(f"[WARN] vorige V4-runs niet op te halen: {e}")
+        try:
+            vorige_v3 = haal_vorige_runs(conn, VORIGE_VERSIE_VERGELIJK)
+        except Exception as e:
+            conn.rollback()
+            print(f"[WARN] vorige V3-runs niet op te halen: {e}")
 
         try:
             log_runs(conn, resultaten)
@@ -883,7 +1107,7 @@ def train_xgboost4() -> None:
         conn.close()
 
     n_getraind = sum(1 for r in resultaten if r["status"] == "getraind")
-    bericht = bouw_bericht(resultaten, vorige, datum)
+    bericht = bouw_bericht(resultaten, vorige_v4, vorige_v3, datum)
     send_telegram(bericht)
     send_email(f"XGBoostV4 hertraining {datum}", bericht)
 
