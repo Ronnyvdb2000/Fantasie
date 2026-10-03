@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 vers_signaal.py
 ================
@@ -11,29 +13,23 @@ niet nadat de move al een paar dagen bezig is.
 Ranking-logica:
   1. Overlap VANDAAG (aantal verschillende strategieën die exact op de
      meest recente datum dezelfde ticker+beurs kozen) -- zwaarst gewogen.
-  2. Cumulatieve overlap over het volledige venster, als tiebreaker
-     (puur informatief/tiebreak, telt niet mee als hoofdcriterium).
+  2. Cumulatieve overlap over het volledige venster, als tiebreaker.
   3. Gemiddelde score, als laatste tiebreaker.
 
-Aantal getoonde picks wordt bepaald door AANTAL_PICKS, los van het budget.
-Rest van de architectuur (kosteninschatting, Telegram HTML + email HTML)
-is identiek aan a_trade.py.
+NIEUW in deze versie:
+  - Logging naar de gedeelde `selecties`-tabel onder strategie
+    "vers_signaal_1d", zodat forward_returns-latere analyses mogelijk zijn.
+  - Robuuste db_logger-import met fallback (zoals in bot_01kasstr).
 
 Env vars (zelfde secrets als de rest van de Fantasie-repo):
-  SUPABASE_DB_URL     - Postgres connectiestring naar Supabase
-  TELEGRAM_TOKEN
-  TELEGRAM_CHAT_ID
-  EMAIL_USER
-  EMAIL_PASS
-  EMAIL_RECEIVER
-  BESCHIKBAAR_KAPITAAL - totaal beschikbaar bedrag in euro (default 2500)
-  TRANSACTIE_BEDRAG    - bedrag per aankoop in euro (default 2500)
-  AANTAL_PICKS         - aantal picks dat getoond wordt, los van budget
-                         (default 5)
-  LOOKBACK_DAYS        - hoeveel dagen data opgehaald wordt om de meest
-                         recente datum in te bepalen (default 3; de
-                         overlap-berekening zelf kijkt enkel naar die
-                         meest recente datum, niet naar het hele venster)
+  SUPABASE_DB_URL, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
+  EMAIL_USER, EMAIL_PASS, EMAIL_RECEIVER,
+  BESCHIKBAAR_KAPITAAL (default 2500),
+  TRANSACTIE_BEDRAG (default 2500),
+  AANTAL_PICKS (default 5),
+  LOOKBACK_DAYS (default 3)
+
+Logging kan uitgeschakeld worden met DB_LOG_ENABLED=0.
 """
 
 import os
@@ -49,6 +45,14 @@ import psycopg2
 import psycopg2.extras
 import requests
 
+try:
+    from db_logger import log_selectie
+except Exception as _e:
+    print(f"[WARN] db_logger niet beschikbaar ({_e}) — DB-logging wordt overgeslagen")
+    def log_selectie(*args, **kwargs):
+        return False
+
+
 # --------------------------------------------------------------------------
 # Configuratie
 # --------------------------------------------------------------------------
@@ -56,15 +60,14 @@ LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "3"))
 
 BESCHIKBAAR_KAPITAAL = float(os.environ.get("BESCHIKBAAR_KAPITAAL", "2500"))
 TRANSACTIE_BEDRAG = float(os.environ.get("TRANSACTIE_BEDRAG", "2500"))
-# Aantal getoonde picks is losgekoppeld van het budget -- het budget wordt
-# enkel nog gebruikt om de kost per positie te berekenen, niet meer om het
-# aantal picks te beperken.
 AANTAL_PICKS = max(1, int(os.environ.get("AANTAL_PICKS", "5")))
 TOP_N = AANTAL_PICKS
 
 VASTE_KOST = 15.0
-VARIABELE_KOST_PCT = 0.35  # %
-TOB_PCT = 0.35  # %
+VARIABELE_KOST_PCT = 0.35
+TOB_PCT = 0.35
+
+DB_LOG_ENABLED = os.environ.get("DB_LOG_ENABLED", "1") == "1"
 
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -78,11 +81,7 @@ EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER")
 # Data ophalen
 # --------------------------------------------------------------------------
 def haal_selecties_op(lookback_days: int):
-    """Haalt alle selecties op van de laatste `lookback_days` dagen.
-
-    `datum` is text in ISO-formaat (YYYY-MM-DD, geen tijdstip) -- vergelijk
-    dus met een string in hetzelfde formaat, geen datetime-object.
-    """
+    """Haalt alle selecties op van de laatste `lookback_days` dagen."""
     if not SUPABASE_DB_URL:
         print("FOUT: SUPABASE_DB_URL ontbreekt.", file=sys.stderr)
         sys.exit(1)
@@ -105,15 +104,13 @@ def haal_selecties_op(lookback_days: int):
 
 
 # --------------------------------------------------------------------------
-# Ranking -- kern van het verschil met a_trade.py
+# Ranking
 # --------------------------------------------------------------------------
 def bouw_ranking(rows):
     """
     Groepeert per (ticker, beurs). Overlap wordt ENKEL geteld op de meest
-    recente datum die voor die ticker/beurs voorkomt in het venster --
-    niet over het hele venster heen zoals in a_trade.py.
+    recente datum die voor die ticker/beurs voorkomt in het venster.
     """
-    # Eerste pas: bepaal per (ticker, beurs) de meest recente datum.
     laatste_datum_per_key = {}
     for row in rows:
         key = (row["ticker"], row["beurs"])
@@ -156,9 +153,6 @@ def bouw_ranking(rows):
     ranking = []
     for (ticker, beurs), g in groepen.items():
         overlap_vandaag = len(g["strategieen_vandaag"])
-        # Enkel tickers tonen die vandaag door minstens 2 strategieën
-        # samen gekozen zijn -- een overlap van 1 is geen "vers signaal",
-        # gewoon een normale eenmalige selectie.
         if overlap_vandaag < 2:
             continue
 
@@ -342,6 +336,46 @@ def stuur_email(html_body: str, heeft_top_signaal: bool):
 
 
 # --------------------------------------------------------------------------
+# Logging
+# --------------------------------------------------------------------------
+def log_picks(ranking):
+    """Logt de top-picks naar de gedeelde selecties-tabel onder de
+    strategie 'vers_signaal_1d', zodat latere forward_returns-analyses
+    mogelijk zijn."""
+    if not DB_LOG_ENABLED:
+        print("DB-logging uitgeschakeld (DB_LOG_ENABLED=0).")
+        return
+
+    vandaag = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    n_gelogd = 0
+
+    for rank, r in enumerate(ranking[:TOP_N], start=1):
+        try:
+            ok = log_selectie(
+                ticker=r["ticker"],
+                datum=vandaag,
+                strategie="vers_signaal_1d",
+                beurs=r["beurs"],
+                koers=r["koers"],
+                parameters={
+                    "rank": rank,
+                    "overlap_vandaag": r["overlap"],
+                    "overlap_totaal": r["overlap_totaal"],
+                    "avg_score": round(r["avg_score"], 4),
+                    "laatste_datum": r["laatste_datum"],
+                    "strategieen": ", ".join(r["strategieen"]),
+                    "grafiek": r["grafiek"],
+                },
+            )
+            if ok:
+                n_gelogd += 1
+        except Exception as e:
+            print(f"[WARN] log mislukt voor {r['ticker']}: {e}")
+
+    print(f"DB-logging: {n_gelogd}/{min(len(ranking), TOP_N)} picks gelogd.")
+
+
+# --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
 def main():
@@ -353,6 +387,8 @@ def main():
 
     stuur_telegram(telegram_tekst)
     stuur_email(email_html, heeft_top_signaal=bool(ranking))
+
+    log_picks(ranking)
 
     print(f"Klaar. {len(ranking)} verse overlap-kandidaten (2+ strategieën, zelfde dag) gevonden.")
 
