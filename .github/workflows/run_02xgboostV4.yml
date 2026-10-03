@@ -1,0 +1,111 @@
+name: XGBoostV4 training
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_mode:
+        description: "Target mode (abs = fwd_ret > 0; top25 = top 25% per dag)"
+        required: false
+        default: "abs"
+        type: choice
+        options:
+          - abs
+          - top25
+  schedule:
+    # Elke zondag om 04:00 UTC (na zaterdag-data, voor maandagmarkt)
+    - cron: "0 4 * * 0"
+  push:
+    paths:
+      - "xgboostV4.py"
+      - ".github/workflows/xgboostv4.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  train-xgboostv4:
+    name: train-xgboostv4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    env:
+      SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
+      TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      EMAIL_USER:       ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
+      EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
+      # Bij handmatige trigger: gebruik input; anders default "abs"
+      XGB_TARGET_MODE: ${{ github.event.inputs.target_mode || 'abs' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            numpy==1.26.4 \
+            pandas==2.2.3 \
+            scikit-learn==1.5.2 \
+            xgboost==2.1.3 \
+            joblib==1.4.2 \
+            psycopg2-binary==2.9.10 \
+            requests==2.32.3
+
+      - name: Verify installed versions
+        run: |
+          python --version
+          python -c "import numpy;     print('numpy',     numpy.__version__)"
+          python -c "import pandas;    print('pandas',    pandas.__version__)"
+          python -c "import sklearn;   print('sklearn',   sklearn.__version__)"
+          python -c "import xgboost;   print('xgboost',   xgboost.__version__)"
+          python -c "import joblib;    print('joblib',    joblib.__version__)"
+          python -c "import psycopg2;  print('psycopg2 OK')"
+          python -c "import requests;  print('requests',  requests.__version__)"
+
+      - name: Check secret
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "FOUT: SUPABASE_DB_URL secret ontbreekt"
+            exit 1
+          fi
+
+      - name: Run XGBoostV4 training
+        id: train
+        run: |
+          python xgboostV4.py
+
+      - name: Controle XGBoostV4 modellen
+        if: always()
+        run: |
+          echo "Controle XGBoostV4 modellen:"
+          shopt -s nullglob
+          modellen=(xgboostV4_*_*.pkl)
+          if [ ${#modellen[@]} -eq 0 ]; then
+            echo "WAARSCHUWING: geen enkel XGBoostV4-model gegenereerd."
+          else
+            for m in "${modellen[@]}"; do
+              echo "OK: $(basename "$m") ($(stat -c%s "$m") bytes)"
+            done
+          fi
+          echo ""
+          echo "Bestanden in werkdirectory:"
+          ls -lh xgboostV4_*.pkl 2>/dev/null || echo "(geen .pkl bestanden)"
+
+      - name: Upload XGBoostV4 models
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: xgboostv4-models-${{ github.run_id }}
+          path: |
+            xgboostV4_*.pkl
+          retention-days: 90
+          if-no-files-found: warn
