@@ -65,7 +65,7 @@ import requests
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "300"))
+MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "400"))
 RECENTE_DAGEN_LIMIET = int(os.environ.get("RECENTE_DAGEN_LIMIET", "5"))
 
 FCF_MIN_YEARS = 2
