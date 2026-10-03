@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bouw_generieke_technicals.py  —  GEDEELDE TECHNISCHE INDICATOREN  v2.0
+bouw_generieke_technicals.py  —  GEDEELDE TECHNISCHE INDICATOREN  v2.1
 
 DOEL
 ====
@@ -34,6 +34,23 @@ nieuwe kolommen herberekend -- haal_openstaande_paren() filtert enkel op
 "rij bestaat nog niet". Enkel écht nieuwe paren krijgen de nieuwe
 kolommen vanaf nu ingevuld. Voor een backfill van bestaande rijen is een
 apart, eenmalig script nodig (analoog aan backfill_rank_kolommen.py).
+
+v2.1 (2026-10-03): twee fixes in bereken_voor_ticker().
+  1) ONVOLLEDIGE BALK: Yahoo/yfinance geeft voor recente datums soms een
+     balk met High/Low/Close = NaN terwijl Volume wél gevuld is. De
+     rolling-/Wilder-indicatoren (ATR, RSI, MA50/200, IBS, Bollinger,
+     Stochastic, ADX, HV, relatieve sterkte) werden dan NaN, terwijl MACD,
+     vol_ratio, high52w en dagen_sinds_low52w (dan altijd 0) gevuld bleven.
+     Resultaat: tot ~90% lege rijen voor recente datums. Nu wordt zo'n
+     paar tot MAX_WACHT_DAGEN dagen na de selectiedatum NIET weggeschreven,
+     zodat het 'openstaand' blijft en de volgende run het opnieuw probeert.
+     Na MAX_WACHT_DAGEN wordt het alsnog (met lege waarden) weggeschreven,
+     zodat een permanent kapotte balk niet eeuwig plekken in
+     MAX_TICKERS_PER_RUN blokkeert.
+  2) LOOK-AHEAD: searchsorted(doel) pakte de EERSTVOLGENDE handelsdag
+     >= datum, waardoor selecties op weekend-/feestdagen de indicatoren
+     van de volgende handelsdag kregen. Nu: de laatste handelsdag OP OF
+     VÓÓR de datum (as-of). Bestaande rijen worden niet aangepast.
 
 INCREMENTEEL, GEEN WACHTTIJD NODIG (in tegenstelling tot forward_returns):
 een technische indicator op datum X is METEEN berekenbaar zodra X voorbij
@@ -97,6 +114,13 @@ LOW52W_WINDOW = 252
 # op DIE datum al zinvol te kunnen berekenen (geen look-ahead: enkel data
 # tot en met de datum zelf wordt gebruikt, dit is puur de opstartbuffer)
 LOOKBACK_BUFFER_DAGEN = 380
+
+# v2.1: aantal dagen na de selectiedatum dat we wachten op een complete
+# koersbalk (High/Low/Close niet-NaN) voordat we het paar toch wegschrijven
+MAX_WACHT_DAGEN = int(os.environ.get("MAX_WACHT_DAGEN", "7"))
+# v2.1: maximaal aantal kalenderdagen tussen selectiedatum en de gebruikte
+# handelsdag (as-of); verder weg = geen bruikbare koersdata (bv. gedelist)
+MAX_BAR_AFSTAND_DAGEN = 7
 
 
 def vandaag() -> str:
@@ -288,14 +312,39 @@ def bereken_voor_ticker(ticker: str, datums: List[str], index_ret: Optional[pd.S
     g = bereken_indicatoren(hist, index_ret)
 
     resultaten = []
+    onvolledig = 0
     for datum in datums:
         try:
             doel = pd.Timestamp(datum)
-            pos = g.index.searchsorted(doel)
-            if pos >= len(g):
+
+            # OUD (look-ahead): pakt de EERSTVOLGENDE handelsdag >= datum, dus
+            # selecties op weekend-/feestdagen kregen de indicatoren van de
+            # volgende handelsdag.
+            # pos = g.index.searchsorted(doel)
+            # if pos >= len(g):
+            #     continue
+            # # exacte handelsdag pakken indien aanwezig, anders de eerstvolgende
+            # rij = g.iloc[pos]
+
+            # NIEUW (v2.1): laatste handelsdag OP OF VÓÓR de datum (as-of,
+            # geen look-ahead)
+            pos = g.index.searchsorted(doel, side="right") - 1
+            if pos < 0:
                 continue
-            # exacte handelsdag pakken indien aanwezig, anders de eerstvolgende
+            if (doel.normalize() - g.index[pos]).days > MAX_BAR_AFSTAND_DAGEN:
+                # geen recente koersdata rond deze datum (bv. gedelist)
+                continue
             rij = g.iloc[pos]
+
+            # NIEUW (v2.1): onvolledige balk (High/Low/Close = NaN) -- nu nog
+            # niet wegschrijven, de volgende run probeert het opnieuw. Na
+            # MAX_WACHT_DAGEN schrijven we het alsnog weg (met lege waarden),
+            # zodat een permanent kapotte balk niet eeuwig 'openstaand' blijft.
+            if pd.isna(rij["Close"]) or pd.isna(rij["High"]) or pd.isna(rij["Low"]):
+                leeftijd = (pd.Timestamp.now().normalize() - doel.normalize()).days
+                if leeftijd <= MAX_WACHT_DAGEN:
+                    onvolledig += 1
+                    continue
 
             def veilig(waarde, is_int: bool = False):
                 try:
@@ -328,6 +377,9 @@ def bereken_voor_ticker(ticker: str, datums: List[str], index_ret: Optional[pd.S
         except Exception as e:
             print(f"  [WARN] {ticker} {datum}: {e}")
             continue
+
+    if onvolledig:
+        print(f"  [INFO] {ticker}: {onvolledig} onvolledige balk(en) overgeslagen, volgende run opnieuw")
 
     return resultaten
 
