@@ -3,7 +3,7 @@ name: "Bot 00: FULL Scanner (01-09) mail"
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 19 * * 1-6'
+    - cron: '30 19 * * 1-5'
 jobs:
   run_trading_bot:
     runs-on: ubuntu-latest
