@@ -3,6 +3,7 @@
 
 """
 xgboostV4.py — wekelijkse hertraining met uitgebreide features
+=================================================================
 
 VOORTBOUWEND OP xgboostV3.py:
 - Behoudt de veilige atomaire model-opslag
@@ -10,15 +11,23 @@ VOORTBOUWEND OP xgboostV3.py:
 - Behoudt de statuslogica (geen workflow failure bij te weinig data)
 
 NIEUW t.o.v. V3:
-1. Uitgebreide feature-set: 12 extra technische + 10 fundamentele features
+1. Uitgebreide feature-set: extra technische + fundamentele features
 2. Drie modellen per horizon: technisch / technisch+fundamenteel / fundamenteel
-3. Ranking-target als alternatief voor classificatie
+3. Ranking-target als alternatief voor classificatie (abs / top25)
 4. Baseline-AUC berekening (naast baseline top-20%)
-5. Fallback voor missende fundamentals (XGBoost's native NaN handling)
+5. Dynamische feature-selectie: features met <50% dekking worden
+   automatisch uitgesloten (voorkomt dat dropna de hele dataset wist
+   door één all-NaN kolom zoals hv60 of dagen_sinds_low52w)
+6. Feature-diagnose per horizon: toont per feature de dekking
+
+Belangrijk:
+- Een horizon met onvoldoende data geeft status "overgeslagen".
+- Een bestaand geldig model blijft behouden als een nieuwe training
+  voor die horizon nog niet mogelijk is.
+- De run faalt alleen als GEEN enkele horizon een model oplevert.
 """
 
 import os
-import sys
 import smtplib
 import warnings
 import datetime as dt
@@ -76,13 +85,13 @@ FEATURE_RELATIEF = [
     "macd_hist", "bb_percent_b", "stoch_k", "adx14", "rel_sterkte_20d",
 ]
 
-# Welke feature-set per model
-MODEL_CONFIGS = {
-    "technisch":         FEATURE_TECHNISCH,
-    "tech_fund":         FEATURE_ALLES,
-    "fundamenteel":      FEATURE_FUNDAMENTEEL,
-    "relatief":          FEATURE_RELATIEF,
-}
+# Minimale dekking per feature (0.50 = 50% van de rijen met geldig target
+# moet een niet-NaN waarde hebben, anders wordt de feature uitgesloten)
+MIN_FEATURE_DEKKING = 0.50
+
+# Minimale aantal bruikbare features om een model te trainen
+MIN_FEATURES_TECHNISCH = 3
+MIN_FEATURES_FUNDAMENTEEL = 3
 
 TOP_N_FRACTIE = 0.20
 BASELINE_KOLOM = "pct_from_ma50"
@@ -92,8 +101,8 @@ MIN_RIJEN_TRAINING = 30
 MIN_RIJEN_TEST = 10
 MIN_MODEL_BYTES = 1000
 
-# Ranking-target optie: 0 = >0 (V3), 1 = top-25%
-TARGET_MODE = os.environ.get("XGB_TARGET_MODE", "abs")  # "abs" of "top25"
+# Ranking-target optie: "abs" = fwd_ret > 0 (V3), "top25" = top 25% per dag
+TARGET_MODE = os.environ.get("XGB_TARGET_MODE", "abs")
 
 
 # ============================================================
@@ -110,7 +119,7 @@ NAN = float("nan")
 
 
 # ============================================================
-# SQL — met JOIN naar fundamentals
+# SQL — met LEFT JOIN naar fundamentals
 # ============================================================
 
 JOIN_QUERY = """
@@ -127,8 +136,6 @@ WITH fr_dedup AS (
             (fwd_ret_60d IS NOT NULL)::int
         ) DESC
 ),
-
--- Fundamentals: neem de meest recente rij per ticker per dag
 fund_dedup AS (
     SELECT DISTINCT ON (ticker, datum)
         ticker, datum,
@@ -139,7 +146,6 @@ fund_dedup AS (
     FROM generieke_fundamentals
     ORDER BY ticker, datum DESC
 )
-
 SELECT
     gt.ticker,
     gt.datum,
@@ -151,14 +157,13 @@ SELECT
     gt.bb_breedte, gt.bb_percent_b, gt.stoch_k, gt.stoch_d,
     gt.adx14, gt.rel_sterkte_20d, gt.hv20, gt.hv60,
     gt.dagen_sinds_low52w, gt.vol_ratio_50d,
-    -- Fundamenteel (kan NULL zijn)
+    -- Fundamenteel
     fd.market_cap, fd.trailing_pe, fd.price_to_book, fd.dividend_yield,
     fd.current_ratio, fd.revenue_growth_pct, fd.fcf_yield,
     fd.net_debt_ebitda, fd.payout_pct, fd.analisten_count,
     fd.piotroski_score, fd.eps_growth_pct, fd.eps_cagr_pct, fd.peg_ratio,
     -- Targets
     fr_dedup.fwd_ret_10d, fr_dedup.fwd_ret_30d, fr_dedup.fwd_ret_60d
-
 FROM generieke_technicals gt
 JOIN fr_dedup
     ON fr_dedup.ticker = gt.ticker
@@ -195,7 +200,7 @@ def _pr(v) -> str:
 
 
 # ============================================================
-# NOTIFICATIES (ongewijzigd t.o.v. V3)
+# NOTIFICATIES
 # ============================================================
 
 def send_telegram(tekst: str) -> None:
@@ -260,18 +265,89 @@ def toon_data_diagnose(df: pd.DataFrame) -> None:
         n_target = int(df[target].notna().sum())
         n_datums = int(df.loc[df[target].notna(), "datum"].nunique())
 
-        # Tel hoeveel rijen compleet zijn in elke feature-set
-        n_tech = len(df.dropna(subset=FEATURE_TECHNISCH + [target, "datum"]))
-        n_alles = len(df.dropna(subset=FEATURE_ALLES + [target, "datum"]))
-        n_fund = len(df.dropna(subset=FEATURE_FUNDAMENTEEL + [target, "datum"]))
-
         print(
             f"[{horizon}] {target}: "
-            f"{n_target} labels | {n_datums} datums | "
-            f"tech={n_tech} tech+fund={n_alles} fund={n_fund}"
+            f"{n_target} labels | {n_datums} datums"
         )
 
     print("=" * 70)
+
+
+def diagnose_features(df: pd.DataFrame, target_column: str) -> None:
+    """Toont per feature de dekking binnen rijen met een geldig target."""
+    print()
+    print("=" * 78)
+    print(f"FEATURE-DIAGNOSE voor {target_column}")
+    print("=" * 78)
+
+    mask = df[target_column].notna()
+    subset = df[mask]
+    n_totaal = len(subset)
+
+    if n_totaal == 0:
+        print(f"  Geen rijen met geldig {target_column}.")
+        return
+
+    print(f"  Basis: {n_totaal} rijen met geldig target")
+    print(f"  {'Feature':<24} {'Gevuld':>8} {'Dekking':>9}  Status")
+    print("  " + "-" * 62)
+
+    alle_features = FEATURE_TECHNISCH + FEATURE_FUNDAMENTEEL
+    for feat in alle_features:
+        if feat not in subset.columns:
+            print(f"  {feat:<24} {'-':>8} {'ONTBREEKT':>9}")
+            continue
+        n_ok = int(subset[feat].notna().sum())
+        pct = n_ok / n_totaal * 100
+        if pct >= 90:
+            status = "OK"
+        elif pct >= 50:
+            status = "zwak"
+        elif pct > 0:
+            status = "⚠️  te weinig"
+        else:
+            status = "❌ ALL-NaN"
+        print(f"  {feat:<24} {n_ok:>8} {pct:>8.1f}%  {status}")
+
+    print("=" * 78)
+
+
+# ============================================================
+# DYNAMISCHE FEATURE-SELECTIE
+# ============================================================
+
+def selecteer_features(
+    df: pd.DataFrame,
+    kandidaten: List[str],
+    target_column: str,
+    min_dekking: float = MIN_FEATURE_DEKKING,
+) -> Tuple[List[str], List[str]]:
+    """
+    Retourneert (bruikbare_features, uitgesloten_features).
+    Een feature is bruikbaar als hij bestaat en voor minstens `min_dekking`
+    niet-NaN is binnen de rijen met een geldig target.
+    Volgorde van `kandidaten` blijft behouden.
+    """
+    mask = df[target_column].notna()
+    subset = df[mask]
+    n = len(subset)
+
+    if n == 0:
+        return [], list(kandidaten)
+
+    bruikbaar = []
+    uitgesloten = []
+    for feat in kandidaten:
+        if feat not in subset.columns:
+            uitgesloten.append(feat)
+            continue
+        pct = subset[feat].notna().sum() / n
+        if pct >= min_dekking:
+            bruikbaar.append(feat)
+        else:
+            uitgesloten.append(feat)
+
+    return bruikbaar, uitgesloten
 
 
 # ============================================================
@@ -287,7 +363,6 @@ def baseline_auc(df, target_col, baseline_kolom) -> float:
     """AUC van de baseline als ranking (laagste pct_from_ma50 = hoogste prob)."""
     if df["is_profitable"].nunique() < 2:
         return NAN
-    # Laagste pct_from_ma50 -> hoogste kans op winst
     prob_baseline = -df[baseline_kolom].rank(pct=True)
     return float(roc_auc_score(df["is_profitable"], prob_baseline))
 
@@ -305,7 +380,6 @@ def train_en_evalueer(train_df, test_df, features, target_column, n_top):
         colsample_bytree=0.8,
         random_state=42,
         eval_metric="logloss",
-        # Native NaN handling (belangrijk voor fundamentele features)
         missing=np.nan,
     )
 
@@ -343,7 +417,7 @@ def leeg_resultaat(horizon, status, opmerking) -> Dict:
 
 
 # ============================================================
-# MODEL VALIDATIE + OPSLAG (identiek aan V3)
+# MODEL VALIDATIE + OPSLAG
 # ============================================================
 
 def valideer_modelbestand(bestandsnaam, features, horizon, stil=False) -> bool:
@@ -448,18 +522,20 @@ def sla_model_veilig_op(model, horizon, features, variant="tech_fund") -> str:
 
 
 # ============================================================
-# TRAINING PER HORIZON
+# TARGET-VOORBEREIDING
 # ============================================================
 
 def _target_voor_mode(df: pd.DataFrame, target_column: str) -> pd.Series:
     if TARGET_MODE == "top25":
-        # Top 25% binnen dezelfde datum
         return df.groupby("datum")[target_column].transform(
             lambda x: (x.rank(pct=True) >= 0.75).astype(int)
         )
-    # "abs" — zelfde als V3
     return (df[target_column] > 0).astype(int)
 
+
+# ============================================================
+# TRAINING PER HORIZON
+# ============================================================
 
 def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
     target_column = f"fwd_ret_{horizon}"
@@ -475,22 +551,62 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
 
     df_h["is_profitable"] = _target_voor_mode(df_h, target_column)
 
-    # ---- Basissplit op alle beschikbare rijen (technisch) ----
-    df_clean = df_h.dropna(subset=FEATURE_TECHNISCH + [target_column, "datum"])
+    # ---- Dynamische feature-selectie ----
+    print()
+    print(f"[{horizon}] Feature-selectie op basis van dekking "
+          f"(min {MIN_FEATURE_DEKKING * 100:.0f}%)...")
+
+    tech_bruikbaar, tech_uit = selecteer_features(
+        df_h, FEATURE_TECHNISCH, target_column,
+    )
+    fund_bruikbaar, fund_uit = selecteer_features(
+        df_h, FEATURE_FUNDAMENTEEL, target_column,
+    )
+    rel_bruikbaar, _ = selecteer_features(
+        df_h, FEATURE_RELATIEF, target_column,
+    )
+
+    # Behoud de originele volgorde (handig voor feature_names_in_)
+    tech_bruikbaar = [f for f in FEATURE_TECHNISCH if f in tech_bruikbaar]
+    fund_bruikbaar = [f for f in FEATURE_FUNDAMENTEEL if f in fund_bruikbaar]
+    rel_bruikbaar = [f for f in FEATURE_RELATIEF if f in rel_bruikbaar]
+    alles_bruikbaar = tech_bruikbaar + fund_bruikbaar
+
+    if tech_uit:
+        print(f"[{horizon}] ⚠️  technische features uitgesloten: {tech_uit}")
+    if fund_uit:
+        print(f"[{horizon}] ⚠️  fundamentele features uitgesloten: {fund_uit}")
+
+    print(f"[{horizon}] Bruikbare features: "
+          f"tech={len(tech_bruikbaar)} fund={len(fund_bruikbaar)} "
+          f"totaal={len(alles_bruikbaar)}")
+
+    if len(tech_bruikbaar) < MIN_FEATURES_TECHNISCH:
+        return leeg_resultaat(
+            horizon, "geen_features",
+            f"te weinig bruikbare technische features "
+            f"({len(tech_bruikbaar)} < {MIN_FEATURES_TECHNISCH})"
+        )
+
+    # ---- Basissplit: dropna op alleen de BRUIKBARE tech features ----
+    df_clean = df_h.dropna(subset=tech_bruikbaar + [target_column, "datum"])
     if len(df_clean) < MIN_RIJEN_TRAINING:
         return leeg_resultaat(horizon, "onvoldoende_data",
-                              f"te weinig rijen ({len(df_clean)})")
+                              f"te weinig rijen na dropna ({len(df_clean)})")
 
     df_clean = df_clean.copy()
     df_clean["datum"] = pd.to_datetime(df_clean["datum"])
     df_clean = df_clean.sort_values("datum").reset_index(drop=True)
 
-    unieke_datums = df_clean["datum"].drop_duplicates().sort_values().reset_index(drop=True)
+    unieke_datums = (
+        df_clean["datum"].drop_duplicates().sort_values().reset_index(drop=True)
+    )
     if len(unieke_datums) < 2:
         return leeg_resultaat(horizon, "onvoldoende_datums",
                               "onvoldoende datums voor split")
 
-    split_idx = min(max(int(len(unieke_datums) * 0.80), 1), len(unieke_datums) - 1)
+    split_idx = min(max(int(len(unieke_datums) * 0.80), 1),
+                    len(unieke_datums) - 1)
     split_datum = unieke_datums[split_idx]
 
     train_df = df_clean[df_clean["datum"] < split_datum].copy()
@@ -512,52 +628,60 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
           f"split={split_datum.date()}, target={TARGET_MODE}")
 
     # ---- Baseline ----
-    top_baseline = top_n_gemiddelde(test_df, BASELINE_KOLOM, target_column, n_top, False)
+    top_baseline = top_n_gemiddelde(
+        test_df, BASELINE_KOLOM, target_column, n_top, False,
+    )
     auc_baseline = baseline_auc(test_df, target_column, BASELINE_KOLOM)
     test_gem = float(test_df[target_column].mean())
 
-    # ---- Hoofdmodel (tech+fund) ----
+    # ---- Hoofdmodel (tech + fund, alleen bruikbare) ----
     try:
         model_main, acc, auc, top_main = train_en_evalueer(
-            train_df, test_df, FEATURE_ALLES, target_column, n_top,
+            train_df, test_df, alles_bruikbaar, target_column, n_top,
         )
     except Exception as e:
         print(f"[{horizon}] hoofdmodel faalde: {e}")
         return leeg_resultaat(horizon, "train_fout", str(e))
 
     # ---- Controlemodel (relatief) ----
-    try:
-        _, _, auc_rel, top_rel = train_en_evalueer(
-            train_df, test_df, FEATURE_RELATIEF, target_column, n_top,
-        )
-    except Exception:
-        auc_rel, top_rel = NAN, NAN
+    auc_rel, top_rel = NAN, NAN
+    if len(rel_bruikbaar) >= MIN_FEATURES_TECHNISCH:
+        try:
+            _, _, auc_rel, top_rel = train_en_evalueer(
+                train_df, test_df, rel_bruikbaar, target_column, n_top,
+            )
+        except Exception:
+            pass
 
     # ---- Technisch-only model ----
+    auc_tech, top_tech = NAN, NAN
     try:
         _, _, auc_tech, top_tech = train_en_evalueer(
-            train_df, test_df, FEATURE_TECHNISCH, target_column, n_top,
+            train_df, test_df, tech_bruikbaar, target_column, n_top,
         )
     except Exception:
-        auc_tech, top_tech = NAN, NAN
+        pass
 
-    # ---- Fundamenteel-only model ----
-    try:
-        train_f = train_df.dropna(subset=FEATURE_FUNDAMENTEEL)
-        test_f = test_df.dropna(subset=FEATURE_FUNDAMENTEEL)
-        if len(train_f) >= MIN_RIJEN_TRAINING and len(test_f) >= MIN_RIJEN_TEST:
-            _, _, auc_fund, top_fund = train_en_evalueer(
-                train_f, test_f, FEATURE_FUNDAMENTEEL, target_column,
-                max(1, int(len(test_f) * TOP_N_FRACTIE)),
-            )
-        else:
-            auc_fund, top_fund = NAN, NAN
-    except Exception:
-        auc_fund, top_fund = NAN, NAN
+    # ---- Fundamenteel-only (alleen als genoeg bruikbare features) ----
+    auc_fund, top_fund = NAN, NAN
+    if len(fund_bruikbaar) >= MIN_FEATURES_FUNDAMENTEEL:
+        try:
+            train_f = train_df.dropna(subset=fund_bruikbaar)
+            test_f = test_df.dropna(subset=fund_bruikbaar)
+            if (len(train_f) >= MIN_RIJEN_TRAINING
+                    and len(test_f) >= MIN_RIJEN_TEST):
+                _, _, auc_fund, top_fund = train_en_evalueer(
+                    train_f, test_f, fund_bruikbaar, target_column,
+                    max(1, int(len(test_f) * TOP_N_FRACTIE)),
+                )
+        except Exception:
+            pass
 
-    # ---- Opslaan (alleen hoofdmodel) ----
+    # ---- Opslaan van het hoofdmodel ----
     try:
-        sla_model_veilig_op(model_main, horizon, FEATURE_ALLES, variant="tech_fund")
+        sla_model_veilig_op(
+            model_main, horizon, alles_bruikbaar, variant="tech_fund",
+        )
     except Exception as e:
         print(f"[{horizon}] ❌ model niet gepubliceerd: {e}")
         return leeg_resultaat(horizon, "opslag_fout", str(e))
@@ -573,17 +697,26 @@ def train_voor_horizon(df: pd.DataFrame, horizon: str) -> Dict:
     )
 
     return {
-        "horizon": horizon, "status": "getraind", "opmerking": None,
-        "n_train": int(len(train_df)), "n_test": int(len(test_df)),
+        "horizon": horizon,
+        "status": "getraind",
+        "opmerking": None,
+        "n_train": int(len(train_df)),
+        "n_test": int(len(test_df)),
         "split_datum": str(split_datum.date()),
-        "accuratesse": acc, "auc": auc, "auc_relatief": auc_rel,
-        "auc_technisch": auc_tech, "auc_fundamenteel": auc_fund,
+        "accuratesse": acc,
+        "auc": auc,
+        "auc_relatief": auc_rel,
+        "auc_technisch": auc_tech,
+        "auc_fundamenteel": auc_fund,
         "auc_baseline": auc_baseline,
         "top_n": int(n_top),
-        "top_model": top_main, "top_baseline": top_baseline,
+        "top_model": top_main,
+        "top_baseline": top_baseline,
         "top_relatief": top_rel,
-        "top_technisch": top_tech, "top_fundamenteel": top_fund,
-        "test_gem": test_gem, "target_mode": TARGET_MODE,
+        "top_technisch": top_tech,
+        "top_fundamenteel": top_fund,
+        "test_gem": test_gem,
+        "target_mode": TARGET_MODE,
     }
 
 
@@ -604,14 +737,14 @@ def haal_vorige_runs(conn) -> Dict[str, Dict]:
             cur.execute(query, {"mv": "xgboostV3", "h": h})
             rij = cur.fetchone()
         if rij:
-            vorige[h] = {"auc": float(rij[0]),
-                         "run_datum": rij[1].strftime("%Y-%m-%d")}
+            vorige[h] = {
+                "auc": float(rij[0]),
+                "run_datum": rij[1].strftime("%Y-%m-%d"),
+            }
     return vorige
 
 
 def log_runs(conn, resultaten: List[Dict]) -> None:
-    """Logt naar xgboost_runs met de bestaande kolommen. Nieuwe V4-velden
-    worden als opmerking-tekst meegegeven om schema-migratie te vermijden."""
     query = """
         INSERT INTO xgboost_runs (
             model_versie, horizon, status, opmerking,
@@ -631,12 +764,13 @@ def log_runs(conn, resultaten: List[Dict]) -> None:
         for res in resultaten:
             params = {k: _db_waarde(v) for k, v in res.items()}
             params["model_versie"] = MODEL_VERSIE
-            # V4-specifieke velden in opmerking proppen
             if res["status"] == "getraind":
-                extra = (f"AUC_tech={_f(res.get('auc_technisch'))} "
-                         f"AUC_fund={_f(res.get('auc_fundamenteel'))} "
-                         f"AUC_baseline={_f(res.get('auc_baseline'))} "
-                         f"target={res.get('target_mode')}")
+                extra = (
+                    f"AUC_tech={_f(res.get('auc_technisch'))} "
+                    f"AUC_fund={_f(res.get('auc_fundamenteel'))} "
+                    f"AUC_baseline={_f(res.get('auc_baseline'))} "
+                    f"target={res.get('target_mode')}"
+                )
                 params["opmerking"] = extra
             cur.execute(query, params)
     conn.commit()
@@ -680,8 +814,10 @@ def bouw_bericht(resultaten: List[Dict], vorige: Dict, datum: str) -> str:
             f"(vanaf {res['split_datum']})"
         )
         regels.append(
-            f"  AUC tech+fund={_f(res['auc'])} | tech={_f(res['auc_technisch'])} | "
-            f"fund={_f(res['auc_fundamenteel'])} | baseline={_f(res['auc_baseline'])}"
+            f"  AUC tech+fund={_f(res['auc'])} | "
+            f"tech={_f(res['auc_technisch'])} | "
+            f"fund={_f(res['auc_fundamenteel'])} | "
+            f"baseline={_f(res['auc_baseline'])}"
         )
         regels.append(
             f"  Top {res['top_n']}: model={_pr(res['top_model'])} | "
@@ -708,6 +844,7 @@ def train_xgboost4() -> None:
 
     conn = psycopg2.connect(db_url)
     resultaten = []
+    vorige = {}
 
     try:
         df = get_training_data(conn)
@@ -715,21 +852,25 @@ def train_xgboost4() -> None:
 
         toon_data_diagnose(df)
 
+        # Feature-diagnose op de horizon met de meeste labels
+        for h in HORIZONS:
+            target = f"fwd_ret_{h}"
+            if target in df.columns and df[target].notna().sum() > 0:
+                diagnose_features(df, target)
+                break
+
         for horizon in HORIZONS:
             try:
                 resultaten.append(train_voor_horizon(df, horizon))
             except Exception as e:
                 print(f"[{horizon}] onverwachte fout: {e}")
-                resultaten.append(
-                    leeg_resultaat(horizon, "fout", str(e))
-                )
+                resultaten.append(leeg_resultaat(horizon, "fout", str(e)))
 
         try:
             vorige = haal_vorige_runs(conn)
         except Exception as e:
             conn.rollback()
             print(f"[WARN] vorige runs niet op te halen: {e}")
-            vorige = {}
 
         try:
             log_runs(conn, resultaten)
@@ -741,11 +882,15 @@ def train_xgboost4() -> None:
     finally:
         conn.close()
 
+    n_getraind = sum(1 for r in resultaten if r["status"] == "getraind")
     bericht = bouw_bericht(resultaten, vorige, datum)
     send_telegram(bericht)
     send_email(f"XGBoostV4 hertraining {datum}", bericht)
 
-    print("\n✅ XGBoostV4 training afgerond")
+    if n_getraind == 0:
+        raise SystemExit("Geen enkele horizon kon getraind worden.")
+
+    print(f"\n✅ XGBoostV4 training afgerond ({n_getraind} modellen)")
 
 
 if __name__ == "__main__":
