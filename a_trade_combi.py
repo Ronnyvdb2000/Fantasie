@@ -1,80 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bot_combi_volatiel.py — GEWOGEN KWALITEITSSCORE x VOLATILITEIT  (v5)
+bot_combi_volatiel.py — GEWOGEN KWALITEITSSCORE x VOLATILITEIT  (v6)
 
-Herzien op basis van de workflow-log van de run van 2026-09-06: die run
-kreeg 5.693 "Too Many Requests"-fouten van Yahoo Finance. Oorzaak
-(bevestigd via de log, niet gegokt): bot_01kasstr, bot_00Fisher en
-bot_01hoogl doen elk honderden tot duizenden LOSSE live
-`yf.Ticker(ticker).info`-calls — de meest rate-limit-gevoelige
-Yahoo-endpoint. Los draaien deze bots prima (elk in hun eigen
-GitHub Actions-job, op een ander moment). In deze combi-bot draaien ze
-na elkaar in dezelfde sessie, dus hun verzoeken stapelen zich op tegen
-dezelfde IP-limiet — die werd binnen enkele minuten bereikt en bleef de
-rest van de run (~25 min) actief.
+Wijzigingen t.o.v. v5:
+  - DYNAMISCHE GEWICHTEN: de hardcoded GEWICHTEN-tabel wordt bij elke run
+    vervangen door een berekening uit `forward_returns`. Per strategie
+    wordt de Sharpe-ratio (gemiddeld rendement / standaardafwijking)
+    berekend op fwd_ret_10d en genormaliseerd naar [0,1]. Als een
+    strategie minder dan MIN_OBSERVATIES picks heeft, valt die terug op
+    het hardcoded gewicht. Als de DB-query volledig faalt, gebruikt de
+    hele run de hardcoded fallback.
+  - Alle overige logica (opwarm-retry, trechter, retry-backoff, ATR-filter,
+    rapportage) is ONGEWIJZIGD t.o.v. v5.
 
-TWEE MAATREGELEN in v4 (samen, op vraag van de gebruiker):
+Ratio: wegen op Sharpe i.p.v. ruwe return compenseert voor strategieën
+met veel variantie (zoals bot_00oshaughnessy met n=24 en gem +1.54% maar
+grote uitschieters).
 
-  1) TRECHTER — kasstr/fisher/hoogl draaien niet langer op het volledige
-     x-universum per beurs, maar enkel nog op de tickers die al
-     minstens 1 stem hebben van de goedkope, bulk-gebaseerde strategieën
-     (bot_00kr's ATR-check op "heeft ATR% berekend", bot_00vcp,
-     bot_01repititief — alle drie via bulk yf.download(), niet per-ticker
-     live calls, en dus veel minder rate-limit-gevoelig). Dit verlaagt
-     het live-fetch-volume typisch met >90% (in de log van 06/09 vond
-     vcp bv. maar 31 van de ~180 Nasdaq/NYSE x-tickers interessant).
-     Consequentie: kasstr/fisher/hoogl worden effectief gebruikt als
-     BEVESTIGING bovenop een technisch/seizoensgebonden signaal, niet
-     meer als volledig onafhankelijke full-universe screener. Gegeven de
-     externe rate-limit-beperking is dit een bewuste, uitgelegde
-     trade-off — geen stille wijziging.
+Fallback-gewichten (identiek aan v5, afgeleid van ruwe gemiddelde returns):
+    kasstr 0.85 | fisher 0.55 | vcp 0.55 | hoogl 0.50 | repititief 0.15
 
-  2) RETRY-MET-BACKOFF — elke resterende live-fetch-call (op de kleinere
-     shortlist) krijgt tot 3 pogingen met oplopende wachttijd (8s, 16s,
-     32s) bij een "Too Many Requests"-fout, i.p.v. meteen opgeven.
+Als je eenmalig wilt forceren op de fallback, zet FORCE_STATIC_GEWICHTEN=1.
 
-Gewichten, uitsluitingen en volatiliteitsfilter ongewijzigd t.o.v. v3
-(zie die docstring-geschiedenis in Git voor de volledige onderbouwing):
-
-    bot_01kasstr       0.85
-    bot_00Fisher       0.55
-    bot_00vcp          0.55
-    bot_01hoogl        0.50
-    bot_01repititief   0.15
-    bot_00kr           niet in de stemming, enkel voor ATR%-berekening
-
-Score per ticker = som van de gewichten van elke strategie die de ticker
-vandaag zou selecteren via haar eigen, ongewijzigde analyse_ticker-functie
-en eigen score-drempel — geen scoringslogica is herschreven.
-
-Rapportage ongewijzigd: enkel tickers met gewogen score > 0 EN binnen de
-ATR%-range (4%-25%), top N per beurs. Eén Telegram-bericht per beurs, één
-samenvattende e-mail, db_logger onder strategie "bot_combi_volatiel".
-
-v5-toevoeging (na een run op 2026-09-06 waarbij zelfs de BULK-downloads
-van kr/vcp/repititief vrijwel volledig faalden — 1028 van 1117 resp. 1026
-van 1117 tickers — met "Crumb fetch rate-limited" meldingen al bij de
-allereerste calls): Yahoo blokkeerde deze sessie dus al vóór de trechter
-of de per-ticker retry-backoff (v4) ook maar de kans kregen om iets uit
-te richten. Trechter en retry-backoff blijven behouden (ze helpen zodra
-Yahoo wél bereikbaar is), maar er komt nu een OPWARM-STAP vooraan de run:
-een klein testdownload (1 ticker, 5 dagen) met lange wachttijden (default
-6 pogingen x 60s = tot 5 minuten) vóórdat de echte, zware downloads
-starten. Als de yfinance-sessie/crumb daardoor eenmaal tot stand komt,
-blijft die meestal geldig voor de rest van de run. Als de opwarm-stap na
-alle pogingen nog steeds niets oplevert, gaat de run gewoon door (de
-daaropvolgende downloads zullen dan waarschijnlijk ook falen, maar we
-willen de run niet onbeperkt laten hangen) — in dat geval wijst dit op
-een bredere, aanhoudende blokkade van het GitHub Actions IP-bereik door
-Yahoo, iets dat buiten wat deze bot zelf kan oplossen ligt.
+De rest van de architectuur (trechter, retry-backoff, opwarm-stap) blijft
+zoals in v5 -- zie die docstring in Git voor de volledige onderbouwing.
 """
 
 import os
 import time
 from typing import Dict, List, Set, Tuple
 
-import bot_00kr as kr                 # enkel voor ATR%-berekening + gedeelde hulpfuncties
+import psycopg2
+import psycopg2.extras
+
+import bot_00kr as kr
 import bot_01kasstr as kasstr
 import bot_00Fisher as fisher
 import bot_01repititief as repititief
@@ -91,14 +51,13 @@ MAX_ATR_PCT = float(os.getenv("MAX_ATR_PCT", "25.0"))
 TOP_N       = int(os.getenv("TOP_N", "10"))
 
 RETRY_POGINGEN     = int(os.getenv("RETRY_POGINGEN", "3"))
-RETRY_BASIS_WACHT  = float(os.getenv("RETRY_BASIS_WACHT", "8"))  # seconden, verdubbelt per poging
+RETRY_BASIS_WACHT  = float(os.getenv("RETRY_BASIS_WACHT", "8"))
 
 WARMUP_POGINGEN    = int(os.getenv("WARMUP_POGINGEN", "6"))
-WARMUP_WACHT       = float(os.getenv("WARMUP_WACHT", "60"))  # seconden tussen opwarm-pogingen
+WARMUP_WACHT       = float(os.getenv("WARMUP_WACHT", "60"))
 
-# Gewicht = gemiddelde van de getrimde gemiddelde-return (%) over de
-# metingen van 2026-08-31 en 2026-09-06. bot_00kr bewust NIET opgenomen.
-GEWICHTEN = {
+# Statische fallback-gewichten (identiek aan v5)
+GEWICHTEN_FALLBACK = {
     "kasstr":     0.85,
     "fisher":     0.55,
     "vcp":        0.55,
@@ -106,14 +65,27 @@ GEWICHTEN = {
     "repititief": 0.15,
 }
 
+# Dynamische gewicht-berekening
+FORCE_STATIC_GEWICHTEN = os.getenv("FORCE_STATIC_GEWICHTEN", "0") == "1"
+MIN_OBSERVATIES        = int(os.getenv("MIN_OBSERVATIES", "30"))
+GEWICHT_HORIZON        = os.getenv("GEWICHT_HORIZON", "10d")  # 10d / 30d / 60d
+GEWICHTEN_MIN          = 0.05   # ondergrens na normalisatie
+GEWICHTEN_MAX          = 1.00   # bovengrens na normalisatie
+
 STRATEGIE_LABELS = {
     "kasstr": "bot_01kasstr", "fisher": "bot_00Fisher",
     "vcp": "bot_00vcp", "hoogl": "bot_01hoogl", "repititief": "bot_01repititief",
 }
 
-# Enkel deze strategieën doen live per-ticker .info-calls en worden dus
-# getrechterd tot de shortlist. vcp/repititief blijven op het volledige
-# universum draaien (bulk yf.download(), veel minder rate-limit-gevoelig).
+# Mapping van interne key -> DB-strategienaam in forward_returns
+STRATEGIE_DB_NAAM = {
+    "kasstr":     "bot_01kasstr",
+    "fisher":     "bot_00Fisher",
+    "vcp":        "bot_00vcp",
+    "hoogl":      "bot_01hoogl",
+    "repititief": "bot_01repititief",
+}
+
 LIVE_FETCH_STRATEGIEEN = {"kasstr", "fisher", "hoogl"}
 
 
@@ -140,9 +112,6 @@ def _yahoo_link(ticker: str) -> str:
 
 
 def met_retry(fn, ticker: str, label: str):
-    """Voert fn() uit; bij 'Too Many Requests' tot RETRY_POGINGEN keer
-    opnieuw proberen met oplopende wachttijd. Geeft None terug bij
-    definitieve mislukking (ticker wordt dan overgeslagen, zoals voorheen)."""
     for poging in range(RETRY_POGINGEN):
         try:
             return fn()
@@ -161,11 +130,6 @@ def met_retry(fn, ticker: str, label: str):
 
 
 def warm_up_yfinance() -> bool:
-    """Doet een klein testdownload (1 ticker, 5 dagen) om de
-    yfinance-sessie/crumb op te warmen vóór de zware downloads starten,
-    met lange wachttijden tussen pogingen. Geeft True terug zodra er
-    data binnenkomt; False als dat na alle pogingen niet lukt (de run
-    gaat dan gewoon door — geen oneindige wachttijd)."""
     for poging in range(WARMUP_POGINGEN):
         try:
             test = kr.download_history(["AAPL"], period="5d")
@@ -182,7 +146,119 @@ def warm_up_yfinance() -> bool:
 
 
 # ============================================================
-# STAP 1 — bulk-strategieën (goedkoop, volledig universum)
+# DYNAMISCHE GEWICHTEN
+# ============================================================
+
+def herbereken_gewichten() -> Dict[str, float]:
+    """
+    Berekent gewichten uit forward_returns via Sharpe-ratio per strategie.
+    Fallback naar GEWICHTEN_FALLBACK bij onvoldoende data of DB-fout.
+    """
+    if FORCE_STATIC_GEWICHTEN:
+        print("[gewichten] FORCE_STATIC_GEWICHTEN=1 — statische fallback gebruikt.")
+        return dict(GEWICHTEN_FALLBACK)
+
+    db_url = os.environ.get("SUPABASE_DB_URL")
+    if not db_url:
+        print("[gewichten] SUPABASE_DB_URL ontbreekt — statische fallback gebruikt.")
+        return dict(GEWICHTEN_FALLBACK)
+
+    target_kolom = f"fwd_ret_{GEWICHT_HORIZON}"
+    db_namen = list(STRATEGIE_DB_NAAM.values())
+
+    query = f"""
+        SELECT
+            strategie,
+            COUNT(*)              AS n,
+            AVG({target_kolom})   AS gem,
+            STDDEV({target_kolom}) AS std
+        FROM forward_returns
+        WHERE {target_kolom} IS NOT NULL
+          AND strategie = ANY(%(strats)s)
+        GROUP BY strategie;
+    """
+
+    try:
+        with psycopg2.connect(db_url) as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(query, {"strats": db_namen})
+                rows = cur.fetchall()
+    except Exception as e:
+        print(f"[gewichten] DB-query faalde: {e} — statische fallback gebruikt.")
+        return dict(GEWICHTEN_FALLBACK)
+
+    # Mapping db_naam -> interne key
+    db_naar_key = {v: k for k, v in STRATEGIE_DB_NAAM.items()}
+
+    # Sharpe per strategie
+    sharpe_per_key: Dict[str, float] = {}
+    n_per_key: Dict[str, int] = {}
+
+    for r in rows:
+        db_naam = r["strategie"]
+        key = db_naar_key.get(db_naam)
+        if key is None:
+            continue
+        n = int(r["n"] or 0)
+        n_per_key[key] = n
+        if n < MIN_OBSERVATIES:
+            continue
+        gem = float(r["gem"]) if r["gem"] is not None else 0.0
+        std = float(r["std"]) if r["std"] is not None else 0.0
+        # Sharpe met kleine-deler-epsilon om deling-door-nul te vermijden
+        sharpe = gem / std if std > 1e-9 else 0.0
+        sharpe_per_key[key] = sharpe
+
+    print()
+    print("=" * 70)
+    print(f"DYNAMISCHE GEWICHTEN (horizon={GEWICHT_HORIZON}, "
+          f"min_n={MIN_OBSERVATIES})")
+    print("=" * 70)
+    print(f"  {'Strategie':<14} {'n':>7} {'Sharpe':>9} {'Gewicht':>9}  Status")
+    print("  " + "-" * 60)
+
+    if not sharpe_per_key:
+        print("  Geen enkele strategie met voldoende observaties — fallback.")
+        for key, gewicht in GEWICHTEN_FALLBACK.items():
+            n = n_per_key.get(key, 0)
+            print(f"  {key:<14} {n:>7} {'-':>9} {gewicht:>9.3f}  fallback")
+        print("=" * 70)
+        return dict(GEWICHTEN_FALLBACK)
+
+    # Normaliseer Sharpe naar [GEWICHTEN_MIN, GEWICHTEN_MAX]
+    sharpe_waarden = list(sharpe_per_key.values())
+    min_s = min(sharpe_waarden)
+    max_s = max(sharpe_waarden)
+    bereik = max_s - min_s
+
+    gewichten: Dict[str, float] = {}
+    for key, sharpe in sharpe_per_key.items():
+        if bereik < 1e-9:
+            # Alle Sharpe-waarden identiek: geef ze allemaal hetzelfde gewicht
+            gewicht = (GEWICHTEN_MIN + GEWICHTEN_MAX) / 2
+        else:
+            genorm = (sharpe - min_s) / bereik
+            gewicht = GEWICHTEN_MIN + genorm * (GEWICHTEN_MAX - GEWICHTEN_MIN)
+        gewichten[key] = round(gewicht, 3)
+
+    # Vul aan met fallback voor strategieën zonder data
+    for key, fallback in GEWICHTEN_FALLBACK.items():
+        if key not in gewichten:
+            gewichten[key] = fallback
+
+    for key in GEWICHTEN_FALLBACK:
+        n = n_per_key.get(key, 0)
+        sharpe_str = f"{sharpe_per_key[key]:.4f}" if key in sharpe_per_key else "-"
+        status = "dynamisch" if key in sharpe_per_key else "fallback"
+        print(f"  {key:<14} {n:>7} {sharpe_str:>9} "
+              f"{gewichten[key]:>9.3f}  {status}")
+
+    print("=" * 70)
+    return gewichten
+
+
+# ============================================================
+# STAP 1 — bulk-strategieën
 # ============================================================
 
 def compute_atr_pct(exchange_tickers, all_tickers) -> Dict[str, float]:
@@ -236,7 +312,7 @@ def selecties_vcp(exchange_tickers, all_tickers) -> Dict[str, Set[str]]:
 
 
 # ============================================================
-# STAP 2 — live-fetch-strategieën (duur, enkel op de shortlist)
+# STAP 2 — live-fetch-strategieën
 # ============================================================
 
 def selecties_kasstr(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
@@ -287,14 +363,18 @@ def selecties_hoogl(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[s
 
 
 # ============================================================
-# STAP 3 — combineren (gewogen), filteren op volatiliteit, rapporteren
+# STAP 3 — combineren + rapporteren
 # ============================================================
 
 def run_live_engine():
     print(f"{'='*60}")
-    print(f"COMBI-SELECTIE VOLATIEL v5 (opwarm-retry + trechter + retry-backoff)  {kr.today_str()}")
-    print(f"  ATR% tussen {MIN_ATR_PCT} en {MAX_ATR_PCT} | gewichten: {GEWICHTEN}")
+    print(f"COMBI-SELECTIE VOLATIEL v6 (dynamische gewichten)  {kr.today_str()}")
+    print(f"  ATR% tussen {MIN_ATR_PCT} en {MAX_ATR_PCT}")
     print(f"{'='*60}")
+
+    # --- Dynamische gewichten berekenen ---
+    gewichten = herbereken_gewichten()
+    print(f"Gewichten: {gewichten}\n")
 
     exchange_tickers, all_tickers = bouw_exchange_tickers()
     if not all_tickers:
@@ -302,17 +382,14 @@ def run_live_engine():
         return
     print(f"Totaal universum: {len(all_tickers)} unieke tickers over {len(exchange_tickers)} beurzen\n")
 
-    # --- opwarm-stap, vóór de zware downloads ---
     warm_up_yfinance()
 
-    # --- bulk-strategieën, volledig universum ---
     atr_pct = compute_atr_pct(exchange_tickers, all_tickers)
 
     per_strategie: Dict[str, Dict[str, Set[str]]] = {}
     per_strategie["repititief"] = selecties_repititief(exchange_tickers, all_tickers)
     per_strategie["vcp"] = selecties_vcp(exchange_tickers, all_tickers)
 
-    # --- shortlist opbouwen: unie van tickers met >=1 stem uit de bulk-strategieën ---
     shortlist_per_beurs: Dict[str, Set[str]] = {}
     for ex_name in exchange_tickers:
         shortlist = set()
@@ -320,10 +397,9 @@ def run_live_engine():
             shortlist |= per_strategie[strat_key].get(ex_name, set())
         shortlist_per_beurs[ex_name] = shortlist
     totaal_shortlist = sum(len(s) for s in shortlist_per_beurs.values())
-    print(f"\n[trechter] {totaal_shortlist} tickers op de shortlist (van {len(all_tickers)} in het volledige universum) "
-          f"voor de live-fetch-strategieën\n")
+    print(f"\n[trechter] {totaal_shortlist} tickers op de shortlist "
+          f"(van {len(all_tickers)} in het volledige universum)\n")
 
-    # --- live-fetch-strategieën, enkel op de shortlist ---
     per_strategie["kasstr"] = selecties_kasstr(shortlist_per_beurs)
     per_strategie["fisher"] = selecties_fisher(shortlist_per_beurs)
     per_strategie["hoogl"] = selecties_hoogl(shortlist_per_beurs)
@@ -335,7 +411,7 @@ def run_live_engine():
         bijdragen: Dict[str, List[str]] = {}
         for strat_key, per_ex in per_strategie.items():
             geselecteerd = per_ex.get(ex_name, set())
-            gewicht = GEWICHTEN[strat_key]
+            gewicht = gewichten.get(strat_key, 0.0)
             for ticker in geselecteerd:
                 gewogen_score[ticker] = gewogen_score.get(ticker, 0.0) + gewicht
                 bijdragen.setdefault(ticker, []).append(STRATEGIE_LABELS[strat_key])
@@ -371,9 +447,12 @@ def run_live_engine():
         if not top:
             continue
 
+        gewicht_str = ", ".join(
+            f"{k}={v:.2f}" for k, v in gewichten.items()
+        )
         delen = [
             f"🎯 *Combi-Selectie Volatiel — {ex_name}*",
-            f"_{kr.today_str()} | gewogen score (kasstr=0.85, fisher/vcp=0.55, hoogl=0.5, repititief=0.15) "
+            f"_{kr.today_str()} | gewichten: {gewicht_str} "
             f"| ATR% {MIN_ATR_PCT}-{MAX_ATR_PCT}%_",
             "─────────────────────────────",
         ]
