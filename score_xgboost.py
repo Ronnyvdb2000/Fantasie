@@ -40,10 +40,17 @@ Database-aanpassing:
 - xgboost_runs.horizon wordt gevuld wanneer deze kolom bestaat.
 
 Datum-aanpassing:
-- selecties.datum en generieke_technicals.datum kunnen
-  als TEXT in PostgreSQL staan.
+- selecties.datum, generieke_technicals.datum en
+  xgboost_scores.datum kunnen als TEXT in PostgreSQL staan.
 - Daarom worden datumvelden in de SQL expliciet naar
   timestamptz gecast.
+
+Wijzigingen v1.1 (2026-10-04):
+- haal_bestaande_scores_op: xgboost_scores.datum wordt nu ook
+  naar timestamptz gecast (fout: text >= timestamp).
+- haal_nieuwe_selecties_op: leeftijdsgrens van 7 dagen op de
+  gekoppelde technische rij, zodat nooit met verouderde features
+  gescoord wordt wanneer de rij voor de selectiedatum ontbreekt.
 """
 
 import os
@@ -789,6 +796,9 @@ def haal_nieuwe_selecties_op(
         for feature in VERWACHTE_FEATURES
     )
 
+    # NIEUW (v1.1): leeftijdsgrens op de gekoppelde technische rij.
+    # Zonder rij binnen deze termijn valt de selectie uit de query,
+    # zodat nooit met verouderde features gescoord wordt.
     query = f"""
         SELECT
             s."ticker" AS ticker,
@@ -1015,6 +1025,18 @@ def haal_bestaande_scores_op(
         ].min()
     )
 
+    # OUD (werkt niet: xgboost_scores.datum is TEXT):
+    # query = """
+    #     SELECT
+    #         ticker,
+    #         datum,
+    #         model_versie,
+    #         horizon
+    #     FROM public.xgboost_scores
+    #     WHERE datum >= %s
+    # """
+
+    # NIEUW (v1.1): datum expliciet naar timestamptz casten
     query = """
         SELECT
             ticker,
@@ -1022,7 +1044,7 @@ def haal_bestaande_scores_op(
             model_versie,
             horizon
         FROM public.xgboost_scores
-        WHERE datum >= %s
+        WHERE datum::timestamptz >= %s
     """
 
     try:
