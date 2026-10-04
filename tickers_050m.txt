@@ -1,5 +1,5 @@
 # MASTERLIJST 050 — Zurich
-# Laatste update: 27/09/2026
+# Laatste update: 04/10/2026
 # Nitro Criteria: ROE>3% | Debt<150 | Marge>2% | Vol 30%-80% | Omzet>€500,000
 # Kolommen: ticker | opname | ROE | Debt | Marge | Vol | Omzet | status [| weken_buiten] [| verwijderd]
 # --------------------------------------------------------------------------------
