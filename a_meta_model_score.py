@@ -8,28 +8,45 @@ meta_model_scores.
 Gebruikt het nieuwste model uit meta_model_models. Past dezelfde
 cross-sectionele ranking en scaler toe als tijdens training.
 
-Env vars: SUPABASE_DB_URL (verplicht)
+Stuurt optioneel een Telegram-bericht met de top-5 scores.
+
+Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
+(optioneel).
 """
 
 import os
 import sys
 import argparse
-from datetime import datetime, timezone
 
 import psycopg2
 import psycopg2.extras
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import Ridge
+import requests
 
 from features import MODEL_HORIZON
 
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 GENERIEKE_TECHNICALS = [
     "atr14", "atr14_pct", "rsi14", "ibs", "ma50", "ma200",
     "pct_from_ma50", "pct_from_ma200", "vol_ratio_20d", "high52w", "pct_from_high52w",
 ]
+
+
+def send_telegram(tekst: str) -> None:
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"Telegram fout: {e}")
 
 
 def haal_laatste_model(conn):
@@ -47,20 +64,22 @@ def haal_laatste_model(conn):
 
 def haal_selecties(conn, features, datum=None):
     """Haal selecties op voor een specifieke datum, of de laatste datum
-    waarvoor selecties bestaan zonder score."""
+    waarvoor selecties EN generieke_technicals bestaan."""
     s = [f for f in features if f not in GENERIEKE_TECHNICALS]
     g = [f for f in features if f in GENERIEKE_TECHNICALS]
     s_lijst = ", ".join(f"s.{k}" for k in s)
     g_lijst = ("," + ", ".join(f"g.{k}" for k in g)) if g else ""
 
     if datum is None:
-        # Laatste selectie-datum waarvoor we ook technische data hebben
+        # Laatste selectie-datum waarvoor we ook technische data hebben.
+        # Dat slaat weekenden en feestdagen over waarop generieke_technicals
+        # niet gevuld wordt.
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT MAX(s.datum)
                 FROM selecties s
                 JOIN generieke_technicals g
-                  ON s.ticker = g.ticker AND s.datum = g.datum
+                  ON s.ticker = g.ticker AND s.datum = g.datum;
             """)
             datum = cur.fetchone()[0]
     print(f"Scoren voor datum: {datum}")
@@ -80,7 +99,7 @@ def haal_selecties(conn, features, datum=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--datum", type=str, default=None,
-                        help="Specifieke datum (YYYY-MM-DD). Default: laatste selectiedatum.")
+                        help="Specifieke datum (YYYY-MM-DD). Default: laatste selectiedatum met technicals.")
     args = parser.parse_args()
 
     if not SUPABASE_DB_URL:
@@ -109,7 +128,7 @@ def main():
             print("Geen selecties voor die datum.")
             return
 
-        # Cross-sectionele rank per datum (maar hier is het 1 datum)
+        # Cross-sectionele rank per datum (hier: 1 datum, dus gewoon rank over alle rijen)
         for k in features:
             df[k] = df[k].rank(pct=True)
 
@@ -141,6 +160,19 @@ def main():
         top = df.nlargest(10, "score")[["ticker", "strategie", "score"]]
         print("\nTop 10 scores:")
         print(top.to_string(index=False))
+
+        # Telegram-melding met top 5
+        if len(df) > 0:
+            top5 = df.nlargest(5, "score")[["ticker", "strategie", "score"]]
+            regels = [
+                f"Meta-model scores {datum}",
+                f"Model: {versie}",
+                f"Totaal: {len(df)} scores",
+                "",
+            ]
+            for _, r in top5.iterrows():
+                regels.append(f"{r['ticker']:<12} {r['strategie']:<22} {r['score']:+.3f}")
+            send_telegram("\n".join(regels))
     finally:
         conn.close()
 
