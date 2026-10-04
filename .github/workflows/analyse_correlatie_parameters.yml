@@ -1,5 +1,5 @@
 # .github/workflows/analyse_parameter_correlatie.yml
-name: Parameter-correlatie analyse
+name: Analyse Parameter-correlatie
 
 on:
   schedule:
