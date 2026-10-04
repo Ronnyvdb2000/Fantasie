@@ -1,0 +1,55 @@
+name: Meta-model walk-forward
+
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      min_train_datums:
+        description: "Minimum aantal initiële trainingsdatums"
+        required: false
+        default: "10"
+
+concurrency:
+  group: meta-model
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Dependencies installeren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Meta-model draaien
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -o pipefail
+          python meta_model.py \
+            --min-train-datums "${{ github.event.inputs.min_train_datums || '10' }}" \
+            2>&1 | tee meta_model_output.log
+
+      - name: Log bewaren
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meta-model-output-${{ github.run_number }}
+          path: meta_model_output.log
+          if-no-files-found: ignore
+          retention-days: 30
