@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-meta_model_train.py — traint het meta-model op ALLE beschikbare data en
+a_meta_model_train.py — traint het meta-model op ALLE beschikbare data en
 schrijft scaler + coëfficiënten naar Supabase (tabel meta_model_models).
 
 Dit is het productie-model. Anders dan meta_model.py (walk-forward
