@@ -813,10 +813,13 @@ def haal_nieuwe_selecties_op(
 
             FROM public."generieke_technicals" t
 
-            WHERE
+            WHEREWHERE
                 t."ticker" = s."ticker"
                 AND t."datum"::timestamptz
                     <= s."datum"::timestamptz
+                -- NIEUW: geen verouderde features (max 7 dagen voor de selectie)
+                AND t."datum"::timestamptz
+                    >= s."datum"::timestamptz - interval '7 days'
 
             ORDER BY
                 t."datum"::timestamptz DESC
