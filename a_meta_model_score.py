@@ -8,7 +8,7 @@ meta_model_scores.
 Gebruikt het nieuwste model uit meta_model_models. Past dezelfde
 cross-sectionele ranking en scaler toe als tijdens training.
 
-Stuurt optioneel een Telegram-bericht met de top-5 scores.
+Stuurt optioneel een Telegram-bericht met top 10 + score-verdeling.
 
 Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
 (optioneel).
@@ -71,9 +71,6 @@ def haal_selecties(conn, features, datum=None):
     g_lijst = ("," + ", ".join(f"g.{k}" for k in g)) if g else ""
 
     if datum is None:
-        # Laatste selectie-datum waarvoor we ook technische data hebben.
-        # Dat slaat weekenden en feestdagen over waarop generieke_technicals
-        # niet gevuld wordt.
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT MAX(s.datum)
@@ -94,6 +91,38 @@ def haal_selecties(conn, features, datum=None):
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(query, (datum,))
         return pd.DataFrame(cur.fetchall()), datum
+
+
+def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
+    """Telegram-bericht met top 10 en score-verdeling."""
+    scores = df["score"].values
+    mediaan = float(np.median(scores))
+    laagste = float(scores.min())
+    hoogste = float(scores.max())
+    std = float(scores.std(ddof=1)) if len(scores) > 1 else 0.0
+
+    top10 = df.nlargest(10, "score")[["ticker", "strategie", "score"]]
+
+    regels = [
+        f"Meta-model scores {datum}",
+        f"Model: {versie}",
+        f"Totaal: {len(df)} scores",
+        "",
+        "Top 10:",
+    ]
+    for i, (_, r) in enumerate(top10.iterrows(), start=1):
+        regels.append(f"{i:>2}. {r['ticker']:<12} {r['strategie']:<22} {r['score']:+.3f}")
+
+    regels += [
+        "",
+        "Verdeling:",
+        f"  hoogste  {hoogste:+.3f}",
+        f"  mediaan  {mediaan:+.3f}",
+        f"  laagste  {laagste:+.3f}",
+        f"  std      {std:.3f}",
+        f"  spreiding {hoogste - laagste:.3f}",
+    ]
+    return "\n".join(regels)
 
 
 def main():
@@ -128,7 +157,6 @@ def main():
             print("Geen selecties voor die datum.")
             return
 
-        # Cross-sectionele rank per datum (hier: 1 datum, dus gewoon rank over alle rijen)
         for k in features:
             df[k] = df[k].rank(pct=True)
 
@@ -156,23 +184,12 @@ def main():
         conn.commit()
         print(f"{len(rijen)} scores opgeslagen in meta_model_scores.")
 
-        # Toon top 10 als sanity check
         top = df.nlargest(10, "score")[["ticker", "strategie", "score"]]
         print("\nTop 10 scores:")
         print(top.to_string(index=False))
 
-        # Telegram-melding met top 5
         if len(df) > 0:
-            top5 = df.nlargest(5, "score")[["ticker", "strategie", "score"]]
-            regels = [
-                f"Meta-model scores {datum}",
-                f"Model: {versie}",
-                f"Totaal: {len(df)} scores",
-                "",
-            ]
-            for _, r in top5.iterrows():
-                regels.append(f"{r['ticker']:<12} {r['strategie']:<22} {r['score']:+.3f}")
-            send_telegram("\n".join(regels))
+            send_telegram(bouw_telegram_bericht(df, datum, versie))
     finally:
         conn.close()
 
