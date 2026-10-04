@@ -813,7 +813,7 @@ def haal_nieuwe_selecties_op(
 
             FROM public."generieke_technicals" t
 
-            WHEREWHERE
+            WHERE
                 t."ticker" = s."ticker"
                 AND t."datum"::timestamptz
                     <= s."datum"::timestamptz
