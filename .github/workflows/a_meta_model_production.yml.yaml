@@ -1,4 +1,4 @@
-name: Meta-model train + score
+name: A Meta-model train + score
 
 on:
   schedule:
@@ -39,21 +39,21 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -o pipefail
-          python meta_model_train.py --alpha 1.0 --notities "auto-train" \
-            2>&1 | tee meta_model_train.log
+          python a__model_train.py --alpha 1.0 --notities "auto-train" \
+            2>&1 | tee _model_train.log
 
       - name: Scoren
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -o pipefail
-          python meta_model_score.py 2>&1 | tee meta_model_score.log
+          python a__model_score.py 2>&1 | tee _model_score.log
 
       - name: Logs bewaren
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: meta-model-production-${{ github.run_number }}
+          name: a_meta-model-production-${{ github.run_number }}
           path: |
             meta_model_train.log
             meta_model_score.log
