@@ -1,30 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-analyse_parameter_correlatie.py  —  WELKE PARAMETER ZEGT IETS?  v2.0
+analyse_parameter_correlatie.py  —  WELKE PARAMETER ZEGT IETS?  v2.1
 
-Per INDIVIDUELE SELECTIE (rij = 1 aandeel op 1 moment) wordt gekeken of de
-ruwe parameterwaarde samenhangt met het nadien behaalde rendement -- maar
-niet meer gepoold over alle datums. In plaats daarvan:
+Cross-sectionele IC per datum, t-toets op de reeks IC's -- geen gepoolde
+Spearman meer. Horizonten 5/10/20/30/60d, primair = 10d.
 
-  * Numerieke parameters: per datum cross-sectionele Spearman (rank IC),
-    daarna t-toets op de reeks IC's. Dit isoleert het SELECTIE-effect
-    ("aandeel met hoge RSI vandaag doet het morgen beter dan een aandeel
-    met lage RSI vandaag") van het MARKTREGIME-effect ("op dagen dat alle
-    RSI's hoog zijn, gaat de markt omhoog").
-
-  * Boolean parameters: per datum mediaan(True) - mediaan(False), daarna
-    t-toets op de reeks verschillen. Zelfde robuustheid tegen scheve
-    rendementsverdelingen, zonder regime-besmetting.
-
-Horizonten: 5, 10 (primair), 20, 30, 60 handelsdagen.
-
-FDR-correctie (BH) wordt per horizon toegepast -- elke horizon is een
-aparte onderzoeksvraag. In de samenvatting wordt de primaire horizon (10d)
-apart uitgelicht; andere horizonten zijn exploratief.
-
-Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
-(optioneel), FDR_ALPHA (default 0.05)
+v2.1: --min-dagen is nu CLI-instelbaar. Default 10. Onder 10 geeft de
+bot een expliciete waarschuwing in het rapport: de t-toets is dan
+gebaseerd op te weinig onafhankelijke observaties om significantie
+serieus te nemen -- bruikbaar als sanity check, niet als filterinput.
 """
 
 import os
@@ -46,14 +31,7 @@ FDR_ALPHA = float(os.environ.get("FDR_ALPHA", "0.05"))
 
 HORIZONS = [5, 10, 20, 30, 60]
 PRIMAIRE_HORIZON = 10
-
-# Minimum aantal datums waarop een parameter cross-sectioneel evalueerbaar
-# is voordat we een t-toets durven rapporteren. Onder deze drempel is de
-# reeks IC's te kort om iets zinnigs over significantie te zeggen.
-MIN_DAGEN = 10
-
-# Minimum aantal aandelen per datum om een cross-sectionele IC te berekenen.
-# Te klein -> ruis. Default via CLI overschrijfbaar.
+DEFAULT_MIN_DAGEN = 10
 DEFAULT_MIN_PER_DATUM = 15
 
 UITGESLOTEN_KOLOMMEN = {
@@ -75,7 +53,7 @@ def send_telegram(tekst: str) -> None:
     try:
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst},  # plain text, geen Markdown-parse-ellende
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst},
             timeout=10,
         )
     except Exception as e:
@@ -127,9 +105,6 @@ def haal_gelabelde_data(conn, kolommen: List[str]) -> pd.DataFrame:
     s_lijst = ", ".join(f"s.{k}" for k in s_kolommen)
     g_lijst = ("," + ", ".join(f"g.{k}" for k in g_kolommen)) if g_kolommen else ""
 
-    # fwd_ret_30d en fwd_ret_60d moeten bestaan in forward_returns; zo niet,
-    # faalt de query hieronder -- dat is bewust, dan weet je dat je view
-    # nog niet uitgebreid is.
     query = f"""
         SELECT s.datum, s.strategie, {s_lijst}{g_lijst},
                f.fwd_ret_5d, f.fwd_ret_10d, f.fwd_ret_20d, f.fwd_ret_30d, f.fwd_ret_60d
@@ -145,10 +120,9 @@ def haal_gelabelde_data(conn, kolommen: List[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _t_toets_op_reeks(waarden: np.ndarray) -> Optional[Tuple[float, float, float]]:
-    """Gemiddelde, t-stat en tweezijdige p van een reeks (bv. per-datum IC's)."""
+def _t_toets_op_reeks(waarden: np.ndarray, min_dagen: int) -> Optional[Tuple[float, float, float]]:
     n = len(waarden)
-    if n < MIN_DAGEN:
+    if n < min_dagen:
         return None
     sd = waarden.std(ddof=1)
     if sd == 0 or np.isnan(sd):
@@ -159,9 +133,7 @@ def _t_toets_op_reeks(waarden: np.ndarray) -> Optional[Tuple[float, float, float
 
 
 def cross_sectionele_ic(df: pd.DataFrame, kolom: str, ret_kolom: str,
-                        min_per_datum: int) -> Optional[dict]:
-    """Rekenkundig gemiddelde van per-datum cross-sectionele Spearman IC's,
-    met t-toets op de reeks IC's. Dit is de standaard rank-IC methodiek."""
+                        min_per_datum: int, min_dagen: int) -> Optional[dict]:
     ics = []
     n_obs = 0
     for _, g in df.groupby("datum"):
@@ -172,9 +144,9 @@ def cross_sectionele_ic(df: pd.DataFrame, kolom: str, ret_kolom: str,
         if not np.isnan(rho):
             ics.append(rho)
             n_obs += len(sub)
-    if len(ics) < MIN_DAGEN:
+    if len(ics) < min_dagen:
         return None
-    toets = _t_toets_op_reeks(np.array(ics))
+    toets = _t_toets_op_reeks(np.array(ics), min_dagen)
     if toets is None:
         return None
     gem, t, p = toets
@@ -183,9 +155,7 @@ def cross_sectionele_ic(df: pd.DataFrame, kolom: str, ret_kolom: str,
 
 
 def cross_sectioneel_boolean_verschil(df: pd.DataFrame, kolom: str, ret_kolom: str,
-                                      min_per_datum: int) -> Optional[dict]:
-    """Per datum mediaan(True) - mediaan(False), dan t-toets op de reeks
-    verschillen. Robuust tegen scheve rendementen en tegen regime-effect."""
+                                      min_per_datum: int, min_dagen: int) -> Optional[dict]:
     diffs = []
     n_obs = 0
     for _, g in df.groupby("datum"):
@@ -197,9 +167,9 @@ def cross_sectioneel_boolean_verschil(df: pd.DataFrame, kolom: str, ret_kolom: s
             continue
         diffs.append(waar.median() - onwaar.median())
         n_obs += len(sub)
-    if len(diffs) < MIN_DAGEN:
+    if len(diffs) < min_dagen:
         return None
-    toets = _t_toets_op_reeks(np.array(diffs))
+    toets = _t_toets_op_reeks(np.array(diffs), min_dagen)
     if toets is None:
         return None
     gem, t, p = toets
@@ -208,16 +178,23 @@ def cross_sectioneel_boolean_verschil(df: pd.DataFrame, kolom: str, ret_kolom: s
 
 
 def bereken_correlaties(df: pd.DataFrame, numeriek: List[str], boolean: List[str],
-                        min_n: int, min_per_datum: int) -> pd.DataFrame:
+                        min_n: int, min_per_datum: int, min_dagen: int) -> pd.DataFrame:
     resultaten = []
+    overgeslagen = []
     for horizon in HORIZONS:
         ret_kolom = f"fwd_ret_{horizon}d"
         if ret_kolom not in df.columns:
-            print(f"  (horizon {horizon}d overgeslagen: {ret_kolom} niet aanwezig)")
+            print(f"  horizon {horizon}d: kolom {ret_kolom} ontbreekt -- overgeslagen")
+            overgeslagen.append(horizon)
             continue
         df_h = df[df[ret_kolom].notna()].copy()
         if df_h.empty:
+            print(f"  horizon {horizon}d: 0 rijen met niet-lege {ret_kolom} -- overgeslagen")
+            overgeslagen.append(horizon)
             continue
+
+        n_datums = df_h["datum"].nunique()
+        print(f"  horizon {horizon}d: {len(df_h)} rijen, {n_datums} unieke datums")
 
         per_horizon = []
 
@@ -226,7 +203,7 @@ def bereken_correlaties(df: pd.DataFrame, numeriek: List[str], boolean: List[str
                 continue
             if df_h[kolom].dropna().shape[0] < min_n:
                 continue
-            res = cross_sectionele_ic(df_h, kolom, ret_kolom, min_per_datum)
+            res = cross_sectionele_ic(df_h, kolom, ret_kolom, min_per_datum, min_dagen)
             if res is None:
                 continue
             res.update({
@@ -240,7 +217,7 @@ def bereken_correlaties(df: pd.DataFrame, numeriek: List[str], boolean: List[str
                 continue
             if df_h[kolom].dropna().shape[0] < min_n:
                 continue
-            res = cross_sectioneel_boolean_verschil(df_h, kolom, ret_kolom, min_per_datum)
+            res = cross_sectioneel_boolean_verschil(df_h, kolom, ret_kolom, min_per_datum, min_dagen)
             if res is None:
                 continue
             res.update({
@@ -250,36 +227,45 @@ def bereken_correlaties(df: pd.DataFrame, numeriek: List[str], boolean: List[str
             per_horizon.append(res)
 
         if not per_horizon:
+            print(f"  horizon {horizon}d: geen parameter haalt de drempels -- overgeslagen")
+            overgeslagen.append(horizon)
             continue
+
         p_waarden = [r["p_waarde"] for r in per_horizon]
         significant_mask = bh_correctie(p_waarden, FDR_ALPHA)
         for r, sig in zip(per_horizon, significant_mask):
             r["significant_fdr"] = sig
         resultaten.extend(per_horizon)
 
+    if overgeslagen:
+        print(f"\nHorizonten zonder resultaten: {overgeslagen}")
     return pd.DataFrame(resultaten)
 
 
-def print_rapport(stats_df: pd.DataFrame, horizon: int) -> str:
+def print_rapport(stats_df: pd.DataFrame, horizon: int, min_dagen: int) -> str:
     sub = stats_df[stats_df["horizon"] == horizon].copy()
     if sub.empty:
         return f"\nGeen resultaten voor horizon {horizon}d."
     sub["abs_coef"] = sub["coefficient"].abs()
     sub = sub.sort_values("abs_coef", ascending=False)
 
-    markering = "  ★ PRIMAIR" if horizon == PRIMAIRE_HORIZON else ""
+    markering = "  * PRIMAIR" if horizon == PRIMAIRE_HORIZON else ""
+    waarschuw = ""
+    if min_dagen < DEFAULT_MIN_DAGEN:
+        waarschuw = f"  [WAARSCHUWING: min_dagen={min_dagen} < {DEFAULT_MIN_DAGEN}, significantie met korrel zout]"
+
     regels = [
         f"\n{'=' * 118}",
-        f"HORIZON: {horizon} handelsdagen{markering}  —  cross-sectionele IC per datum "
-        f"(FDR alpha={FDR_ALPHA}, {len(sub)} parameters getest)",
+        f"HORIZON: {horizon} handelsdagen{markering}  --  cross-sectionele IC per datum"
+        f" (FDR alpha={FDR_ALPHA}, min_dagen={min_dagen}, {len(sub)} parameters getest){waarschuw}",
         "=" * 118,
         f"{'parameter':<26}{'type':<10}{'#dagen':>8}{'#obs':>8}{'#strat':>8}"
-        f"{'IC / Δmediaan':>16}{'t-stat':>9}{'p':>10}  sig?  opm",
+        f"{'IC / dmediaan':>16}{'t-stat':>9}{'p':>10}  sig?  opm",
     ]
     for _, r in sub.iterrows():
-        vlag = "✓" if r["significant_fdr"] else " "
-        label = "ρ" if r["type"] == "numeriek" else "Δ%"
-        opm = "⚠ 1 strat" if r["n_strategieen"] <= 1 else ""
+        vlag = "JA" if r["significant_fdr"] else "  "
+        label = "rho" if r["type"] == "numeriek" else "d%"
+        opm = "! 1 strat" if r["n_strategieen"] <= 1 else ""
         regels.append(
             f"{r['parameter']:<26}{r['type']:<10}{int(r['n_dagen']):>8}{int(r['n_obs']):>8}"
             f"{int(r['n_strategieen']):>8}{r['coefficient']:>13.4f} {label:>2}"
@@ -291,9 +277,6 @@ def print_rapport(stats_df: pd.DataFrame, horizon: int) -> str:
 
 
 def print_decay_curve(stats_df: pd.DataFrame) -> str:
-    """Voor elke parameter die op minstens één horizon significant is,
-    toon de IC over alle horizonten. Laat zien of het signaal soepel
-    afneemt (bruikbaar) of omslaat van teken (verdacht / horizon-specifiek)."""
     if stats_df.empty:
         return ""
     sig_params = stats_df.loc[stats_df["significant_fdr"], "parameter"].unique()
@@ -302,7 +285,7 @@ def print_decay_curve(stats_df: pd.DataFrame) -> str:
 
     regels = [
         f"\n{'=' * 118}",
-        "DECAY-CURVE — IC/Δmediaan per horizon voor elke significante parameter",
+        "DECAY-CURVE -- IC/dmediaan per horizon voor elke significante parameter",
         "=" * 118,
         f"{'parameter':<26}{'type':<10}" + "".join(f"{h:>10}d" for h in HORIZONS),
     ]
@@ -312,7 +295,7 @@ def print_decay_curve(stats_df: pd.DataFrame) -> str:
         for h in HORIZONS:
             match = stats_df[(stats_df["parameter"] == param) & (stats_df["horizon"] == h)]
             if match.empty:
-                row.append(f"{'—':>11}")
+                row.append(f"{'--':>11}")
             else:
                 c = match["coefficient"].iloc[0]
                 ster = "*" if match["significant_fdr"].iloc[0] else " "
@@ -330,11 +313,17 @@ def main():
                         help="minimum aantal niet-lege observaties per parameter/horizon")
     parser.add_argument("--min-per-datum", type=int, default=DEFAULT_MIN_PER_DATUM,
                         help="minimum aantal aandelen per datum voor een cross-sectionele IC")
+    parser.add_argument("--min-dagen", type=int, default=DEFAULT_MIN_DAGEN,
+                        help=f"minimum aantal datums voor een geldige t-toets (default {DEFAULT_MIN_DAGEN})")
     args = parser.parse_args()
 
     if not SUPABASE_DB_URL:
         print("FOUT: SUPABASE_DB_URL ontbreekt.", file=sys.stderr)
         sys.exit(1)
+
+    if args.min_dagen < DEFAULT_MIN_DAGEN:
+        print(f"LET OP: --min-dagen={args.min_dagen} < {DEFAULT_MIN_DAGEN}. "
+              f"Resultaten zijn indicatief, niet betrouwbaar voor filtering.\n")
 
     conn = psycopg2.connect(SUPABASE_DB_URL)
     try:
@@ -346,26 +335,26 @@ def main():
 
         alle_kolommen = numeriek + boolean
         df = haal_gelabelde_data(conn, alle_kolommen)
-        print(f"{len(df)} rijen opgehaald (gepoold over alle strategieën).\n")
+        print(f"{len(df)} rijen opgehaald.\n")
 
         if df.empty:
             print("Nog geen gelabelde data beschikbaar.")
             return
 
+        print("Data per horizon:")
         stats_df = bereken_correlaties(df, numeriek, boolean,
-                                       args.min_n, args.min_per_datum)
+                                       args.min_n, args.min_per_datum, args.min_dagen)
         if stats_df.empty:
-            print(f"Geen enkele parameter haalt de drempels (min_n={args.min_n}, "
-                  f"min_per_datum={args.min_per_datum}, min_dagen={MIN_DAGEN}).")
+            print(f"\nGeen enkele parameter haalt de drempels "
+                  f"(min_n={args.min_n}, min_per_datum={args.min_per_datum}, "
+                  f"min_dagen={args.min_dagen}).")
             return
 
-        telegram_delen = []
         for horizon in HORIZONS:
             if horizon in stats_df["horizon"].values:
-                telegram_delen.append(print_rapport(stats_df, horizon))
-        telegram_delen.append(print_decay_curve(stats_df))
+                print_rapport(stats_df, horizon, args.min_dagen)
+        print_decay_curve(stats_df)
 
-        # Samenvatting op basis van primaire horizon
         prim = stats_df[stats_df["horizon"] == PRIMAIRE_HORIZON]
         aantal_sig = int(prim["significant_fdr"].sum()) if not prim.empty else 0
         totaal = len(prim)
@@ -374,8 +363,6 @@ def main():
             .sort_values("abs_coef", ascending=False)
         top_namen = ", ".join(top_sig["parameter"].head(5)) if not top_sig.empty else "geen"
 
-        # Tel ook significantie op andere horizonten, zodat je weet of er
-        # signaal is dat enkel op lange of korte termijn opduikt.
         extra = []
         for h in HORIZONS:
             if h == PRIMAIRE_HORIZON:
@@ -384,10 +371,15 @@ def main():
             if sh.empty:
                 continue
             extra.append(f"{h}d: {int(sh['significant_fdr'].sum())}/{len(sh)}")
-        extra_txt = " | ".join(extra)
+        extra_txt = " | ".join(extra) if extra else "geen"
+
+        waarschuwing = ""
+        if args.min_dagen < DEFAULT_MIN_DAGEN:
+            waarschuwing = f"\n!! min_dagen={args.min_dagen} < {DEFAULT_MIN_DAGEN} -- resultaten indicatief\n"
 
         samenvatting = (
-            f"Parameter-correlatie analyse (cross-sectionele IC)\n\n"
+            f"Parameter-correlatie analyse (cross-sectionele IC)\n"
+            f"{waarschuwing}\n"
             f"Primair ({PRIMAIRE_HORIZON}d): {aantal_sig}/{totaal} significant na BH "
             f"(alpha={FDR_ALPHA})\n"
             f"Sterkste: {top_namen}\n\n"
