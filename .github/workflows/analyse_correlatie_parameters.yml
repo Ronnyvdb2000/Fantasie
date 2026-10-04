@@ -1,0 +1,72 @@
+# .github/workflows/analyse_parameter_correlatie.yml
+name: Parameter-correlatie analyse
+
+on:
+  schedule:
+    # Elke werkdag om 22:00 UTC (na sluiting VS + verwerking in Supabase)
+    - cron: "0 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      min_dagen:
+        description: "Minimum aantal datums voor t-toets (default 10, 8 voor 30d-meenemen)"
+        required: false
+        default: "10"
+      min_n:
+        description: "Minimum observaties per parameter"
+        required: false
+        default: "50"
+      min_per_datum:
+        description: "Minimum aandelen per datum voor cross-sectionele IC"
+        required: false
+        default: "15"
+
+concurrency:
+  group: analyse-parameter-correlatie
+  cancel-in-progress: false
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Dependencies installeren
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            "psycopg2-binary>=2.9" \
+            "pandas>=2.0" \
+            "numpy>=1.26" \
+            "scipy>=1.11" \
+            "requests>=2.31"
+
+      - name: Bot draaien
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FDR_ALPHA: "0.05"
+        run: |
+          python analyse_parameter_correlatie.py \
+            --min-n "${{ github.event.inputs.min_n || '50' }}" \
+            --min-per-datum "${{ github.event.inputs.min_per_datum || '15' }}" \
+            --min-dagen "${{ github.event.inputs.min_dagen || '10' }}"
+
+      - name: Volledige output bewaren als artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analyse-output-${{ github.run_number }}
+          path: |
+            *.log
+          if-no-files-found: ignore
+          retention-days: 30
