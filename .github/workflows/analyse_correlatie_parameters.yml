@@ -3,12 +3,12 @@ name: Analyse Parameter-correlatie
 
 on:
   schedule:
-    # Elke werkdag om 22:00 UTC (na sluiting VS + verwerking in Supabase)
+    # Elke werkdag om 22:00 UTC (00:00 NL-tijd zomertijd)
     - cron: "0 22 * * 1-5"
   workflow_dispatch:
     inputs:
       min_dagen:
-        description: "Minimum aantal datums voor t-toets (default 10, 8 voor 30d-meenemen)"
+        description: "Minimum aantal datums voor t-toets (default 10, lager = 30d meenemen)"
         required: false
         default: "10"
       min_n:
@@ -55,20 +55,19 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FDR_ALPHA: "0.05"
-         run: |
-            set -o pipefail
-            python analyse_parameter_correlatie.py \
-             --min-n "${{ github.event.inputs.min_n || '50' }}" \
-             --min-per-datum "${{ github.event.inputs.min_per_datum || '15' }}" \
-             --min-dagen "${{ github.event.inputs.min_dagen || '10' }}" \
-             2>&1 | tee analyse_output.log
+        run: |
+          set -o pipefail
+          python analyse_parameter_correlatie.py \
+            --min-n "${{ github.event.inputs.min_n || '50' }}" \
+            --min-per-datum "${{ github.event.inputs.min_per_datum || '15' }}" \
+            --min-dagen "${{ github.event.inputs.min_dagen || '10' }}" \
+            2>&1 | tee analyse_output.log
 
       - name: Volledige output bewaren als artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: analyse-output-${{ github.run_number }}
-          path: |
-            *.log
+          path: analyse_output.log
           if-no-files-found: ignore
           retention-days: 30
