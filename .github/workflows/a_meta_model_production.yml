@@ -53,7 +53,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: a_meta-model-production-${{ github.run_number }}
+          name: meta-model-production-${{ github.run_number }}
           path: |
             meta_model_train.log
             meta_model_score.log
