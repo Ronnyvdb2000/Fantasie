@@ -48,6 +48,46 @@ def send_telegram(tekst: str) -> None:
     except Exception as e:
         print(f"Telegram fout: {e}")
 
+def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
+    """Telegram-bericht met top 10 en score-verdeling."""
+    scores = df["score"].values
+    mediaan = float(np.median(scores))
+    laagste = float(scores.min())
+    hoogste = float(scores.max())
+    std = float(scores.std(ddof=1)) if len(scores) > 1 else 0.0
+
+    top10 = df.nlargest(10, "score")[["ticker", "strategie", "score"]]
+
+    regels = [
+        f"Meta-model scores {datum}",
+        f"Model: {versie}",
+        f"Totaal: {len(df)} scores",
+        "",
+        "Top 10:",
+    ]
+    for i, (_, r) in enumerate(top10.iterrows(), start=1):
+        regels.append(f"{i:>2}. {r['ticker']:<12} {r['strategie']:<22} {r['score']:+.3f}")
+
+    regels += [
+        "",
+        "Verdeling:",
+        f"  hoogste   {hoogste:+.3f}",
+        f"  mediaan   {mediaan:+.3f}",
+        f"  laagste   {laagste:+.3f}",
+        f"  std       {std:.3f}",
+        f"  spreiding {hoogste - laagste:.3f}",
+        "",
+        "Toelichting:",
+        "  mediaan   = middelste score van alle selecties;",
+        "              negatief betekent dat het gros van de",
+        "              selecties onder nul scoort.",
+        "  std       = standaardafwijking; hoe hoger, hoe",
+        "              meer de scores uit elkaar liggen.",
+        "  spreiding = hoogste - laagste; grootte van de",
+        "              bandbreedte. Kleine spreiding (<1)",
+        "              betekent weinig onderscheidend vermogen.",
+    ]
+    return "\n".join(regels)
 
 def haal_laatste_model(conn):
     query = """
