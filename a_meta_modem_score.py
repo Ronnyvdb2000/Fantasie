@@ -86,7 +86,7 @@ def main():
     try:
         model_row = haal_laatste_model(conn)
         if model_row is None:
-            print("Geen model gevonden. Draai eerst meta_model_train.py.")
+            print("Geen model gevonden. Draai eerst a_meta_model_train.py.")
             sys.exit(1)
 
         versie = model_row["versie"]
