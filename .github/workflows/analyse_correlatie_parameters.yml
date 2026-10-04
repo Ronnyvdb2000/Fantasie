@@ -55,11 +55,13 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FDR_ALPHA: "0.05"
-        run: |
-          python analyse_parameter_correlatie.py \
-            --min-n "${{ github.event.inputs.min_n || '50' }}" \
-            --min-per-datum "${{ github.event.inputs.min_per_datum || '15' }}" \
-            --min-dagen "${{ github.event.inputs.min_dagen || '10' }}"
+         run: |
+            set -o pipefail
+            python analyse_parameter_correlatie.py \
+             --min-n "${{ github.event.inputs.min_n || '50' }}" \
+             --min-per-datum "${{ github.event.inputs.min_per_datum || '15' }}" \
+             --min-dagen "${{ github.event.inputs.min_dagen || '10' }}" \
+             2>&1 | tee analyse_output.log
 
       - name: Volledige output bewaren als artifact
         if: always()
