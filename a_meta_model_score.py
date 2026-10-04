@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_modem_score.py — berekent meta-model scores voor de laatste
+a_meta_model_score.py — berekent meta-model scores voor de laatste
 selectie-datum (of een opgegeven datum) en schrijft ze naar
 meta_model_scores.
 
