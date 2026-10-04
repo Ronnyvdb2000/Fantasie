@@ -5,3 +5,9 @@ vaderSentiment
 newsapi-python
 python-telegram-bot
 psycopg2-binary
+psycopg2-binary>=2.9
+pandas>=2.0
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+requests>=2.31
