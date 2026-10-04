@@ -54,9 +54,14 @@ def haal_selecties(conn, features, datum=None):
     g_lijst = ("," + ", ".join(f"g.{k}" for k in g)) if g else ""
 
     if datum is None:
-        # Laatste selectie-datum
+        # Laatste selectie-datum waarvoor we ook technische data hebben
         with conn.cursor() as cur:
-            cur.execute("SELECT MAX(datum) FROM selecties;")
+            cur.execute("""
+                SELECT MAX(s.datum)
+                FROM selecties s
+                JOIN generieke_technicals g
+                  ON s.ticker = g.ticker AND s.datum = g.datum
+            """)
             datum = cur.fetchone()[0]
     print(f"Scoren voor datum: {datum}")
 
