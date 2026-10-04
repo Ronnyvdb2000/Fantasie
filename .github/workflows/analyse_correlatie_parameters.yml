@@ -3,12 +3,11 @@ name: Analyse Parameter-correlatie
 
 on:
   schedule:
-    # Elke werkdag om 22:00 UTC (00:00 NL-tijd zomertijd)
     - cron: "0 22 * * 1-5"
   workflow_dispatch:
     inputs:
       min_dagen:
-        description: "Minimum aantal datums voor t-toets (default 10, lager = 30d meenemen)"
+        description: "Minimum aantal datums voor t-toets (default 10)"
         required: false
         default: "10"
       min_n:
@@ -19,6 +18,10 @@ on:
         description: "Minimum aandelen per datum voor cross-sectionele IC"
         required: false
         default: "15"
+      min_strategieen:
+        description: "Minimum aantal strategieën dat een parameter vult (3+ voor filter-model)"
+        required: false
+        default: "1"
 
 concurrency:
   group: analyse-parameter-correlatie
@@ -61,6 +64,7 @@ jobs:
             --min-n "${{ github.event.inputs.min_n || '50' }}" \
             --min-per-datum "${{ github.event.inputs.min_per_datum || '15' }}" \
             --min-dagen "${{ github.event.inputs.min_dagen || '10' }}" \
+            --min-strategieen "${{ github.event.inputs.min_strategieen || '1' }}" \
             2>&1 | tee analyse_output.log
 
       - name: Volledige output bewaren als artifact
