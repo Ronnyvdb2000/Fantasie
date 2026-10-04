@@ -1,4 +1,4 @@
-name: Meta-model walk-forward
+name: A Meta-model walk-forward
 
 on:
   schedule:
@@ -41,7 +41,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           set -o pipefail
-          python meta_model.py \
+          python a_meta_model.py \
             --min-train-datums "${{ github.event.inputs.min_train_datums || '10' }}" \
             2>&1 | tee meta_model_output.log
 
