@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-analyse_parameter_correlatie.py  —  WELKE PARAMETER ZEGT IETS?  v2.2
+analyse_parameter_correlatie.py  —  WELKE PARAMETER ZEGT IETS?  v2.3
 
 Cross-sectionele IC per datum, t-toets op de reeks IC's. Horizonten
 5/10/20/30/60d, primair = 10d.
 
-v2.2: --min-strategieen toegevoegd. Parameters die door minder dan N
-verschillende strategieën gevuld worden, worden overgeslagen voordat de
-per-datum IC's berekend worden. Dit filtert de typische '1 strat'-ruis:
-een parameter die door één bot gebruikt wordt kan correlationeel lijken
-omdat die ene bot toevallig goed presteerde in de onderzochte periode,
-niet omdat de parameter voorspellend is.
+v2.3: --use-whitelist toegevoegd. Beperkt de analyse tot de features uit
+features.ANALYSE_WHITELIST.
 
-Default = 1 (geen filter). Voor een generiek filter-model is 3 of hoger
-aan te raden.
+Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
+(optioneel), FDR_ALPHA (default 0.05)
 """
 
 import os
@@ -28,6 +24,8 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import requests
+
+from features import ANALYSE_WHITELIST
 
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
@@ -214,7 +212,6 @@ def bereken_correlaties(df: pd.DataFrame, numeriek: List[str], boolean: List[str
             if niet_leeg.shape[0] < min_n:
                 continue
 
-            # Strategie-filter VOOR de dure per-datum-loop
             n_strat = int(niet_leeg["strategie"].nunique())
             if n_strat < min_strategieen:
                 genegeerd_weinig_strat.append((horizon, kolom, n_strat))
@@ -335,6 +332,8 @@ def main():
     parser.add_argument("--min-strategieen", type=int, default=DEFAULT_MIN_STRATEGIEEN,
                         help=f"minimum aantal strategieën dat een parameter vult (default "
                              f"{DEFAULT_MIN_STRATEGIEEN}; gebruik 3+ voor een generiek filter-model)")
+    parser.add_argument("--use-whitelist", action="store_true",
+                        help="Beperk de analyse tot de features in features.ANALYSE_WHITELIST")
     args = parser.parse_args()
 
     if not SUPABASE_DB_URL:
@@ -352,7 +351,14 @@ def main():
     try:
         numeriek, boolean = haal_feature_kolommen(conn)
         numeriek = sorted(set(numeriek) | set(GENERIEKE_TECHNICALS_KOLOMMEN))
-        print(f"{len(numeriek)} numerieke kolommen (incl. generieke_technicals) + {len(boolean)} boolean-kolommen.\n")
+
+        if args.use_whitelist:
+            numeriek = [k for k in numeriek if k in ANALYSE_WHITELIST]
+            boolean = [k for k in boolean if k in ANALYSE_WHITELIST]
+            print(f"Whitelist actief: {len(numeriek)} numerieke + {len(boolean)} boolean features.")
+            print(f"Features: {', '.join(numeriek + boolean)}\n")
+
+        print(f"{len(numeriek)} numerieke kolommen + {len(boolean)} boolean-kolommen.\n")
 
         alle_kolommen = numeriek + boolean
         df = haal_gelabelde_data(conn, alle_kolommen)
@@ -402,6 +408,7 @@ def main():
         samenvatting = (
             f"Parameter-correlatie analyse (cross-sectionele IC)\n"
             f"min_strategieen={args.min_strategieen}, min_dagen={args.min_dagen}\n"
+            f"whitelist={'ja' if args.use_whitelist else 'nee'}\n"
             f"{waarschuwing}\n"
             f"Primair ({PRIMAIRE_HORIZON}d): {aantal_sig}/{totaal} significant na BH "
             f"(alpha={FDR_ALPHA})\n"
