@@ -1,1 +1,130 @@
-f
+name: Backfill technische features
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (geen DB-writes, alleen rapport)"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      batch_size:
+        description: "Aantal tickers per keer (leeg = alles)"
+        required: false
+        default: ""
+        type: string
+      ticker_filter:
+        description: "Optioneel: alleen deze tickers (komma-gescheiden, bv. 'AAPL,MSFT,ASML.AS')"
+        required: false
+        default: ""
+        type: string
+      sleep_sec:
+        description: "Wachttijd tussen ticker-calls (seconden)"
+        required: false
+        default: "2.0"
+        type: string
+
+permissions:
+  contents: read
+
+# Nooit twee backfills tegelijk (ze zouden dezelfde rijen bijwerken).
+concurrency:
+  group: backfill-technische-features
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: backfill
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    env:
+      SUPABASE_DB_URL:       ${{ secrets.SUPABASE_DB_URL }}
+      # Het script herkent "true"/"false" (en 1/0, ja/nee). Leeg = dry-run.
+      BACKFILL_DRY_RUN:      ${{ github.event.inputs.dry_run }}
+      BACKFILL_BATCH_SIZE:   ${{ github.event.inputs.batch_size }}
+      BACKFILL_SLEEP:        ${{ github.event.inputs.sleep_sec }}
+      BACKFILL_TICKER_FILTER: ${{ github.event.inputs.ticker_filter }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # Zelfde installatie als run_generieke_technicals.yml (ongepinde
+      # versies), zodat het script dezelfde omgeving krijgt als de live
+      # builder waarvan het de berekening hergebruikt.
+      #
+      # OUDE CODE (gepinde versies), bewust bewaard als documentatie:
+      # - name: Install dependencies
+      #   run: |
+      #     python -m pip install --upgrade pip
+      #     pip install \
+      #       numpy==1.26.4 \
+      #       pandas==2.2.3 \
+      #       yfinance==0.2.50 \
+      #       psycopg2-binary==2.9.10
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas numpy requests python-dotenv psycopg2-binary
+
+      - name: Verify install
+        run: |
+          python --version
+          python -c "import numpy;    print('numpy',    numpy.__version__)"
+          python -c "import pandas;   print('pandas',   pandas.__version__)"
+          python -c "import yfinance; print('yfinance', yfinance.__version__)"
+          python -c "import psycopg2; print('psycopg2 OK')"
+          python -c "import bouw_generieke_technicals; print('live builder importeerbaar OK')"
+
+      - name: Check secret
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "FOUT: SUPABASE_DB_URL secret ontbreekt"
+            exit 1
+          fi
+          echo "Configuratie:"
+          echo "  dry_run      = $BACKFILL_DRY_RUN"
+          echo "  batch_size   = ${BACKFILL_BATCH_SIZE:-'(alles)'}"
+          echo "  ticker_filter= ${BACKFILL_TICKER_FILTER:-'(geen)'}"
+          echo "  sleep_sec    = ${BACKFILL_SLEEP:-2.0}"
+          if [ "$BACKFILL_DRY_RUN" = "false" ]; then
+            echo "LET OP: dry_run=false, er wordt naar de database geschreven."
+          else
+            echo "Dry run: er wordt niets geschreven."
+          fi
+
+      - name: Run backfill
+        id: backfill
+        run: |
+          mkdir -p results
+          python backfill_technische_features.py 2>&1 | tee results/backfill_log.txt
+
+      - name: Controle output
+        if: always()
+        run: |
+          echo "Bestanden in results/:"
+          ls -lh results/ || echo "(geen results map)"
+          if [ -f results/backfill_log.txt ]; then
+            echo ""
+            echo "Laatste 30 regels van de log:"
+            tail -30 results/backfill_log.txt
+          fi
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: backfill-log-${{ github.run_id }}
+          path: results/backfill_log.txt
+          retention-days: 90
+          if-no-files-found: warn
