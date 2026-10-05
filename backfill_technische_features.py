@@ -3,234 +3,381 @@
 """
 backfill_technische_features.py
 ================================
-Vult de nieuwe technische features (macd_hist, stoch_k, adx14, hv20,
-rel_sterkte_20d, bb_percent_b, bb_breedte, stoch_d, macd, macd_signaal,
-hv60, dagen_sinds_low52w, vol_ratio_50d) aan voor bestaande datums waar
-ze nu NULL zijn.
+Vult de nieuwe technische features (macd, macd_signaal, macd_hist,
+bb_breedte, bb_percent_b, stoch_k, stoch_d, adx14, rel_sterkte_20d, hv20,
+hv60, dagen_sinds_low52w, vol_ratio_50d) aan voor bestaande datums waar ze
+nu NULL zijn in generieke_technicals.
 
 Methode:
-  1. Lees alle (ticker, datum) uit generieke_technicals waar minstens
-     één van de nieuwe features NULL is
-  2. Haal per unieke ticker de OHLCV op via yfinance (bulk-download)
-  3. Bereken indicatoren POINT-IN-TIME (alleen data tot datum D)
-  4. UPDATE alleen de NULL-velden
+  1. Lees alle (ticker, datum) uit generieke_technicals waar minstens één
+     van de nieuwe features NULL is
+  2. Per ticker: haal OHLCV op via yfinance (zelfde aanroep als de live
+     builder: Ticker().history(auto_adjust=True), start = vroegste datum
+     minus LOOKBACK_BUFFER_DAGEN)
+  3. Bereken ALLE indicatoren met de LIVE-functie bereken_indicatoren()
+     uit bouw_generieke_technicals.py, eenmaal per ticker
+  4. Per datum: lees de rij van de laatste handelsdag OP OF VÓÓR de datum
+     (as-of, geen look-ahead) en UPDATE alleen de NULL-velden
+
+Waarom de live-berekening hergebruiken: elke eigen implementatie in dit
+script gaf andere waarden dan de live builder (bb_breedte x100, stochastics
+zonder extra smoothing, Wilder-ADX, relatieve sterkte t.o.v. index,
+vol_ratio_50d inclusief vandaag, dagen_sinds_low52w in handelsdagen). Eén
+kolom met twee definities maakt elk model dat erop traint onbetrouwbaar.
+
+Point-in-time: alle indicatoren in bereken_indicatoren() zijn causaal
+(rolling / ewm / Wilder), dus de waarde op datum D hangt alleen af van data
+tot en met D. Eenmaal berekenen over de hele historie en de rij van D
+aflezen geeft hetzelfde als herberekenen met data tot D.
 
 Veilig:
   - Alleen UPDATE, nooit INSERT
-  - Alleen NULL-velden worden gevuld (bestaande waarden blijven)
-  - Dry-run optie via env var BACKFILL_DRY_RUN=1
+  - Alleen NULL-velden worden gevuld (COALESCE + WHERE ... IS NULL)
+  - DRY RUN staat standaard AAN; alleen BACKFILL_DRY_RUN=0/false/nee
+    zet schrijven aan. Elke andere (onduidelijke) waarde = dry-run.
 
 Env:
-  SUPABASE_DB_URL
-  BACKFILL_DRY_RUN   (default 0)
-  BACKFILL_BATCH_SIZE (default 50)
-  BACKFILL_SLEEP     (default 2.0)
+  SUPABASE_DB_URL        (verplicht)
+  BACKFILL_DRY_RUN       "1"/"true"/"ja" = dry-run, "0"/"false"/"nee" =
+                         schrijven. Leeg of ontbrekend = dry-run.
+  BACKFILL_BATCH_SIZE    max. aantal tickers per run (leeg/0 = alles)
+  BACKFILL_TICKER_FILTER komma-gescheiden tickers, bv. "AAPL,ASML.AS"
+                         (leeg = alle tickers met openstaande rijen)
+  BACKFILL_SLEEP         seconden wachttijd tussen tickers (default 2.0)
+
+WIJZIGINGEN NA REVIEW (2026-10-05):
+A. Berekening hergebruikt uit bouw_generieke_technicals.py (zie boven).
+B. DRY-RUN-FIX: de workflow geeft "true"/"false" door, het oude script
+   vergeleek met "1". Daardoor was dry_run=true NIET actief en werd er
+   toch geschreven. Nu worden beide notaties herkend en is dry-run de
+   veilige default.
+C. BATCH_SIZE en TICKER_FILTER werken nu. Een lege BACKFILL_BATCH_SIZE
+   (workflow-default) gaf voorheen int("") -> crash bij opstarten.
+D. Bij een batch wordt willekeurig geschud, zodat tickers die nooit
+   gevuld kunnen worden (te korte historie) de volgende batches niet
+   blijven blokkeren.
+E. UPDATE-voorwaarde "... AND (kolom IS NULL OR ...)" zodat rowcount echt
+   het aantal rijen is waar iets gevuld werd.
+G. DRY-RUN CONTROLEERT DE UPDATE-WHERE: in dry-run draait nu dezelfde WHERE
+   als SELECT (geen schrijfactie), zodat typefouten zoals "text = timestamp"
+   (datum is een tekstkolom) al in de dry-run zichtbaar worden. De waarde
+   van datum wordt ongewijzigd uit de database teruggegeven, niet omgezet
+   naar een Timestamp.
+F. Controle: ma50 en rsi14 (reeds in de tabel) worden herberekend en
+   vergeleken met de opgeslagen waarde; dit toont of de koersdata/as-of
+   uitlijning klopt (informatief, geen blokkade).
 """
 
 import os
 import sys
+import math
 import time
+import random
 import warnings
 import datetime as dt
 
-import numpy as np
 import pandas as pd
 import psycopg2
 import psycopg2.extras
 import yfinance as yf
 
+# Hergebruik de LIVE-berekening, zodat backfill en live identieke definities
+# hebben. Dit script moet in dezelfde map staan als bouw_generieke_technicals.py.
+from bouw_generieke_technicals import (
+    bereken_indicatoren,
+    download_index_returns,
+    LOOKBACK_BUFFER_DAGEN,
+    MAX_BAR_AFSTAND_DAGEN,
+)
+
 warnings.filterwarnings("ignore")
 
-# --------------------------------------------------------------------------
-# Config
-# --------------------------------------------------------------------------
-DB_URL = os.environ.get("SUPABASE_DB_URL")
-DRY_RUN = os.environ.get("BACKFILL_DRY_RUN", "0") == "1"
-BATCH_SIZE = int(os.environ.get("BACKFILL_BATCH_SIZE", "50"))
-SLEEP_SEC = float(os.environ.get("BACKFILL_SLEEP", "2.0"))
 
-# Features om aan te vullen
-DOEL_FEATURES = [
-    "macd", "macd_signaal", "macd_hist",
-    "bb_breedte", "bb_percent_b",
-    "stoch_k", "stoch_d", "adx14",
-    "rel_sterkte_20d", "hv20", "hv60",
-    "dagen_sinds_low52w", "vol_ratio_50d",
+# --------------------------------------------------------------------------
+# Config (robuust tegen lege strings)
+# --------------------------------------------------------------------------
+def _env_tekst(naam: str) -> str:
+    return (os.environ.get(naam) or "").strip()
+
+
+def _env_int(naam: str, standaard=None):
+    w = _env_tekst(naam)
+    if not w:
+        return standaard
+    try:
+        return int(w)
+    except ValueError:
+        print(f"[WARN] {naam}='{w}' is geen geheel getal; gebruik {standaard}")
+        return standaard
+
+
+def _env_float(naam: str, standaard: float) -> float:
+    w = _env_tekst(naam)
+    if not w:
+        return standaard
+    try:
+        return float(w)
+    except ValueError:
+        print(f"[WARN] {naam}='{w}' is geen getal; gebruik {standaard}")
+        return standaard
+
+
+def _env_dry_run() -> bool:
+    """True = dry-run. Alleen een duidelijke 'nee' zet schrijven aan."""
+    w = _env_tekst("BACKFILL_DRY_RUN").lower()
+    if w in ("0", "false", "nee", "no", "n"):
+        return False
+    if w in ("", "1", "true", "ja", "yes", "y"):
+        return True
+    print(f"[WARN] BACKFILL_DRY_RUN='{w}' onduidelijk; dry-run blijft AAN")
+    return True
+
+
+DB_URL = os.environ.get("SUPABASE_DB_URL")
+DRY_RUN = _env_dry_run()
+BATCH_SIZE = _env_int("BACKFILL_BATCH_SIZE", None)
+if BATCH_SIZE is not None and BATCH_SIZE <= 0:
+    BATCH_SIZE = None
+SLEEP_SEC = _env_float("BACKFILL_SLEEP", 2.0)
+TICKER_FILTER = {
+    t.strip().upper()
+    for t in _env_tekst("BACKFILL_TICKER_FILTER").split(",")
+    if t.strip()
+}
+
+# kolomnaam in generieke_technicals -> kolomnaam in het resultaat van
+# bereken_indicatoren()
+KOLOM_NAAR_G = {
+    "macd": "MACD",
+    "macd_signaal": "MACD_SIGNAAL",
+    "macd_hist": "MACD_HIST",
+    "bb_breedte": "BB_BREEDTE",
+    "bb_percent_b": "BB_PERCENT_B",
+    "stoch_k": "STOCH_K",
+    "stoch_d": "STOCH_D",
+    "adx14": "ADX14",
+    "rel_sterkte_20d": "REL_STERKTE_20D",
+    "hv20": "HV20",
+    "hv60": "HV60",
+    "dagen_sinds_low52w": "DAGEN_SINDS_LOW52W",
+    "vol_ratio_50d": "VOL_RATIO_50D",
+}
+DOEL_FEATURES = list(KOLOM_NAAR_G.keys())
+INT_FEATURES = {"dagen_sinds_low52w"}
+
+# Controle tegen reeds opgeslagen waarden:
+# (kolom in DB, kolom in g, type verschil, tolerantie)
+CONTROLE_KOLOMMEN = [
+    ("ma50", "MA50", "rel", 0.02),   # max 2% relatief verschil
+    ("rsi14", "RSI14", "abs", 3.0),  # max 3 RSI-punten verschil
 ]
 
-# Hoeveel jaar historie ophalen? 2 jaar is genoeg voor alle indicatoren
-HISTORIE_JAREN = 2
+MAX_VOORBEELDEN = 3   # aantal tickers waarvan een voorbeeldrij wordt getoond
+
+
+# --------------------------------------------------------------------------
+# Hulpfuncties
+# --------------------------------------------------------------------------
+def _veilig(waarde, is_int: bool = False):
+    """Zelfde afronding als de live builder: 4 decimalen, NaN -> None."""
+    try:
+        f = float(waarde)
+        if math.isnan(f):
+            return None
+        return int(round(f)) if is_int else round(f, 4)
+    except Exception:
+        return None
+
+
+def _sql_datum(d):
+    """Zet Timestamp/datetime om naar date voor gebruik in SQL."""
+    if isinstance(d, (pd.Timestamp, dt.datetime)):
+        return d.date()
+    return d
 
 
 # --------------------------------------------------------------------------
 # DB
 # --------------------------------------------------------------------------
-def haal_te_vullen_rijen(conn):
-    """Geeft DataFrame met (ticker, datum) waar minstens één feature NULL is."""
-    features_str = ", ".join(DOEL_FEATURES)
+def haal_te_vullen_rijen(conn) -> pd.DataFrame:
+    """(ticker, datum) waar minstens één doel-feature NULL is."""
     where = " OR ".join(f"{f} IS NULL" for f in DOEL_FEATURES)
+    # position('/' in ticker) = 0: sluit pairs-tickers uit (zoals de live
+    # builder), zonder %-teken in de query.
     query = f"""
         SELECT ticker, datum
         FROM generieke_technicals
-        WHERE {where}
+        WHERE ({where})
+          AND position('/' in ticker) = 0
         ORDER BY ticker, datum
     """
     return pd.read_sql(query, conn)
 
 
-def haal_bestaande_features(conn, ticker, datum):
-    """Haalt bestaande waarden op voor verificatie."""
-    query = f"""
-        SELECT {', '.join(DOEL_FEATURES)}
-        FROM generieke_technicals
-        WHERE ticker = %s AND datum = %s
+def update_features(conn, ticker, datum, waarden: dict) -> int:
     """
-    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(query, (ticker, datum))
-        return cur.fetchone()
-
-
-def update_features(conn, ticker, datum, waarden):
-    """UPDATE alleen de NULL-velden. waarden is dict {feature: value}."""
-    if not waarden:
-        return 0
-
-    # Alleen features met niet-NaN waarde
+    UPDATE alleen de NULL-velden. waarden = {feature: waarde}.
+    Retourneert het aantal bijgewerkte rijen (0 of 1). In dry-run: het aantal
+    rijen dat bijgewerkt ZOU worden (SELECT, er wordt niets geschreven).
+    """
     te_setten = {
         k: v for k, v in waarden.items()
-        if k in DOEL_FEATURES and v is not None and not pd.isna(v)
+        if k in DOEL_FEATURES and v is not None
     }
     if not te_setten:
         return 0
 
-    # UPDATE met COALESCE: alleen als bestaande waarde NULL is
-    set_delen = []
-    params = []
-    for k, v in te_setten.items():
-        set_delen.append(f"{k} = COALESCE({k}, %s)")
-        params.append(float(v))
+    null_voorwaarde = " OR ".join(f"{k} IS NULL" for k in te_setten)
 
-    params.extend([ticker, datum])
+    if DRY_RUN:
+        # Zelfde WHERE als de echte UPDATE, maar als SELECT: er wordt niets
+        # geschreven, maar het script controleert wel dat de rij gevonden
+        # wordt en dat het datumtype klopt. (De allereerste live run faalde
+        # op "text = timestamp" omdat datum een tekstkolom is; een dry-run
+        # die niets uitvoert had dat niet gezien.)
+        # OUDE CODE (dry-run raakte de database niet aan), bewust bewaard:
+        # return 1
+        query = (
+            "SELECT count(*) FROM generieke_technicals "
+            "WHERE ticker = %s AND datum = %s "
+            f"AND ({null_voorwaarde})"
+        )
+        with conn.cursor() as cur:
+            cur.execute(query, [ticker, datum])
+            return int(cur.fetchone()[0])
+
+    set_delen = [f"{k} = COALESCE({k}, %s)" for k in te_setten]
+    params = list(te_setten.values()) + [ticker, datum]
     query = f"""
         UPDATE generieke_technicals
         SET {', '.join(set_delen)}
         WHERE ticker = %s AND datum = %s
+          AND ({null_voorwaarde})
     """
-
-    if DRY_RUN:
-        return len(te_setten)
-
     with conn.cursor() as cur:
         cur.execute(query, params)
         return cur.rowcount
 
 
-# --------------------------------------------------------------------------
-# Indicator-berekening (point-in-time)
-# --------------------------------------------------------------------------
-def bereken_indicatoren_voor_datum(df_ohlcv, datum):
+def controleer_tegen_db(conn, ticker, controle_rijen):
     """
-    Berekent alle indicatoren voor één specifieke datum, met alleen data
-    tot en met die datum. df_ohlcv moet kolommen hebben: open, high, low,
-    close, volume; index = DatetimeIndex.
+    Vergelijkt herberekende ma50/rsi14 met de opgeslagen waarden.
+    controle_rijen = lijst van (datum_sql, {db_kolom: herberekende waarde}).
+    Retourneert (n_vergeleken, n_afwijkend). Informatief.
     """
-    if df_ohlcv is None or df_ohlcv.empty:
-        return {}
+    if not controle_rijen:
+        return 0, 0
+    kolommen = ", ".join(k[0] for k in CONTROLE_KOLOMMEN)
+    query = (f"SELECT datum, {kolommen} FROM generieke_technicals "
+             f"WHERE ticker = %s AND datum = ANY(%s)")
+    datums = [d for d, _ in controle_rijen]
+    with conn.cursor() as cur:
+        cur.execute(query, (ticker, datums))
+        db_rijen = {_sql_datum(r[0]): r[1:] for r in cur.fetchall()}
 
-    # Filter op datum
-    df = df_ohlcv[df_ohlcv.index <= datum].copy()
-    if len(df) < 60:  # minimale historie voor indicatoren
-        return {}
+    n_vergeleken = 0
+    n_afwijkend = 0
+    for datum, nieuw in controle_rijen:
+        opgeslagen = db_rijen.get(datum)
+        if opgeslagen is None:
+            continue
+        for (db_kol, _, soort, tol), oud in zip(CONTROLE_KOLOMMEN, opgeslagen):
+            nw = nieuw.get(db_kol)
+            if oud is None or nw is None:
+                continue
+            oud = float(oud)
+            n_vergeleken += 1
+            if soort == "rel":
+                verschil = abs(nw - oud) / abs(oud) if oud != 0 else abs(nw)
+            else:
+                verschil = abs(nw - oud)
+            if verschil > tol:
+                n_afwijkend += 1
+    return n_vergeleken, n_afwijkend
 
-    close = df["Close"]
-    high = df["High"]
-    low = df["Low"]
-    volume = df["Volume"]
 
-    resultaat = {}
+# --------------------------------------------------------------------------
+# Verwerking per ticker
+# --------------------------------------------------------------------------
+def verwerk_ticker(conn, ticker, datums, index_ret) -> dict:
+    stat = {
+        "status": "ok", "fout": None,
+        "n_rijen": 0, "n_bijgewerkt": 0,
+        "n_onvolledig": 0, "n_geen_bar": 0,
+        "n_controle": 0, "n_afwijkend": 0,
+        "voorbeeld": None,
+    }
 
-    # MACD (12, 26, 9)
-    if len(close) >= 35:
-        ema12 = close.ewm(span=12, adjust=False).mean()
-        ema26 = close.ewm(span=26, adjust=False).mean()
-        macd = ema12 - ema26
-        signaal = macd.ewm(span=9, adjust=False).mean()
-        resultaat["macd"] = float(macd.iloc[-1])
-        resultaat["macd_signaal"] = float(signaal.iloc[-1])
-        resultaat["macd_hist"] = float(macd.iloc[-1] - signaal.iloc[-1])
+    vroegste = min(pd.Timestamp(d) for d in datums)
+    start = (vroegste - pd.Timedelta(days=LOOKBACK_BUFFER_DAGEN)).strftime("%Y-%m-%d")
 
-    # Bollinger Bands (20, 2)
-    if len(close) >= 20:
-        ma20 = close.rolling(20).mean()
-        std20 = close.rolling(20).std()
-        upper = ma20 + 2 * std20
-        lower = ma20 - 2 * std20
-        bb_breedte = (upper - lower) / ma20
-        bb_pct_b = (close - lower) / (upper - lower)
-        resultaat["bb_breedte"] = float(bb_breedte.iloc[-1]) if not pd.isna(bb_breedte.iloc[-1]) else None
-        resultaat["bb_percent_b"] = float(bb_pct_b.iloc[-1]) if not pd.isna(bb_pct_b.iloc[-1]) else None
+    try:
+        hist = yf.Ticker(ticker).history(start=start, auto_adjust=True)
+    except Exception as e:
+        stat["status"] = "download_fout"
+        stat["fout"] = str(e)
+        return stat
 
-    # Stochastics (14, 3, 3)
-    if len(df) >= 14:
-        low14 = low.rolling(14).min()
-        high14 = high.rolling(14).max()
-        k_ruw = 100 * (close - low14) / (high14 - low14)
-        k = k_ruw.rolling(3).mean()
-        d = k.rolling(3).mean()
-        resultaat["stoch_k"] = float(k.iloc[-1]) if not pd.isna(k.iloc[-1]) else None
-        resultaat["stoch_d"] = float(d.iloc[-1]) if not pd.isna(d.iloc[-1]) else None
+    if hist is None or hist.empty or "Close" not in hist.columns:
+        stat["status"] = "geen_data"
+        return stat
 
-    # ADX (14)
-    if len(df) >= 28:
-        try:
-            high_diff = high.diff()
-            low_diff = -low.diff()
-            plus_dm = np.where((high_diff > low_diff) & (high_diff > 0), high_diff, 0.0)
-            min_dm = np.where((low_diff > high_diff) & (low_diff > 0), low_diff, 0.0)
-            tr = pd.concat([
-                high - low,
-                (high - close.shift()).abs(),
-                (low - close.shift()).abs(),
-            ], axis=1).max(axis=1)
-            atr = tr.rolling(14).mean()
-            plus_di = 100 * pd.Series(plus_dm, index=df.index).rolling(14).mean() / atr
-            min_di = 100 * pd.Series(min_dm, index=df.index).rolling(14).mean() / atr
-            dx = 100 * (plus_di - min_di).abs() / (plus_di + min_di)
-            adx = dx.rolling(14).mean()
-            if not pd.isna(adx.iloc[-1]):
-                resultaat["adx14"] = float(adx.iloc[-1])
-        except Exception:
-            pass
+    hist.index = pd.to_datetime(hist.index).tz_localize(None)
+    g = bereken_indicatoren(hist, index_ret)
 
-    # Relatieve sterkte (20d) = rendement over 20 dagen
-    if len(close) >= 21:
-        rs = (close.iloc[-1] / close.iloc[-21] - 1) * 100
-        resultaat["rel_sterkte_20d"] = float(rs) if not pd.isna(rs) else None
+    controle_rijen = []
+    for datum_db in datums:
+        doel = pd.Timestamp(datum_db)
 
-    # HV20 en HV60 (historical volatility = std van log returns)
-    log_ret = np.log(close / close.shift(1))
-    if len(log_ret.dropna()) >= 20:
-        hv20 = log_ret.rolling(20).std() * np.sqrt(252) * 100
-        resultaat["hv20"] = float(hv20.iloc[-1]) if not pd.isna(hv20.iloc[-1]) else None
-    if len(log_ret.dropna()) >= 60:
-        hv60 = log_ret.rolling(60).std() * np.sqrt(252) * 100
-        resultaat["hv60"] = float(hv60.iloc[-1]) if not pd.isna(hv60.iloc[-1]) else None
+        # As-of: laatste handelsdag OP OF VÓÓR de datum (zoals de live
+        # builder v2.1). Geen look-ahead.
+        pos = g.index.searchsorted(doel, side="right") - 1
+        if pos < 0 or (doel.normalize() - g.index[pos]).days > MAX_BAR_AFSTAND_DAGEN:
+            stat["n_geen_bar"] += 1
+            continue
+        rij = g.iloc[pos]
 
-    # Dagen sinds 52w low
-    if len(df) >= 252:
-        recent = df.tail(252)
-        idx_low = recent["Low"].idxmin()
-        dagen = (df.index[-1] - idx_low).days
-        resultaat["dagen_sinds_low52w"] = int(dagen)
+        # Onvolledige koersbalk: niet invullen (de datums zijn historisch,
+        # er komt geen betere balk meer bij).
+        if pd.isna(rij["Close"]) or pd.isna(rij["High"]) or pd.isna(rij["Low"]):
+            stat["n_onvolledig"] += 1
+            continue
 
-    # Volume ratio 50d
-    if len(volume) >= 51:
-        vol_avg_50 = volume.rolling(50).mean()
-        if vol_avg_50.iloc[-2] > 0:
-            ratio = volume.iloc[-1] / vol_avg_50.iloc[-2]
-            resultaat["vol_ratio_50d"] = float(ratio) if not pd.isna(ratio) else None
+        datum_sql = _sql_datum(datum_db)
 
-    return resultaat
+        waarden = {}
+        for kolom, g_kolom in KOLOM_NAAR_G.items():
+            v = _veilig(rij[g_kolom], is_int=(kolom in INT_FEATURES))
+            if v is not None:
+                waarden[kolom] = v
+
+        # Voor de controle tegen reeds opgeslagen ma50 / rsi14
+        controle_rijen.append((
+            datum_sql,
+            {db_kol: _veilig(rij[g_kol]) for db_kol, g_kol, _, _ in CONTROLE_KOLOMMEN},
+        ))
+
+        if not waarden:
+            continue
+
+        stat["n_rijen"] += 1
+        if stat["voorbeeld"] is None:
+            stat["voorbeeld"] = (datum_sql, waarden)
+        stat["n_bijgewerkt"] += update_features(conn, ticker, datum_sql, waarden)
+
+    if not DRY_RUN:
+        conn.commit()
+
+    # Controle na de commit, zodat een eventuele SQL-fout hier geen
+    # reeds uitgevoerde updates terugdraait.
+    try:
+        n_v, n_a = controleer_tegen_db(conn, ticker, controle_rijen)
+        stat["n_controle"], stat["n_afwijkend"] = n_v, n_a
+    except Exception as e:
+        conn.rollback()
+        print(f"  [INFO] controle tegen DB overgeslagen: {e}")
+
+    return stat
 
 
 # --------------------------------------------------------------------------
@@ -240,100 +387,122 @@ def main():
     if not DB_URL:
         sys.exit("SUPABASE_DB_URL ontbreekt")
 
-    print(f"Backfill technische features — dry_run={DRY_RUN}")
+    print("Backfill technische features")
+    print(f"  dry_run       = {DRY_RUN}")
+    print(f"  batch_size    = {BATCH_SIZE if BATCH_SIZE else '(alles)'}")
+    print(f"  ticker_filter = {sorted(TICKER_FILTER) if TICKER_FILTER else '(geen)'}")
+    print(f"  sleep_sec     = {SLEEP_SEC}")
     print()
-
-    with psycopg2.connect(DB_URL) as conn:
-        te_vullen = haal_te_vullen_rijen(conn)
-        print(f"{len(te_vullen):,} rijen met minstens één NULL-feature")
-
-        unieke_tickers = sorted(te_vullen["ticker"].unique().tolist())
-        print(f"{len(unieke_tickers):,} unieke tickers")
+    if DRY_RUN:
+        print("DRY RUN: er wordt NIETS naar de database geschreven.")
         print()
 
-        if DRY_RUN:
-            print("DRY RUN — geen database-writes")
-            print()
+    conn = psycopg2.connect(DB_URL)
+    try:
+        te_vullen = haal_te_vullen_rijen(conn)
+        print(f"{len(te_vullen):,} rijen met minstens één NULL-feature")
+        if te_vullen.empty:
+            print("Niets te doen.")
+            return
 
-        # Groepeer rijen per ticker voor efficiënte verwerking
         per_ticker = te_vullen.groupby("ticker")["datum"].apply(list).to_dict()
+        tickers = sorted(per_ticker.keys())
+        print(f"{len(tickers):,} unieke tickers met openstaande rijen")
 
-        n_verwerkt = 0
-        n_geupdatet = 0
+        if TICKER_FILTER:
+            tickers = [t for t in tickers if t.upper() in TICKER_FILTER]
+            print(f"{len(tickers):,} tickers na ticker_filter")
+            ontbrekend = TICKER_FILTER - {t.upper() for t in tickers}
+            if ontbrekend:
+                print(f"  [INFO] geen openstaande rijen voor: {sorted(ontbrekend)}")
+
+        if BATCH_SIZE and len(tickers) > BATCH_SIZE:
+            random.shuffle(tickers)
+            tickers = sorted(tickers[:BATCH_SIZE])
+            print(f"Batch: {len(tickers)} tickers in deze run (willekeurige selectie)")
+
+        if not tickers:
+            print("Geen tickers om te verwerken.")
+            return
+        print()
+
+        # Referentie-index één keer ophalen (voor rel_sterkte_20d)
+        vroegste_alle = min(pd.Timestamp(d) for t in tickers for d in per_ticker[t])
+        index_start = (vroegste_alle - pd.Timedelta(days=LOOKBACK_BUFFER_DAGEN)).strftime("%Y-%m-%d")
+        index_ret = download_index_returns(index_start)
+        if index_ret is None:
+            print("[WARN] Referentie-index niet beschikbaar: rel_sterkte_20d "
+                  "blijft NULL in deze run (de rest wordt wel gevuld).")
+        print()
+
+        totaal = {
+            "n_rijen": 0, "n_bijgewerkt": 0, "n_onvolledig": 0,
+            "n_geen_bar": 0, "n_controle": 0, "n_afwijkend": 0,
+        }
         n_geen_data = 0
-        n_geen_historie = 0
+        n_download_fout = 0
         fouten = []
+        voorbeelden_getoond = 0
 
-        periode_start = dt.date.today() - dt.timedelta(days=HISTORIE_JAREN * 365)
-
-        for i, ticker in enumerate(unieke_tickers, 1):
+        for i, ticker in enumerate(tickers, 1):
             datums = per_ticker[ticker]
-            print(f"[{i}/{len(unieke_tickers)}] {ticker} ({len(datums)} datums)")
+            print(f"[{i}/{len(tickers)}] {ticker} ({len(datums)} datums)")
 
             try:
-                # yfinance bulk-download voor deze ticker
-                df = yf.download(
-                    ticker,
-                    start=periode_start.isoformat(),
-                    progress=False,
-                    auto_adjust=True,
-                    threads=False,
-                )
-                if df is None or df.empty:
-                    n_geen_data += 1
-                    print(f"  → geen data")
-                    time.sleep(SLEEP_SEC)
-                    continue
-
-                # yfinance geeft soms MultiIndex kolommen terug
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = df.columns.get_level_values(0)
-
-                df.index = pd.to_datetime(df.index)
-
-                # Verwerk elke datum
-                for datum_str in datums:
-                    try:
-                        datum = pd.to_datetime(datum_str)
-                    except Exception:
-                        continue
-
-                    waarden = bereken_indicatoren_voor_datum(df, datum)
-                    if not waarden:
-                        n_geen_historie += 1
-                        continue
-
-                    n_verwerkt += 1
-                    rows = update_features(conn, ticker, datum, waarden)
-                    n_geupdatet += rows
-
-                if not DRY_RUN:
-                    conn.commit()
-
-                time.sleep(SLEEP_SEC)
-
+                stat = verwerk_ticker(conn, ticker, datums, index_ret)
             except Exception as e:
                 fouten.append((ticker, str(e)))
                 print(f"  → FOUT: {e}")
-                if not DRY_RUN:
-                    conn.rollback()
+                # Ook in dry-run: een mislukte SELECT laat de transactie
+                # anders in 'aborted' staan en laat alle volgende tickers falen.
+                conn.rollback()
                 time.sleep(SLEEP_SEC)
+                continue
+
+            if stat["status"] == "geen_data":
+                n_geen_data += 1
+                print("  → geen data")
+            elif stat["status"] == "download_fout":
+                n_download_fout += 1
+                fouten.append((ticker, stat["fout"]))
+                print(f"  → download mislukt: {stat['fout']}")
+            else:
+                for k in totaal:
+                    totaal[k] += stat[k]
+                if stat["n_afwijkend"]:
+                    print(f"  [INFO] {stat['n_afwijkend']} van {stat['n_controle']} "
+                          f"controlewaarden (ma50/rsi14) wijken af van de opgeslagen waarde")
+                if stat["voorbeeld"] and voorbeelden_getoond < MAX_VOORBEELDEN:
+                    d, w = stat["voorbeeld"]
+                    print(f"  voorbeeld {d}: " + ", ".join(f"{k}={v}" for k, v in w.items()))
+                    voorbeelden_getoond += 1
+
+            time.sleep(SLEEP_SEC)
 
         # Samenvatting
         print()
         print("=" * 60)
-        print("SAMENVATTING")
+        print("SAMENVATTING" + ("  (DRY RUN, niets geschreven)" if DRY_RUN else ""))
         print("=" * 60)
-        print(f"Tickers verwerkt : {len(unieke_tickers)}")
-        print(f"Rijen verwerkt   : {n_verwerkt}")
-        print(f"Features gevuld  : {n_geupdatet}")
-        print(f"Geen data        : {n_geen_data}")
-        print(f"Geen historie    : {n_geen_historie}")
+        print(f"Tickers verwerkt      : {len(tickers)}")
+        print(f"Rijen met waarden     : {totaal['n_rijen']}")
+        label = "Rijen die bijgewerkt zouden worden" if DRY_RUN else "Rijen bijgewerkt"
+        print(f"{label:<22}: {totaal['n_bijgewerkt']}")
+        print(f"Geen data (ticker)    : {n_geen_data}")
+        print(f"Download mislukt      : {n_download_fout}")
+        print(f"Geen koersbalk (datum): {totaal['n_geen_bar']}")
+        print(f"Onvolledige balk      : {totaal['n_onvolledig']}")
+        if totaal["n_controle"]:
+            pct = 100 * totaal["n_afwijkend"] / totaal["n_controle"]
+            print(f"Controle ma50/rsi14   : {totaal['n_controle']} vergeleken, "
+                  f"{totaal['n_afwijkend']} afwijkend ({pct:.1f}%)")
 
         if fouten:
             print(f"\nFouten ({len(fouten)}):")
             for t, e in fouten[:20]:
                 print(f"  {t}: {e}")
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
