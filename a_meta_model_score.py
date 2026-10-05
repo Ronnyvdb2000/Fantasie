@@ -12,6 +12,17 @@ Stuurt optioneel een Telegram-bericht met top 10 + score-verdeling.
 
 Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
 (optioneel).
+
+WIJZIGINGEN NA REVIEW (2026-10-05):
+A. bouw_telegram_bericht stond twee keer in het bestand; Python gebruikte de
+   laatste (kale) versie, dus de versie met "Toelichting" draaide nooit.
+   De kale versie is hernoemd naar bouw_telegram_bericht_kaal() en wordt
+   niet meer gebruikt (bewaard als documentatie).
+B. send_telegram controleert nu de HTTP-statuscode en print bij een fout.
+C. Beveiliging tegen scaler_std == 0 (deling door nul) bij het scoren.
+D. Diagnose in de log: per strategie hoeveel selecties wegvallen omdat een
+   feature ontbreekt (bv. geen "score"), zodat zichtbaar is welke bots niet
+   gescoord worden.
 """
 
 import os
@@ -39,12 +50,23 @@ GENERIEKE_TECHNICALS = [
 def send_telegram(tekst: str) -> None:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         return
+    # OUDE CODE (zonder statuscontrole), bewust bewaard als documentatie:
+    # try:
+    #     requests.post(
+    #         f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+    #         json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst},
+    #         timeout=10,
+    #     )
+    # except Exception as e:
+    #     print(f"Telegram fout: {e}")
     try:
-        requests.post(
+        r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst},
             timeout=10,
         )
+        if r.status_code != 200:
+            print(f"Telegram status {r.status_code}: {r.text[:200]}")
     except Exception as e:
         print(f"Telegram fout: {e}")
 
@@ -133,7 +155,10 @@ def haal_selecties(conn, features, datum=None):
         return pd.DataFrame(cur.fetchall()), datum
 
 
-def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
+# Oude, kale variant (zonder 'Toelichting'). Overschreef voorheen de
+# volledige versie hierboven doordat de naam gelijk was. Bewust bewaard
+# onder een andere naam; wordt niet aangeroepen.
+def bouw_telegram_bericht_kaal(df: pd.DataFrame, datum: str, versie: str) -> str:
     """Telegram-bericht met top 10 en score-verdeling."""
     scores = df["score"].values
     mediaan = float(np.median(scores))
@@ -187,6 +212,9 @@ def main():
         coefs = np.array(model_row["coefs"], dtype=float)
         mean = np.array(model_row["scaler_mean"], dtype=float)
         std = np.array(model_row["scaler_std"], dtype=float)
+        # Beveiliging: een schaal van 0 (constante feature) zou deling door
+        # nul geven. StandardScaler zet die normaal al op 1.0; dit is extra.
+        std = np.where(std == 0, 1.0, std)
 
         print(f"Model: {versie}")
         print(f"Horizon: {model_row['horizon_dagen']}d, features: {len(features)}")
@@ -200,7 +228,13 @@ def main():
         for k in features:
             df[k] = df[k].rank(pct=True)
 
+        voor_dropna = df
         df = df.dropna(subset=features)
+        gedropt = voor_dropna.loc[~voor_dropna.index.isin(df.index), "strategie"]
+        if len(gedropt) > 0:
+            print("Niet gescoord (feature ontbreekt), per strategie:")
+            for strat, n in gedropt.value_counts().items():
+                print(f"  {strat:<24} {n}")
         print(f"{len(df)} rijen met complete features.")
 
         X = (df[features].values - mean) / std
