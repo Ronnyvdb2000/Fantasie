@@ -1,0 +1,496 @@
+# Fantasie — Systeemoverzicht en Handleiding
+
+*Versie: 6 oktober 2026*
+
+---
+
+## 1. Wat is Fantasie?
+
+Fantasie is een geautomatiseerd aandelen-selectiesysteem dat dagelijks draait op GitHub Actions. Het combineert:
+
+- **20+ screeners** ("bots") die elk een andere beleggingsstijl hanteren
+- **Twee ML-modellen** (XGBoost V3 en V4) die de selecties rangschikken
+- **Een meta-model** (Ridge) dat bots combineert tot een eindscore
+- **Forward-return tracking** om te meten welke aanpak werkt
+- **Notificaties** via Telegram en e-mail
+
+Het doel is **beslissingsondersteuning**, niet automatische handel. De mens kiest uiteindelijk.
+
+---
+
+## 2. Architectuur in één blik
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LAAG 1 — DATA                            │
+│                                                             │
+│  bouw_generieke_technicals.py   →  technische indicatoren   │
+│  bouw_generieke_fundamentals.py →  fundamentele kengetallen │
+│  bouw_forward_returns.py        →  fwd_ret 5/10/20/30/60d   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│                 LAAG 2 — SCREENERS                          │
+│                                                             │
+│  bot_00* — fundamenteel (graham, greenblatt, Fisher, ...)   │
+│  bot_01* — technisch/momentum (hoogl, kasstr, vcp, ...)     │
+│  bot_041m, bot_041mV2 — beurs-specifieke screeners          │
+│                                                             │
+│  Allemaal schrijven ze naar tabel: selecties                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│              LAAG 3 — ML EN AGGREGATIE                      │
+│                                                             │
+│  xgboostV3.py    →  trained modellen (10d/30d/60d)          │
+│  xgboostV4.py    →  uitgebreide features + embargo          │
+│  score_xgboost.py → rangschikt dagelijkse selecties         │
+│                                                             │
+│  a_meta_model_train.py  →  Ridge combineert bots            │
+│  a_meta_model_score.py  →  scoort per dag                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│              LAAG 4 — RAPPORTAGE                            │
+│                                                             │
+│  a_trade.py              →  beste signaal (3d overlap)      │
+│  vers_signaal.py         →  verse overlap (1 dag)           │
+│  bot_combi_volatiel.py   →  gewogen ensemble                │
+│                                                             │
+│  Allemaal: Telegram + e-mail + logging naar selecties       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│              LAAG 5 — ANALYSE                               │
+│                                                             │
+│  analyse_parameter_ic.py  →  welke parameters voorspellen?  │
+│  analyse_selecties.py     →  diepere analyse van selecties  │
+│  analyse_forward_returns.py → hoe presteren de picks?       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. De database
+
+Alle data staat in **Supabase** (PostgreSQL). Verbinding via `SUPABASE_DB_URL`.
+
+### Kerntabellen
+
+| Tabel | Doel | Vult door |
+|---|---|---|
+| `generieke_technicals` | Technische indicatoren per ticker/datum (27 kolommen) | `bouw_generieke_technicals.py` |
+| `generieke_fundamentals` | Fundamentele kengetallen per ticker/datum (20 kolommen) | `bouw_generieke_fundamentals.py` |
+| `selecties` | Alle picks van alle bots (108 kolommen) | Alle bots |
+| `forward_returns` | Toekomstig rendement per pick (5/10/20/30/60d) | `bouw_forward_returns.py` |
+| `xgboost_scores` | XGBoost scores per ticker/horizon | `score_xgboost.py` |
+| `xgboost_runs` | Metadata van elke XGBoost-training | `xgboostV3.py` |
+| `meta_model_models` | Opgeslagen Ridge-coëfficiënten | `a_meta_model_train.py` |
+| `meta_model_scores` | Dagelijkse Ridge-scores | `a_meta_model_score.py` |
+| `evaluation_logs` | Historische strategie-prestaties (nog grotendeels leeg) | — |
+| `weekly_toppers` | Wekelijkse top-picks | `weekly_report.py` |
+
+### De belangrijkste relatie
+
+```
+generieke_technicals ──┐
+generieke_fundamentals ─┼──> SELECTIES ──> FORWARD_RETURNS
+xgboost_scores ────────┘      │
+                               ↓
+                     a_trade, vers_signaal, meta_model
+```
+
+---
+
+## 4. De screeners (bots)
+
+Elke bot heeft een eigen filosofie. Overzicht per categorie:
+
+### Fundamentele bots
+
+| Bot | Strategie | Bron |
+|---|---|---|
+| `bot_00graham` | Graham defensive investor | Diepe waarde, lage P/E, dividend |
+| `bot_00greenblatt` | Magic Formula | Hoge ROIC + lage P/E |
+| `bot_01graham` | Graham variant | Alternatieve parameters |
+| `bot_00Fisher` | Fisher groei-aandelen | Kwaliteit + groei |
+| `bot_00oshaughnessy` | O'Shaughnessy | Momentum + waarde |
+| `bot_01kasstr` | Kasstroom-onderwaardering | FCF-yield + 8 criteria |
+| `bot_01hoogl` | Hoog-laag spreiding | Waarderings-anomalie |
+| `bot_01marktsent` | Marktsentiment | Sentiment-indicatoren |
+| `bot_00cs`, `bot_00db` | Eigen varianten | Combinaties |
+
+### Technische bots
+
+| Bot | Strategie | Bron |
+|---|---|---|
+| `bot_00vcp` | Volatility Contraction Pattern | Minervini-stijl breakout |
+| `bot_00kr` | ATR-percentage | Volatiliteitsfilter |
+| `bot_00ms` | Moving averages | Trend-volgend |
+| `bot_01repititief` | Statistische patronen | FDR-gecorrigeerde signalen |
+| `bot_01volhunter` | Volatiliteit-jacht | Hoge-vol setups |
+| `bot_01beurssign` | Beurssignalen | Combinatie |
+| `bot_01cointegr` | Co-integratie | Pair-analyse |
+
+### Beurs-specifieke bots
+
+| Bot | Doel |
+|---|---|
+| `bot_041m`, `bot_041mV2` | Beurs 041 (Benelux) |
+| `bot_00supervar` | Supervariatie-screener |
+
+### Aggregator-bots
+
+| Bot | Doel |
+|---|---|
+| `a_trade.py` | Beste signaal via 3-dagen overlap |
+| `vers_signaal.py` | Verse overlap (1 dag) |
+| `bot_combi_volatiel.py` | Gewogen ensemble van 5 bots |
+
+---
+
+## 5. Hoe je een nieuwe bot toevoegt
+
+1. **Kopieer een bestaande bot** als template (bijv. `bot_01kasstr.py`)
+2. **Pas de logica aan** in `analyse_ticker()` of equivalent
+3. **Gebruik `db_logger.log_selectie()`** om resultaten weg te schrijven:
+
+```python
+from db_logger import log_selectie
+
+log_selectie(
+    ticker=ticker,
+    datum=today_str(),
+    strategie="bot_XXmijnbot",
+    beurs=beurs_naam,
+    koers=price,
+    parameters={
+        "score": score,
+        "eigen_parameter": waarde,
+        "grafiek": f"https://finance.yahoo.com/quote/{ticker}",
+    },
+)
+```
+
+4. **Voeg een GitHub Actions workflow toe** in `.github/workflows/`:
+
+```yaml
+name: Bot mijnbot
+on:
+  schedule:
+    - cron: "0 7 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+      EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python bot_XXmijnbot.py live
+```
+
+5. **Test lokaal** voordat je commit.
+
+---
+
+## 6. Secrets en environment variables
+
+Zet deze in **GitHub → Settings → Secrets and variables → Actions**:
+
+| Secret | Waarvoor | Verplicht |
+|---|---|---|
+| `SUPABASE_DB_URL` | Postgres connectiestring | **Ja** |
+| `TELEGRAM_TOKEN` | Bot-token van @BotFather | Optioneel |
+| `TELEGRAM_CHAT_ID` | Chat-id | Optioneel |
+| `EMAIL_USER` | Gmail-adres | Optioneel |
+| `EMAIL_PASS` | Gmail app-password | Optioneel |
+| `EMAIL_RECEIVER` | Ontvanger | Optioneel |
+
+Per bot kunnen extra env-variabelen gelden:
+
+| Variabele | Default | Effect |
+|---|---|---|
+| `LOOKBACK_DAGEN` | 3 | Hoeveel dagen terug selecties ophalen |
+| `TOP_N` | 10 | Aantal getoonde picks |
+| `AANTAL_PICKS` | 5 | Aantal picks in rapportage-bots |
+| `TRANSACTIE_BEDRAG` | 2500 | Voor kostenberekening |
+| `XGB_TARGET_MODE` | abs | `abs` of `top25` |
+| `XGB_TRAIN_FRACTIE` | 0.80 | Train/test split |
+| `FORCE_STATIC_GEWICHTEN` | 0 | Zet dynamische gewichten uit |
+| `MIN_OBSERVATIES` | 30 | Min. picks voor dynamisch gewicht |
+
+---
+
+## 7. Dagelijkse workflow
+
+Een typische productiedag verloopt zo:
+
+| Tijd (UTC) | Wat | Door |
+|---|---|---|
+| 06:00 | Technische data verversen | `bouw_generieke_technicals.py` |
+| 06:30 | Fundamentele data verversen | `bouw_generieke_fundamentals.py` |
+| 07:00–09:00 | Screeners draaien | Alle `bot_*` scripts |
+| 09:30–10:00 | ML-scoring | `score_xgboost.py`, `a_meta_model_score.py` |
+| 10:00–10:30 | Rapportage | `a_trade.py`, `vers_signaal.py`, `bot_combi_volatiel.py` |
+| 23:00 | Forward returns bijwerken | `bouw_forward_returns.py` |
+| Zondag 04:00 | Wekelijkse hertraining | `xgboostV4.py` |
+| Zondag 05:00 | Parameter-IC analyse | `analyse_parameter_ic.py` |
+
+---
+
+## 8. Interpretatie van de berichten
+
+### Van `score_xgboost.py`
+
+```
+1. BEZ.L | 30d | score 0.9061 | koers 1308.50 | 📈 Grafiek
+```
+
+- **BEZ.L** = ticker (Yahoo-formaat)
+- **30d** = horizon waarop het model is getraind
+- **score** = kans dat het aandeel boven 0 uitkomt (0-1, hoe hoger hoe beter)
+- **koers** = laatste koers
+- **Grafiek** = klikbare link naar Yahoo Finance
+
+### Van `a_trade.py`
+
+```
+🥇 BAMNB.AS (041 Benelux Ierland) 💰 Kasstr
+✅ Overlap: 4/12 — bot_00graham, bot_01hoogl, bot_01kasstr, bot_01repititief
+📊 Gem. score: 5.40
+🎯 XGBoost: rang #7 (score 0.412, 2 datums)
+💶 Laatste koers: 104.6
+```
+
+- **Overlap** = hoeveel bots hetzelfde aandeel selecteerden in de laatste 3 dagen
+- **XGBoost** = waar het ML-model het plaatst
+- **Kasstr** = voldoet aan FCF-criteria
+
+### Van `a_meta_model_score.py`
+
+```
+ 1. BAMNB.AS — bot_01hoogl_full — score +1.180 — 📈 Grafiek
+```
+
+- **score** = Ridge-voorspelling (relatief binnen de 32 selecties van vandaag)
+- Hogere scores = hoger gerangschikt door het meta-model
+
+**Belangrijk:** scores zijn **rangordes**, geen rendementsverwachtingen. Vergelijk scores binnen dezelfde dag, niet over dagen heen.
+
+---
+
+## 9. Analyse-tools
+
+### `analyse_parameter_ic.py`
+
+Berekent per parameter de voorspellende waarde (Information Coefficient) op 5/10/20/30/60d.
+
+**Output:** `results/parameter_ic_matrix.csv`
+
+| Kolom | Betekenis |
+|---|---|
+| `ic_10d` | Voorspellende waarde op 10 dagen |
+| `ir_10d` | IC-IR (hoe consistent) |
+| `hit_10d` | % datums met correct teken |
+
+**Interpretatie:**
+- `|IC| > 0.05` en `|IC-IR| > 1.0` → sterk
+- `|IC| > 0.03` en `|IC-IR| > 0.5` → bruikbaar
+- Teken +: hoge waarde = goed. Teken -: lage waarde = goed.
+
+---
+
+## 10. Onderhoud en probleemoplossing
+
+### Veelvoorkomende fouten
+
+| Fout | Oorzaak | Oplossing |
+|---|---|---|
+| `NotNullViolation` | Kolom niet gevuld die NOT NULL is | Vul de kolom, of verwijder constraint |
+| `Yahoo rate limit` | Te veel yfinance-calls | Voeg `sleep()` toe, of spreid over tijd |
+| `Script afgekapt` | Kopieerprobleem bij upload | Plak in kleinere stukken |
+| `column X does not exist` | Verkeerde kolomnaam | Check `information_schema.columns` |
+| `RuntimeError: geen geldig model` | Modelbestand ontbreekt | Draai `xgboostV3.py` opnieuw |
+
+### Als iets stopt met werken
+
+1. **Kijk naar de laatste succesvolle run** in Actions
+2. **Vergelijk de logs** met de huidige run
+3. **Zoek het verschil** in data of configuratie
+4. **Test lokaal** met dezelfde env-variabelen
+
+---
+
+## 11. Belangrijke principes
+
+### 1. De mens beslist
+
+Het systeem geeft **suggesties**, geen bevelen.
+
+### 2. Forward returns zijn de waarheid
+
+Of een bot werkt, meet je met `forward_returns`, niet met de score van vandaag.
+
+### 3. Overleef bear-markten
+
+Je testset dekt augustus-september 2026 — een dalende markt. Relatieve prestatie is wat telt.
+
+### 4. Wacht op data
+
+Met 2 maanden historie kun je geen conclusies trekken.
+
+### 5. Eén ding tegelijk
+
+Bij een fout: fix die ene fout. Bouw niet ondertussen iets nieuws.
+
+---
+
+## 12. Belangrijke bestanden
+
+### Root
+
+```
+bouw_generieke_technicals.py    — data pipeline (technisch)
+bouw_generieke_fundamentals.py  — data pipeline (fundamenteel)
+bouw_forward_returns.py         — label-tracking
+db_logger.py                    — database logger (gedeeld)
+features.py                     — feature-definities
+requirements.txt                — Python dependencies
+```
+
+### Bots (`bot_*.py`)
+
+Elk bestand bevat één screener.
+
+### ML (`x*.py`)
+
+```
+xgboostV3.py       — basismodel (productie)
+xgboostV4.py       — uitgebreid model (experimenteel)
+xLightgbmV2.py     — alternatief model
+score_xgboost.py   — scoring pipeline
+```
+
+### Aggregatie (`a_*.py`)
+
+```
+a_trade.py              — beste signaal (3d)
+a_trade_combi.py        — variant
+a_meta_model_train.py   — Ridge trainen
+a_meta_model_score.py   — Ridge scoren
+a_top_dist_sma50.py     — specifieke screener
+```
+
+### Rapportage (`weekly_*.py`, `analyse*.py`)
+
+```
+weekly_report.py               — weekrapport
+analyse_parameter_ic.py        — factor-IC analyse
+analyse_forward_returns.py     — prestatie-analyse
+analyse_selecties.py           — selectie-analyse
+```
+
+---
+
+## 13. Roadmap en mijlpalen
+
+### Komende weken
+
+- **20 oktober 2026** — Nieuwe technische features hebben genoeg data voor IC-analyse
+- **Eind oktober** — Eerste betrouwbare 5d-IC's voor `macd_hist`, `stoch_k`, `adx14`, etc.
+- **November 2026** — 30d en 60d-IC's voor nieuwe features
+
+### Komende maanden
+
+- **December 2026** — 6 maanden historie; eerste betrouwbare backtest mogelijk
+- **Begin 2027** — Genoeg data voor 30d/60d XGBoost-modellen
+- **Q1 2027** — Evaluatie van meta-model op out-of-sample data
+
+---
+
+## 14. Nuttige queries
+
+**Hoe presteert een specifieke bot?**
+
+```sql
+SELECT
+  COUNT(*) AS n,
+  ROUND(AVG(f.fwd_ret_10d)::numeric, 3) AS gem,
+  ROUND(AVG(CASE WHEN f.fwd_ret_10d > 0 THEN 1.0 ELSE 0.0 END)::numeric, 3) AS winrate
+FROM selecties s
+JOIN forward_returns f ON f.ticker = s.ticker AND f.datum = s.datum
+WHERE s.strategie = 'bot_01kasstr'
+  AND f.fwd_ret_10d IS NOT NULL
+  AND s.datum >= '2026-08-15';
+```
+
+**Welke bots hebben vandaag picks?**
+
+```sql
+SELECT strategie, COUNT(*) AS n
+FROM selecties
+WHERE datum = CURRENT_DATE
+GROUP BY strategie
+ORDER BY n DESC;
+```
+
+**Zijn er dubbele combinaties?**
+
+```sql
+SELECT ticker, datum, strategie, COUNT(*)
+FROM selecties
+GROUP BY ticker, datum, strategie
+HAVING COUNT(*) > 1
+ORDER BY COUNT(*) DESC
+LIMIT 10;
+```
+
+---
+
+## 15. Handige commando's
+
+**Lokale testrun van een bot:**
+
+```bash
+export SUPABASE_DB_URL="..."
+export TELEGRAM_TOKEN="..."
+export TELEGRAM_CHAT_ID="..."
+python bot_01kasstr.py live
+```
+
+**Syntaxcontrole:**
+
+```bash
+python -c "import ast; ast.parse(open('score_xgboost.py').read()); print('OK')"
+```
+
+**Aantal regels van een bestand:**
+
+```bash
+wc -l score_xgboost.py
+```
+
+---
+
+## 16. Belangrijkste conclusie
+
+**Het systeem is een hulpmiddel, niet een orakel. De mens is en blijft de beslisser.**
+
+Bewaar dit document goed. Als je later terugkomt met vragen, is dit het startpunt.
