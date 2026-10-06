@@ -23,11 +23,19 @@ C. Beveiliging tegen scaler_std == 0 (deling door nul) bij het scoren.
 D. Diagnose in de log: per strategie hoeveel selecties wegvallen omdat een
    feature ontbreekt (bv. geen "score"), zodat zichtbaar is welke bots niet
    gescoord worden.
+
+WIJZIGINGEN v1.1 (2026-10-06):
+E. Telegram-bericht nu in HTML-modus met klikbare Yahoo Finance-link
+   per ticker ("📈 Grafiek"), vetgedrukte ticker en score. Nieuwe
+   hulpfunctie bouw_telegram_bericht() werkt in HTML, en send_telegram()
+   verstuurt met parse_mode="HTML". De oude kale variant is verwijderd
+   (was toch niet in gebruik).
 """
 
 import os
 import sys
 import argparse
+import html
 
 import psycopg2
 import psycopg2.extras
@@ -47,22 +55,28 @@ GENERIEKE_TECHNICALS = [
 ]
 
 
+# ============================================================
+# TELEGRAM
+# ============================================================
+
+def _esc(s) -> str:
+    """Escaped speciale HTML-tekens (&, <, >)."""
+    return html.escape(str(s))
+
+
 def send_telegram(tekst: str) -> None:
+    """Verstuurt een bericht in HTML-modus (klikbare links, vet)."""
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         return
-    # OUDE CODE (zonder statuscontrole), bewust bewaard als documentatie:
-    # try:
-    #     requests.post(
-    #         f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-    #         json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst},
-    #         timeout=10,
-    #     )
-    # except Exception as e:
-    #     print(f"Telegram fout: {e}")
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst},
+            json={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": tekst,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            },
             timeout=10,
         )
         if r.status_code != 200:
@@ -70,8 +84,12 @@ def send_telegram(tekst: str) -> None:
     except Exception as e:
         print(f"Telegram fout: {e}")
 
+
 def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
-    """Telegram-bericht met top 10 en score-verdeling."""
+    """
+    Telegram-bericht (HTML) met top 10, score-verdeling en een klikbare
+    Yahoo Finance-link per ticker.
+    """
     scores = df["score"].values
     mediaan = float(np.median(scores))
     laagste = float(scores.min())
@@ -81,25 +99,38 @@ def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
     top10 = df.nlargest(10, "score")[["ticker", "strategie", "score"]]
 
     regels = [
-        f"Meta-model scores {datum}",
-        f"Model: {versie}",
-        f"Totaal: {len(df)} scores",
+        "📊 <b>Meta-model scores</b>",
         "",
-        "Top 10:",
+        f"Datum: <b>{_esc(datum)}</b>",
+        f"Model: <code>{_esc(versie)}</code>",
+        f"Totaal: <b>{len(df)}</b> scores",
+        "",
+        "<b>Top 10:</b>",
     ]
+
     for i, (_, r) in enumerate(top10.iterrows(), start=1):
-        regels.append(f"{i:>2}. {r['ticker']:<12} {r['strategie']:<22} {r['score']:+.3f}")
+        ticker = str(r["ticker"])
+        ticker_url = ticker.replace(" ", "")
+        yahoo_url = f"https://finance.yahoo.com/quote/{ticker_url}"
+
+        regels.append(
+            f"{i:>2}. "
+            f"<b>{_esc(ticker)}</b> — "
+            f"{_esc(r['strategie'])} — "
+            f"score <b>{float(r['score']):+.3f}</b> — "
+            f'<a href="{yahoo_url}">📈 Grafiek</a>'
+        )
 
     regels += [
         "",
-        "Verdeling:",
+        "<b>Verdeling:</b>",
         f"  hoogste   {hoogste:+.3f}",
         f"  mediaan   {mediaan:+.3f}",
         f"  laagste   {laagste:+.3f}",
         f"  std       {std:.3f}",
         f"  spreiding {hoogste - laagste:.3f}",
         "",
-        "Toelichting:",
+        "<b>Toelichting:</b>",
         "  mediaan   = middelste score van alle selecties;",
         "              negatief betekent dat het gros van de",
         "              selecties onder nul scoort.",
@@ -110,6 +141,11 @@ def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
         "              betekent weinig onderscheidend vermogen.",
     ]
     return "\n".join(regels)
+
+
+# ============================================================
+# DATABASE
+# ============================================================
 
 def haal_laatste_model(conn):
     query = """
@@ -155,45 +191,21 @@ def haal_selecties(conn, features, datum=None):
         return pd.DataFrame(cur.fetchall()), datum
 
 
-# Oude, kale variant (zonder 'Toelichting'). Overschreef voorheen de
-# volledige versie hierboven doordat de naam gelijk was. Bewust bewaard
-# onder een andere naam; wordt niet aangeroepen.
-def bouw_telegram_bericht_kaal(df: pd.DataFrame, datum: str, versie: str) -> str:
-    """Telegram-bericht met top 10 en score-verdeling."""
-    scores = df["score"].values
-    mediaan = float(np.median(scores))
-    laagste = float(scores.min())
-    hoogste = float(scores.max())
-    std = float(scores.std(ddof=1)) if len(scores) > 1 else 0.0
-
-    top10 = df.nlargest(10, "score")[["ticker", "strategie", "score"]]
-
-    regels = [
-        f"Meta-model scores {datum}",
-        f"Model: {versie}",
-        f"Totaal: {len(df)} scores",
-        "",
-        "Top 10:",
-    ]
-    for i, (_, r) in enumerate(top10.iterrows(), start=1):
-        regels.append(f"{i:>2}. {r['ticker']:<12} {r['strategie']:<22} {r['score']:+.3f}")
-
-    regels += [
-        "",
-        "Verdeling:",
-        f"  hoogste  {hoogste:+.3f}",
-        f"  mediaan  {mediaan:+.3f}",
-        f"  laagste  {laagste:+.3f}",
-        f"  std      {std:.3f}",
-        f"  spreiding {hoogste - laagste:.3f}",
-    ]
-    return "\n".join(regels)
-
+# ============================================================
+# MAIN
+# ============================================================
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--datum", type=str, default=None,
-                        help="Specifieke datum (YYYY-MM-DD). Default: laatste selectiedatum met technicals.")
+    parser.add_argument(
+        "--datum",
+        type=str,
+        default=None,
+        help=(
+            "Specifieke datum (YYYY-MM-DD). "
+            "Default: laatste selectiedatum met technicals."
+        ),
+    )
     args = parser.parse_args()
 
     if not SUPABASE_DB_URL:
