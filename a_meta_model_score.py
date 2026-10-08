@@ -13,23 +13,9 @@ Stuurt optioneel een Telegram-bericht met top 10 + score-verdeling.
 Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
 (optioneel).
 
-WIJZIGINGEN NA REVIEW (2026-10-05):
-A. bouw_telegram_bericht stond twee keer in het bestand; Python gebruikte de
-   laatste (kale) versie, dus de versie met "Toelichting" draaide nooit.
-   De kale versie is hernoemd naar bouw_telegram_bericht_kaal() en wordt
-   niet meer gebruikt (bewaard als documentatie).
-B. send_telegram controleert nu de HTTP-statuscode en print bij een fout.
-C. Beveiliging tegen scaler_std == 0 (deling door nul) bij het scoren.
-D. Diagnose in de log: per strategie hoeveel selecties wegvallen omdat een
-   feature ontbreekt (bv. geen "score"), zodat zichtbaar is welke bots niet
-   gescoord worden.
-
-WIJZIGINGEN v1.1 (2026-10-06):
-E. Telegram-bericht nu in HTML-modus met klikbare Yahoo Finance-link
-   per ticker ("📈 Grafiek"), vetgedrukte ticker en score. Nieuwe
-   hulpfunctie bouw_telegram_bericht() werkt in HTML, en send_telegram()
-   verstuurt met parse_mode="HTML". De oude kale variant is verwijderd
-   (was toch niet in gebruik).
+WIJZIGINGEN v1.2 (2026-10-08):
+F. Top-10 toont nu ook de koers (laatste selectiekoers) en een klikbare
+   Yahoo Finance-link per pick.
 """
 
 import os
@@ -64,6 +50,16 @@ def _esc(s) -> str:
     return html.escape(str(s))
 
 
+def _format_koers(koers) -> str:
+    """Formatteert de koers met 2 decimalen of '-' als onbekend."""
+    try:
+        if koers is None or pd.isna(koers):
+            return "-"
+        return f"{float(koers):.2f}"
+    except Exception:
+        return "-"
+
+
 def send_telegram(tekst: str) -> None:
     """Verstuurt een bericht in HTML-modus (klikbare links, vet)."""
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
@@ -87,8 +83,8 @@ def send_telegram(tekst: str) -> None:
 
 def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
     """
-    Telegram-bericht (HTML) met top 10, score-verdeling en een klikbare
-    Yahoo Finance-link per ticker.
+    Telegram-bericht (HTML) met top 10, score-verdeling, koers en een
+    klikbare Yahoo Finance-link per ticker.
     """
     scores = df["score"].values
     mediaan = float(np.median(scores))
@@ -96,7 +92,11 @@ def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
     hoogste = float(scores.max())
     std = float(scores.std(ddof=1)) if len(scores) > 1 else 0.0
 
-    top10 = df.nlargest(10, "score")[["ticker", "strategie", "score"]]
+    # Zorg dat koers er is (kan None zijn)
+    if "koers" not in df.columns:
+        df["koers"] = np.nan
+
+    top10 = df.nlargest(10, "score")[["ticker", "strategie", "score", "koers"]]
 
     regels = [
         "📊 <b>Meta-model scores</b>",
@@ -112,12 +112,14 @@ def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
         ticker = str(r["ticker"])
         ticker_url = ticker.replace(" ", "")
         yahoo_url = f"https://finance.yahoo.com/quote/{ticker_url}"
+        koers_str = _format_koers(r.get("koers"))
+        score_val = float(r["score"])
 
         regels.append(
-            f"{i:>2}. "
-            f"<b>{_esc(ticker)}</b> — "
+            f"{i:>2}. <b>{_esc(ticker)}</b> — "
             f"{_esc(r['strategie'])} — "
-            f"score <b>{float(r['score']):+.3f}</b> — "
+            f"score <b>{score_val:+.3f}</b> — "
+            f"koers {koers_str} — "
             f'<a href="{yahoo_url}">📈 Grafiek</a>'
         )
 
@@ -162,7 +164,11 @@ def haal_laatste_model(conn):
 
 def haal_selecties(conn, features, datum=None):
     """Haal selecties op voor een specifieke datum, of de laatste datum
-    waarvoor selecties EN generieke_technicals bestaan."""
+    waarvoor selecties EN generieke_technicals bestaan.
+
+    v1.2: s.koers wordt ook opgehaald, zodat het Telegram-bericht
+    de koers kan tonen.
+    """
     s = [f for f in features if f not in GENERIEKE_TECHNICALS]
     g = [f for f in features if f in GENERIEKE_TECHNICALS]
     s_lijst = ", ".join(f"s.{k}" for k in s)
@@ -179,8 +185,9 @@ def haal_selecties(conn, features, datum=None):
             datum = cur.fetchone()[0]
     print(f"Scoren voor datum: {datum}")
 
+    # v1.2: s.koers toegevoegd
     query = f"""
-        SELECT s.ticker, s.datum, s.strategie, {s_lijst}{g_lijst}
+        SELECT s.ticker, s.datum, s.strategie, s.koers, {s_lijst}{g_lijst}
         FROM selecties s
         LEFT JOIN generieke_technicals g
           ON s.ticker = g.ticker AND s.datum = g.datum
@@ -270,7 +277,7 @@ def main():
         conn.commit()
         print(f"{len(rijen)} scores opgeslagen in meta_model_scores.")
 
-        top = df.nlargest(10, "score")[["ticker", "strategie", "score"]]
+        top = df.nlargest(10, "score")[["ticker", "strategie", "score", "koers"]]
         print("\nTop 10 scores:")
         print(top.to_string(index=False))
 
