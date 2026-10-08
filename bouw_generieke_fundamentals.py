@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bouw_generieke_fundamentals.py  —  GEDEELDE FUNDAMENTELE PARAMETERS  v1.0
+bouw_generieke_fundamentals.py  —  GEDEELDE FUNDAMENTELE PARAMETERS  v1.1
 
 DOEL
 ====
@@ -25,6 +25,30 @@ Daarom verwerkt dit script UITSLUITEND (ticker, datum)-paren met een datum
 binnen RECENTE_DAGEN_LIMIET dagen vóór vandaag. Een selectie die ouder is
 en nog geen rij heeft, krijgt er NOOIT een -- dat is bewust, geen bug.
 
+WIJZIGINGEN v1.1 (2026-10-08) -- n.a.v. een groeiende "nog te gaan"-teller
+====================================================================
+1. VOLGORDE: tickers worden niet langer alfabetisch gekozen
+   (sorted(per_ticker.keys())[:MAX]) maar OUDSTE openstaande datum eerst.
+   Alfabetisch liet tickers laat in het alfabet telkens achteraan staan
+   terwijl nieuwe selecties van vroege letters er telkens voor schoven; die
+   vielen dan uit het venster van RECENTE_DAGEN_LIMIET en kregen NOOIT een
+   rij. (Zelfde fix als eerder in bouw_forward_returns.py.)
+2. HERGEBRUIK: heeft een ticker binnen HERGEBRUIK_DAGEN al een rij in
+   generieke_fundamentals, dan worden die waarden gekopieerd naar de nieuwe
+   openstaande datum(s) i.p.v. opnieuw 4 yfinance-calls te doen. Fundamentals
+   veranderen niet binnen een paar dagen. Gekopieerde tickers tellen NIET mee
+   voor MAX_TICKERS_PER_RUN (dat begrenst enkel echte yfinance-fetches).
+3. RATE LIMIT: na RL_DREMPEL opeenvolgende rate-limit-fouten wordt gepauzeerd
+   (RL_PAUZE_SEC), max RL_MAX_PAUZES keer; daarna stopt de run bewust i.p.v.
+   de rest zinloos te blijven proberen.
+4. RAPPORTAGE: het Telegram-bericht toont nu apart opgehaald / hergebruikt /
+   mislukt / nog te gaan. Voorheen telde "verwerkt" ook mislukte tickers mee.
+
+NIET gewijzigd: tickers zonder bruikbare data (geen marktkap, delisted)
+schrijven nog steeds GEEN rij en komen dus elke run terug tot ze uit het
+venster vallen. Dat te vermijden vraagt een "geprobeerd"-markering in de
+tabel; daarvoor is de tabeldefinitie (NOT NULL-kolommen) nodig.
+
 HERGEBRUIKTE LOGICA (bewust niet opnieuw uitgevonden):
 - Piotroski F-Score (0-9): identieke implementatie als bot_01kasstr.py /
   bot_00graham.py (welke op hun beurt identiek zijn aan elkaar).
@@ -33,21 +57,18 @@ HERGEBRUIKTE LOGICA (bewust niet opnieuw uitgevonden):
 - EPS-groei (totaal) + EPS-CAGR (jaarlijks) + PEG-ratio: overgenomen uit
   bot_00graham.py.
 
-Per ticker kost dit tot 4 yfinance-calls (info, cashflow, balance_sheet,
-financials) -- net als bot_00graham.py, dus merkelijk zwaarder per ticker
-dan bouw_generieke_technicals.py (dat enkel prijs/volumehistoriek nodig
-heeft). De RECENTE_DAGEN_LIMIET + het feit dat éénzelfde ticker binnen die
-periode maar ÉÉN keer bevraagd wordt (ongeacht hoeveel keer of door hoeveel
-strategieën hij recent geselecteerd werd) houdt het volume beheersbaar.
+Per ticker kost een echte fetch tot 4 yfinance-calls (info, cashflow,
+balance_sheet, financials) -- net als bot_00graham.py, dus merkelijk zwaarder
+per ticker dan bouw_generieke_technicals.py.
 
 GEBRUIK
 =======
   python bouw_generieke_fundamentals.py build
 
 Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
-(optioneel), MAX_TICKERS_PER_RUN (default 300 -- lager dan de technicals-
-variant omdat elke ticker hier tot 4x zoveel yfinance-calls kost),
-RECENTE_DAGEN_LIMIET (default 5)
+(optioneel), MAX_TICKERS_PER_RUN (default 400), RECENTE_DAGEN_LIMIET
+(default 5), HERGEBRUIK_DAGEN (default 3), RL_DREMPEL (default 5),
+RL_PAUZE_SEC (default 60), RL_MAX_PAUZES (default 2)
 """
 
 import os
@@ -55,7 +76,7 @@ import sys
 import math
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import psycopg2
 import psycopg2.extras
@@ -67,6 +88,11 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "400"))
 RECENTE_DAGEN_LIMIET = int(os.environ.get("RECENTE_DAGEN_LIMIET", "5"))
+HERGEBRUIK_DAGEN = int(os.environ.get("HERGEBRUIK_DAGEN", "3"))
+
+RL_DREMPEL = int(os.environ.get("RL_DREMPEL", "5"))
+RL_PAUZE_SEC = float(os.environ.get("RL_PAUZE_SEC", "60"))
+RL_MAX_PAUZES = int(os.environ.get("RL_MAX_PAUZES", "2"))
 
 FCF_MIN_YEARS = 2
 
@@ -95,6 +121,11 @@ def safe_float(val, default: float = float("nan")) -> float:
         return default if math.isnan(f) else f
     except Exception:
         return default
+
+
+def is_rate_limit_fout(e: Exception) -> bool:
+    tekst = str(e)
+    return "Too Many Requests" in tekst or "Rate limited" in tekst
 
 
 # --------------------------------------------------------------------------
@@ -212,17 +243,21 @@ def _piotroski_f_score(tk, cashflow) -> int:
 # --------------------------------------------------------------------------
 # Kern: alle fundamentals voor één ticker in één keer ophalen
 # --------------------------------------------------------------------------
-def haal_fundamentals_op(ticker: str) -> Optional[dict]:
+def haal_fundamentals_op(ticker: str) -> Tuple[Optional[dict], str]:
+    """Retourneert (fundamentals, reden). reden is "ok", "geen_data",
+    "rate_limit" of "fout"; fundamentals is enkel gevuld bij "ok"."""
     try:
         tk = yf.Ticker(ticker)
         info = tk.info or {}
     except Exception as e:
+        if is_rate_limit_fout(e):
+            return None, "rate_limit"
         print(f"  [WARN] {ticker}: info-ophalen mislukt ({e})")
-        return None
+        return None, "fout"
 
     market_cap = safe_float(info.get("marketCap"))
     if math.isnan(market_cap) or market_cap <= 0:
-        return None
+        return None, "geen_data"
 
     try:
         cashflow = tk.cashflow
@@ -305,7 +340,7 @@ def haal_fundamentals_op(ticker: str) -> Optional[dict]:
         "eps_growth_pct": rond(eps_growth_pct, 1),
         "eps_cagr_pct": rond(eps_cagr_pct, 1),
         "peg_ratio": rond(peg_ratio, 2),
-    }
+    }, "ok"
 
 
 # --------------------------------------------------------------------------
@@ -326,6 +361,24 @@ def haal_openstaande_paren(conn) -> List[dict]:
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(query, {"cutoff": cutoff})
         return cur.fetchall()
+
+
+def haal_recente_rijen(conn, tickers: List[str]) -> Dict[str, dict]:
+    """Per ticker de meest recente bestaande rij binnen HERGEBRUIK_DAGEN
+    (om te kopiëren i.p.v. opnieuw op te halen)."""
+    if not tickers:
+        return {}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=HERGEBRUIK_DAGEN)).strftime("%Y-%m-%d")
+    query = """
+        SELECT DISTINCT ON (ticker) *
+        FROM generieke_fundamentals
+        WHERE ticker = ANY(%(tickers)s)
+          AND datum::date >= %(cutoff)s
+        ORDER BY ticker, datum DESC;
+    """
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(query, {"tickers": tickers, "cutoff": cutoff})
+        return {r["ticker"]: dict(r) for r in cur.fetchall()}
 
 
 # --------------------------------------------------------------------------
@@ -383,33 +436,95 @@ def run_build():
         for r in open_paren:
             per_ticker.setdefault(r["ticker"], []).append(r["datum"])
 
-        tickers = sorted(per_ticker.keys())[:MAX_TICKERS_PER_RUN]
-        overgeslagen = len(per_ticker) - len(tickers)
-        print(f"{len(tickers)} unieke tickers te verwerken dit run"
-              + (f" ({overgeslagen} tickers volgen in een volgend run)" if overgeslagen > 0 else ""))
+        # OUD (alfabetisch: late letters verhongerden en vielen uit het venster):
+        # tickers = sorted(per_ticker.keys())[:MAX_TICKERS_PER_RUN]
+        # NIEUW: oudste openstaande datum eerst, daarna alfabetisch als tiebreak.
+        volgorde = sorted(per_ticker.keys(), key=lambda t: (min(per_ticker[t]), t))
 
-        totaal_bijgewerkt = 0
+        # --- Hergebruik: ticker heeft al een recente rij -> kopiëren, geen yfinance ---
+        recent = haal_recente_rijen(conn, volgorde)
+        hergebruikte_rijen = 0
+        hergebruikte_tickers = 0
+        te_fetchen: List[str] = []
+        for t in volgorde:
+            if t in recent:
+                basis = {k: recent[t].get(k) for k in KOLOMMEN if k not in ("ticker", "datum")}
+                rijen = [{"ticker": t, "datum": d, **basis} for d in per_ticker[t]]
+                hergebruikte_rijen += upsert_rijen(conn, rijen)
+                hergebruikte_tickers += 1
+            else:
+                te_fetchen.append(t)
+
+        tickers = te_fetchen[:MAX_TICKERS_PER_RUN]
+        print(f"{hergebruikte_tickers} tickers hergebruikt van een recente rij (geen yfinance-calls), "
+              f"{len(tickers)} tickers worden nu echt opgehaald "
+              f"({len(te_fetchen) - len(tickers)} blijven over voor een volgend run).")
+
+        opgehaald_ok = 0
+        totaal_bijgewerkt = hergebruikte_rijen
+        geen_data = 0
+        fouten = 0
+        rate_limit_fouten = 0
+        rl_achtereen = 0
+        pauzes = 0
+        vroegtijdig_gestopt = False
+        geprobeerd = 0
+
         for i, ticker in enumerate(tickers, start=1):
             # ÉÉN fundamentals-ophaling per ticker, hergebruikt voor elke
             # recente datum waarop die ticker geselecteerd werd -- fundamentals
             # veranderen niet binnen een paar dagen, dus dit bespaart calls
             # zonder de "geen backfill van oude data"-garantie te schenden.
-            fundamentals = haal_fundamentals_op(ticker)
-            if fundamentals is not None:
+            fundamentals, reden = haal_fundamentals_op(ticker)
+            geprobeerd += 1
+
+            if reden == "ok":
                 rijen = [{"ticker": ticker, "datum": d, **fundamentals} for d in per_ticker[ticker]]
                 totaal_bijgewerkt += upsert_rijen(conn, rijen)
-            else:
+                opgehaald_ok += 1
+                rl_achtereen = 0
+            elif reden == "rate_limit":
+                rate_limit_fouten += 1
+                rl_achtereen += 1
+            elif reden == "geen_data":
+                geen_data += 1
+                rl_achtereen = 0
                 print(f"  [WARN] {ticker}: geen bruikbare fundamentals, overgeslagen")
+            else:
+                fouten += 1
+                rl_achtereen = 0
+
+            if rl_achtereen >= RL_DREMPEL:
+                if pauzes >= RL_MAX_PAUZES:
+                    print(f"[RATE LIMIT] pauzebudget ({RL_MAX_PAUZES}x{RL_PAUZE_SEC:.0f}s) uitgeput -- "
+                          f"run stopt bewust vroegtijdig.")
+                    vroegtijdig_gestopt = True
+                    break
+                pauzes += 1
+                print(f"[RATE LIMIT] {rl_achtereen} opeenvolgende fouten (laatste: {ticker}) -- "
+                      f"pauze {RL_PAUZE_SEC:.0f}s ({pauzes}/{RL_MAX_PAUZES})")
+                time.sleep(RL_PAUZE_SEC)
+                rl_achtereen = 0
+
             if i % 25 == 0 or i == len(tickers):
-                print(f"  {i}/{len(tickers)} tickers verwerkt...")
+                print(f"  {i}/{len(tickers)} tickers geprobeerd...")
             time.sleep(0.15)
 
-        send_telegram(
-            f"📊 *Generieke Fundamentals — {vandaag()}*\n\n"
-            f"{totaal_bijgewerkt} (ticker, datum)-rijen bijgewerkt\n"
-            f"{len(tickers)} unieke tickers verwerkt dit run"
-            + (f" ({overgeslagen} tickers nog te gaan)" if overgeslagen > 0 else "")
-        )
+        mislukt = geen_data + fouten + rate_limit_fouten
+        nog_te_gaan = len(te_fetchen) - geprobeerd
+
+        regels = [
+            f"📊 *Generieke Fundamentals — {vandaag()}*",
+            "",
+            f"{totaal_bijgewerkt} (ticker, datum)-rijen bijgewerkt",
+            f"{opgehaald_ok} tickers opgehaald, {hergebruikte_tickers} hergebruikt",
+            f"{mislukt} mislukt (geen data {geen_data}, rate limit {rate_limit_fouten}, overig {fouten})",
+        ]
+        if nog_te_gaan > 0:
+            regels.append(f"{nog_te_gaan} tickers nog te gaan")
+        if vroegtijdig_gestopt:
+            regels.append("⚠️ vroegtijdig gestopt wegens Yahoo rate limiting")
+        send_telegram("\n".join(regels))
         print(f"\nKlaar. {totaal_bijgewerkt} rijen bijgewerkt.")
     finally:
         conn.close()
