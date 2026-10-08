@@ -66,7 +66,7 @@ GEBRUIK
   python bouw_generieke_fundamentals.py build
 
 Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
-(optioneel), MAX_TICKERS_PER_RUN (default 400), RECENTE_DAGEN_LIMIET
+(optioneel), MAX_TICKERS_PER_RUN (default 600), RECENTE_DAGEN_LIMIET
 (default 5), HERGEBRUIK_DAGEN (default 3), RL_DREMPEL (default 5),
 RL_PAUZE_SEC (default 60), RL_MAX_PAUZES (default 2)
 """
@@ -86,7 +86,7 @@ import requests
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "400"))
+MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "600"))
 RECENTE_DAGEN_LIMIET = int(os.environ.get("RECENTE_DAGEN_LIMIET", "5"))
 HERGEBRUIK_DAGEN = int(os.environ.get("HERGEBRUIK_DAGEN", "3"))
 
