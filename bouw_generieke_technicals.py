@@ -71,7 +71,7 @@ GEBRUIK
   python bouw_generieke_technicals.py build
 
 Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
-(optioneel), MAX_TICKERS_PER_RUN (default 400), REFERENTIE_INDEX
+(optioneel), MAX_TICKERS_PER_RUN (default 600), REFERENTIE_INDEX
 (default "^GSPC" -- S&P500; pas aan indien elders in het project een
 andere index als marktreferentie gebruikt wordt, bv. voor markt_ret_5d)
 """
@@ -93,7 +93,7 @@ import requests
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "400"))
+MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "600"))
 # LET OP: nog niet bevestigd of dit overeenkomt met de index die elders in
 # het project (bv. markt_ret_5d in selecties) al gebruikt wordt -- pas aan
 # indien dat een andere index is, voor consistentie tussen beide.
