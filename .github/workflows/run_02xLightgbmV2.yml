@@ -1,4 +1,4 @@
-name: XLightGBM V1 training
+name: XLightGBM V2 training
 
 on:
   workflow_dispatch:
