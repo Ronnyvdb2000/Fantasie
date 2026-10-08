@@ -14,6 +14,12 @@ Wijzigingen t.o.v. v5:
   - Alle overige logica (opwarm-retry, trechter, retry-backoff, ATR-filter,
     rapportage) is ONGEWIJZIGD t.o.v. v5.
 
+Fix (2026-10-08): hoogl.analyse_ticker() retourneert sinds de rate-limit-
+backoff een tuple (signaal, was_rate_limited). selecties_hoogl() verwachtte
+nog een los signaal en crashte met "AttributeError: 'tuple' object has no
+attribute 'score'". Opgelost via _hoogl_analyse_met_retry(). kasstr en fisher
+zijn ongewijzigd (hun analyse_ticker is niet nagekeken).
+
 Ratio: wegen op Sharpe i.p.v. ruwe return compenseert voor strategieën
 met veel variantie (zoals bot_00oshaughnessy met n=24 en gem +1.54% maar
 grote uitschieters).
@@ -346,6 +352,21 @@ def selecties_fisher(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[
     return result
 
 
+def _hoogl_analyse_met_retry(ticker: str, cfg: dict):
+    """hoogl.analyse_ticker retourneert (signaal, was_rate_limited).
+    Probeert opnieuw met backoff bij rate limiting en geeft enkel het
+    signaal (of None) terug, zodat de aanroeper niet hoeft te unpacken."""
+    for poging in range(RETRY_POGINGEN):
+        sig, was_rate_limited = hoogl.analyse_ticker(ticker, cfg)
+        if not was_rate_limited:
+            return sig
+        if poging < RETRY_POGINGEN - 1:
+            wacht = RETRY_BASIS_WACHT * (2 ** poging)
+            print(f"  [retry] hoogl {ticker}: rate limited, wacht {wacht:.0f}s (poging {poging+1}/{RETRY_POGINGEN})...")
+            time.sleep(wacht)
+    return None
+
+
 def selecties_hoogl(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
     totaal = sum(len(s) for s in shortlist_per_beurs.values())
     print(f"[hoogl] Fundamentals per ticker (live yfinance-calls) — {totaal} tickers op shortlist...")
@@ -354,7 +375,9 @@ def selecties_hoogl(shortlist_per_beurs: Dict[str, Set[str]]) -> Dict[str, Set[s
     for ex_name, shortlist in shortlist_per_beurs.items():
         geselecteerd = set()
         for ticker in shortlist:
-            sig = met_retry(lambda t=ticker: hoogl.analyse_ticker(t, cfg), ticker, "hoogl")
+            # OUD (crashte: analyse_ticker retourneert een tuple):
+            # sig = met_retry(lambda t=ticker: hoogl.analyse_ticker(t, cfg), ticker, "hoogl")
+            sig = _hoogl_analyse_met_retry(ticker, cfg)
             if sig is not None and sig.score >= cfg["min_score"]:
                 geselecteerd.add(ticker)
             time.sleep(cfg["throttle_sec"])
