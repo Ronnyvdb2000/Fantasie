@@ -2,8 +2,40 @@ name: XLightGBM V2 training
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Target-mode: excess (mediaan) of abs (>0)"
+        required: false
+        default: "excess"
+        type: choice
+        options:
+          - excess
+          - abs
+      horizons:
+        description: "Horizons (komma-gescheiden, bv. 10d,30d)"
+        required: false
+        default: "10d,30d,60d"
+        type: string
+      exclude_strategie:
+        description: "Uitsluiten strategieën (komma-gescheiden)"
+        required: false
+        default: ""
+        type: string
+      strict:
+        description: "Falen als niet alle horizons getraind zijn"
+        required: false
+        default: false
+        type: boolean
+      geen_notify:
+        description: "Geen Telegram/e-mail versturen"
+        required: false
+        default: false
+        type: boolean
+
   schedule:
-    - cron: "0 6 * * *"
+    # Wekelijks op zondag 04:00 UTC
+    - cron: "0 4 * * 0"
+
   push:
     paths:
       - "xLightgbmV2.py"
@@ -16,7 +48,7 @@ jobs:
   run-lightgbm:
     name: run-lightgbm
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
@@ -26,6 +58,7 @@ jobs:
       EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
       EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      ARTIFACT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
       - name: Checkout
@@ -55,33 +88,61 @@ jobs:
             echo "FOUT: SUPABASE_DB_URL secret ontbreekt"
             exit 1
           fi
+          echo "SUPABASE_DB_URL is gezet (lengte: ${#SUPABASE_DB_URL})"
 
       - name: Run LightGBM V2 training
         run: |
           mkdir -p results
-          python xLightgbmV2.py
+
+          # Bouw de command-line op basis van inputs
+          ARGS=""
+
+          if [ -n "${{ github.event.inputs.target }}" ]; then
+            ARGS="$ARGS --target ${{ github.event.inputs.target }}"
+          fi
+
+          if [ -n "${{ github.event.inputs.horizons }}" ]; then
+            ARGS="$ARGS --horizons ${{ github.event.inputs.horizons }}"
+          fi
+
+          if [ -n "${{ github.event.inputs.exclude_strategie }}" ]; then
+            ARGS="$ARGS --exclude-strategie ${{ github.event.inputs.exclude_strategie }}"
+          fi
+
+          if [ "${{ github.event.inputs.strict }}" = "true" ]; then
+            ARGS="$ARGS --strict"
+          fi
+
+          if [ "${{ github.event.inputs.geen_notify }}" = "true" ]; then
+            ARGS="$ARGS --geen-notify"
+          fi
+
+          echo "Command: python xLightgbmV2.py $ARGS"
+          python xLightgbmV2.py $ARGS
 
       - name: Controle LightGBM modellen
         if: always()
         run: |
+          echo "Controle LightGBM modellen:"
           shopt -s nullglob
           modellen=(results/lightgbmV2_*_model.pkl)
           if [ ${#modellen[@]} -eq 0 ]; then
             echo "WAARSCHUWING: geen enkel model gegenereerd."
           else
             for m in "${modellen[@]}"; do
-              echo "OK: $(basename "$m")"
+              echo "OK: $(basename "$m") ($(stat -c%s "$m") bytes)"
             done
           fi
           echo ""
-          ls -lh results/ || true
+          echo "Bestanden in results/:"
+          ls -lh results/ || echo "(geen bestanden)"
 
       - name: Upload artifact
         if: always()
         id: upload
         uses: actions/upload-artifact@v5
         with:
-          name: lightgbmV2-results
+          name: lightgbmV2-results-${{ github.run_id }}
           path: results/
-          retention-days: 30
+          retention-days: 90
           if-no-files-found: warn
