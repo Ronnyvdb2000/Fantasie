@@ -1,53 +1,16 @@
-name: XLightGBM V2 training
+name: XLightGBM V1 training
 
 on:
   workflow_dispatch:
-    inputs:
-      target:
-        description: "Target-mode: excess (mediaan) of abs (>0)"
-        required: false
-        default: "excess"
-        type: choice
-        options:
-          - excess
-          - abs
-      horizons:
-        description: "Horizons (komma-gescheiden, bv. 10d,30d)"
-        required: false
-        default: "10d,30d,60d"
-        type: string
-      exclude_strategie:
-        description: "Uitsluiten strategieën (komma-gescheiden)"
-        required: false
-        default: ""
-        type: string
-      strict:
-        description: "Falen als niet alle horizons getraind zijn"
-        required: false
-        default: false
-        type: boolean
-      geen_notify:
-        description: "Geen Telegram/e-mail versturen"
-        required: false
-        default: false
-        type: boolean
 
-  schedule:
-    # Wekelijks op zondag 04:00 UTC
-    - cron: "0 4 * * 0"
-
-  push:
-    paths:
-      - "xLightgbmV2.py"
-      - ".github/workflows/lightgbm.yml"
-
-permissions:
-  contents: read
+  # Schedule staat uit. Zet terug aan wanneer je V1 periodiek wilt draaien.
+  # schedule:
+  #   - cron: "0 21 * * *"
 
 jobs:
   run-lightgbm:
     name: run-lightgbm
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
 
     env:
@@ -58,14 +21,13 @@ jobs:
       EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
       EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      ARTIFACT_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
@@ -80,9 +42,20 @@ jobs:
             lightgbm==4.6.0 \
             joblib==1.4.2 \
             psycopg2-binary==2.9.10 \
-            requests==2.32.3
+            requests==2.34.2
 
-      - name: Check secret
+      - name: Controleer versies
+        run: |
+          python --version
+          python -c "import numpy; print('numpy', numpy.__version__)"
+          python -c "import pandas; print('pandas', pandas.__version__)"
+          python -c "import sklearn; print('scikit-learn', sklearn.__version__)"
+          python -c "import lightgbm; print('lightgbm', lightgbm.__version__)"
+          python -c "import joblib; print('joblib', joblib.__version__)"
+          python -c "import psycopg2; print('psycopg2 OK')"
+          python -c "import requests; print('requests', requests.__version__)"
+
+      - name: Controleer secret
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
             echo "FOUT: SUPABASE_DB_URL secret ontbreekt"
@@ -90,42 +63,18 @@ jobs:
           fi
           echo "SUPABASE_DB_URL is gezet (lengte: ${#SUPABASE_DB_URL})"
 
-      - name: Run LightGBM V2 training
-        run: |
-          mkdir -p results
+      - name: Maak results-map
+        run: mkdir -p results
 
-          # Bouw de command-line op basis van inputs
-          ARGS=""
-
-          if [ -n "${{ github.event.inputs.target }}" ]; then
-            ARGS="$ARGS --target ${{ github.event.inputs.target }}"
-          fi
-
-          if [ -n "${{ github.event.inputs.horizons }}" ]; then
-            ARGS="$ARGS --horizons ${{ github.event.inputs.horizons }}"
-          fi
-
-          if [ -n "${{ github.event.inputs.exclude_strategie }}" ]; then
-            ARGS="$ARGS --exclude-strategie ${{ github.event.inputs.exclude_strategie }}"
-          fi
-
-          if [ "${{ github.event.inputs.strict }}" = "true" ]; then
-            ARGS="$ARGS --strict"
-          fi
-
-          if [ "${{ github.event.inputs.geen_notify }}" = "true" ]; then
-            ARGS="$ARGS --geen-notify"
-          fi
-
-          echo "Command: python xLightgbmV2.py $ARGS"
-          python xLightgbmV2.py $ARGS
+      - name: Run LightGBM V1
+        run: python xLightgbm.py
 
       - name: Controle LightGBM modellen
         if: always()
         run: |
           echo "Controle LightGBM modellen:"
           shopt -s nullglob
-          modellen=(results/lightgbmV2_*_model.pkl)
+          modellen=(results/lightgbmV1_*_model.pkl)
           if [ ${#modellen[@]} -eq 0 ]; then
             echo "WAARSCHUWING: geen enkel model gegenereerd."
           else
@@ -137,12 +86,11 @@ jobs:
           echo "Bestanden in results/:"
           ls -lh results/ || echo "(geen bestanden)"
 
-      - name: Upload artifact
+      - name: Upload results
         if: always()
-        id: upload
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
-          name: lightgbmV2-results-${{ github.run_id }}
+          name: lightgbmV1-results-${{ github.run_id }}
           path: results/
-          retention-days: 90
+          retention-days: 30
           if-no-files-found: warn
