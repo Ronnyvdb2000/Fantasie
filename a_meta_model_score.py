@@ -13,27 +13,10 @@ Stuurt optioneel een Telegram-bericht met top 10 + score-verdeling.
 Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
 (optioneel).
 
-WIJZIGINGEN NA REVIEW (2026-10-05):
-A. bouw_telegram_bericht stond twee keer in het bestand; Python gebruikte de
-   laatste (kale) versie, dus de versie met "Toelichting" draaide nooit.
-   De kale versie is hernoemd naar bouw_telegram_bericht_kaal() en wordt
-   niet meer gebruikt (bewaard als documentatie).
-B. send_telegram controleert nu de HTTP-statuscode en print bij een fout.
-C. Beveiliging tegen scaler_std == 0 (deling door nul) bij het scoren.
-D. Diagnose in de log: per strategie hoeveel selecties wegvallen omdat een
-   feature ontbreekt (bv. geen "score"), zodat zichtbaar is welke bots niet
-   gescoord worden.
-
-WIJZIGINGEN v1.1 (2026-10-06):
-E. Telegram-bericht nu in HTML-modus met klikbare Yahoo Finance-link
-   per ticker ("📈 Grafiek"), vetgedrukte ticker en score. Nieuwe
-   hulpfunctie bouw_telegram_bericht() werkt in HTML, en send_telegram()
-   verstuurt met parse_mode="HTML". De oude kale variant is verwijderd
-   (was toch niet in gebruik).
-
-WIJZIGINGEN v1.2 (2026-10-08):
-F. Top-10 toont nu ook de koers (laatste selectiekoers uit de
-   selecties-tabel) naast de score en de klikbare Yahoo-link.
+WIJZIGINGEN v1.3 (2026-10-09):
+G. Fix: 'Kleine spreiding (<1)' werd door Telegram's HTML-parser gelezen
+   als het begin van een HTML-tag → Bad Request 400. Vervangen door
+   '&lt;1' (HTML-entiteit voor '<').
 """
 
 import os
@@ -157,7 +140,7 @@ def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
         "  std       = standaardafwijking; hoe hoger, hoe",
         "              meer de scores uit elkaar liggen.",
         "  spreiding = hoogste - laagste; grootte van de",
-        "              bandbreedte. Kleine spreiding (<1)",
+        "              bandbreedte. Kleine spreiding (&lt;1)",
         "              betekent weinig onderscheidend vermogen.",
     ]
     return "\n".join(regels)
