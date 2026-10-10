@@ -2,21 +2,20 @@
 # -*- coding: utf-8 -*-
 """
 a_meta_model_score.py — berekent meta-model scores voor de laatste
-selectie-datum (of een opgegeven datum) en schrijft ze naar
-meta_model_scores.
+selectie-datum en schrijft ze naar meta_model_scores.
 
-Gebruikt het nieuwste model uit meta_model_models. Past dezelfde
-cross-sectionele ranking en scaler toe als tijdens training.
+Stuurt Telegram met top 10 + koers + klikbare Yahoo-link per pick.
 
-Stuurt optioneel een Telegram-bericht met top 10 + score-verdeling.
+Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID.
 
-Env vars: SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID
-(optioneel).
-
-WIJZIGINGEN v1.3 (2026-10-09):
-G. Fix: 'Kleine spreiding (<1)' werd door Telegram's HTML-parser gelezen
-   als het begin van een HTML-tag → Bad Request 400. Vervangen door
-   '&lt;1' (HTML-entiteit voor '<').
+WIJZIGINGEN v1.4 (2026-10-10):
+I. LATERAL JOIN in haal_selecties: features komen nu uit de meest recente
+   technische rij OP OF VÓÓR de selectiedatum, niet per se dezelfde
+   datum. Voorkomt dat weekend-selecties zonder technische data worden
+   overgeslagen.
+J. Waarschuwing in Telegram wanneer minder dan MIN_COMPLETE_RIJEN
+   selecties complete features hebben (i.p.v. stilte of 1 pick).
+   Bij 0 complete rijen: geen score-bericht, alleen een alert.
 """
 
 import os
@@ -41,18 +40,19 @@ GENERIEKE_TECHNICALS = [
     "pct_from_ma50", "pct_from_ma200", "vol_ratio_20d", "high52w", "pct_from_high52w",
 ]
 
+# Waarschuwingsdrempel
+MIN_COMPLETE_RIJEN = 10
+
 
 # ============================================================
 # TELEGRAM
 # ============================================================
 
 def _esc(s) -> str:
-    """Escaped speciale HTML-tekens (&, <, >)."""
     return html.escape(str(s))
 
 
 def _format_koers(koers) -> str:
-    """Formatteert de koers met 2 decimalen of '-' als onbekend."""
     try:
         if koers is None or pd.isna(koers):
             return "-"
@@ -61,10 +61,10 @@ def _format_koers(koers) -> str:
         return "-"
 
 
-def send_telegram(tekst: str) -> None:
-    """Verstuurt een bericht in HTML-modus (klikbare links, vet)."""
+def send_telegram(tekst: str) -> bool:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        return
+        print("[Telegram] Secrets ontbreken — bericht NIET verstuurd.")
+        return False
     try:
         r = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
@@ -77,23 +77,22 @@ def send_telegram(tekst: str) -> None:
             timeout=10,
         )
         if r.status_code != 200:
-            print(f"Telegram status {r.status_code}: {r.text[:200]}")
+            print(f"[Telegram] FOUT {r.status_code}: {r.text[:200]}")
+            return False
+        print("[Telegram] Bericht verzonden.")
+        return True
     except Exception as e:
-        print(f"Telegram fout: {e}")
+        print(f"[Telegram] Exception: {e}")
+        return False
 
 
 def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
-    """
-    Telegram-bericht (HTML) met top 10, score-verdeling, koers en een
-    klikbare Yahoo Finance-link per ticker.
-    """
     scores = df["score"].values
     mediaan = float(np.median(scores))
     laagste = float(scores.min())
     hoogste = float(scores.max())
     std = float(scores.std(ddof=1)) if len(scores) > 1 else 0.0
 
-    # Zorg dat koers er is (kan None zijn)
     if "koers" not in df.columns:
         df["koers"] = np.nan
 
@@ -132,16 +131,6 @@ def bouw_telegram_bericht(df: pd.DataFrame, datum: str, versie: str) -> str:
         f"  laagste   {laagste:+.3f}",
         f"  std       {std:.3f}",
         f"  spreiding {hoogste - laagste:.3f}",
-        "",
-        "<b>Toelichting:</b>",
-        "  mediaan   = middelste score van alle selecties;",
-        "              negatief betekent dat het gros van de",
-        "              selecties onder nul scoort.",
-        "  std       = standaardafwijking; hoe hoger, hoe",
-        "              meer de scores uit elkaar liggen.",
-        "  spreiding = hoogste - laagste; grootte van de",
-        "              bandbreedte. Kleine spreiding (&lt;1)",
-        "              betekent weinig onderscheidend vermogen.",
     ]
     return "\n".join(regels)
 
@@ -164,34 +153,54 @@ def haal_laatste_model(conn):
 
 
 def haal_selecties(conn, features, datum=None):
-    """Haal selecties op voor een specifieke datum, of de laatste datum
-    waarvoor selecties EN generieke_technicals bestaan.
+    """
+    Haalt selecties op voor een specifieke datum (of de laatste datum
+    waarvoor selecties bestaan) en voegt per selectie de meest recente
+    technische rij toe via LATERAL JOIN.
 
-    v1.2: s.koers wordt ook opgehaald, zodat het Telegram-bericht
-    de koers kan tonen.
+    v1.4: LATERAL JOIN — pakt de laatste technische rij op of vóór de
+    selectiedatum. Hierdoor werkt het script ook op zaterdagen en bij
+    vertraging in de technische pipeline.
     """
     s = [f for f in features if f not in GENERIEKE_TECHNICALS]
     g = [f for f in features if f in GENERIEKE_TECHNICALS]
-    s_lijst = ", ".join(f"s.{k}" for k in s)
-    g_lijst = ("," + ", ".join(f"g.{k}" for k in g)) if g else ""
+
+    # SELECT-lijst opbouwen
+    select_delen = ["s.ticker", "s.datum", "s.strategie", "s.koers"]
+    for k in s:
+        select_delen.append(f"s.{k}")
+    for k in g:
+        select_delen.append(f"g.{k}")
+    select_lijst = ",\n            ".join(select_delen)
+
+    # LATERAL JOIN (alleen als er technische features zijn)
+    if g:
+        g_select = ",\n                ".join(f"gt.{k}" for k in g)
+        lateral = f"""
+        LEFT JOIN LATERAL (
+            SELECT
+                {g_select}
+            FROM generieke_technicals gt
+            WHERE gt.ticker = s.ticker
+              AND gt.datum::timestamptz <= s.datum::timestamptz
+            ORDER BY gt.datum::timestamptz DESC
+            LIMIT 1
+        ) g ON TRUE
+        """
+    else:
+        lateral = ""
 
     if datum is None:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT MAX(s.datum)
-                FROM selecties s
-                JOIN generieke_technicals g
-                  ON s.ticker = g.ticker AND s.datum = g.datum;
-            """)
+            cur.execute("SELECT MAX(datum) FROM selecties;")
             datum = cur.fetchone()[0]
     print(f"Scoren voor datum: {datum}")
 
-    # v1.2: s.koers toegevoegd
     query = f"""
-        SELECT s.ticker, s.datum, s.strategie, s.koers, {s_lijst}{g_lijst}
+        SELECT
+            {select_lijst}
         FROM selecties s
-        LEFT JOIN generieke_technicals g
-          ON s.ticker = g.ticker AND s.datum = g.datum
+        {lateral}
         WHERE s.datum = %s;
     """
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -205,15 +214,7 @@ def haal_selecties(conn, features, datum=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--datum",
-        type=str,
-        default=None,
-        help=(
-            "Specifieke datum (YYYY-MM-DD). "
-            "Default: laatste selectiedatum met technicals."
-        ),
-    )
+    parser.add_argument("--datum", type=str, default=None)
     args = parser.parse_args()
 
     if not SUPABASE_DB_URL:
@@ -225,6 +226,7 @@ def main():
         model_row = haal_laatste_model(conn)
         if model_row is None:
             print("Geen model gevonden. Draai eerst a_meta_model_train.py.")
+            send_telegram("⚠️ <b>Meta-model score</b>\n\nGeen model gevonden.")
             sys.exit(1)
 
         versie = model_row["versie"]
@@ -232,8 +234,6 @@ def main():
         coefs = np.array(model_row["coefs"], dtype=float)
         mean = np.array(model_row["scaler_mean"], dtype=float)
         std = np.array(model_row["scaler_std"], dtype=float)
-        # Beveiliging: een schaal van 0 (constante feature) zou deling door
-        # nul geven. StandardScaler zet die normaal al op 1.0; dit is extra.
         std = np.where(std == 0, 1.0, std)
 
         print(f"Model: {versie}")
@@ -241,27 +241,51 @@ def main():
 
         df, datum = haal_selecties(conn, features, args.datum)
         print(f"{len(df)} selecties opgehaald.")
+
         if df.empty:
             print("Geen selecties voor die datum.")
+            send_telegram(
+                f"📊 <b>Meta-model scores</b>\n\n"
+                f"Datum: <b>{datum}</b>\n"
+                f"<i>Geen selecties voor deze datum.</i>"
+            )
             return
 
+        # Feature-rangschikking (cross-sectioneel)
+        voor_dropna = df.copy()
         for k in features:
             df[k] = df[k].rank(pct=True)
 
-        voor_dropna = df
         df = df.dropna(subset=features)
         gedropt = voor_dropna.loc[~voor_dropna.index.isin(df.index), "strategie"]
         if len(gedropt) > 0:
             print("Niet gescoord (feature ontbreekt), per strategie:")
             for strat, n in gedropt.value_counts().items():
                 print(f"  {strat:<24} {n}")
-        print(f"{len(df)} rijen met complete features.")
 
+        n_totaal = len(voor_dropna)
+        n_gescoord = len(df)
+        print(f"{n_gescoord} rijen met complete features.")
+
+        # --------------------------------------------------------
+        # v1.4: waarschuwing bij te weinig complete data
+        # --------------------------------------------------------
+        if n_gescoord == 0:
+            print("Geen complete rijen — alleen waarschuwing sturen.")
+            send_telegram(
+                f"⚠️ <b>Meta-model scores — geen complete data</b>\n\n"
+                f"Datum: <b>{datum}</b>\n"
+                f"Alle <b>{n_totaal}</b> selecties missen minstens één feature.\n"
+                f"<i>Waarschijnlijk ontbreekt technische data voor deze datum.</i>"
+            )
+            return
+
+        # Scores berekenen
         X = (df[features].values - mean) / std
         scores = X @ coefs
-
         df["score"] = scores
 
+        # Opslaan in meta_model_scores
         insert = """
             INSERT INTO meta_model_scores
                 (datum, ticker, strategie, score, model_versie, horizon_dagen)
@@ -282,8 +306,28 @@ def main():
         print("\nTop 10 scores:")
         print(top.to_string(index=False))
 
-        if len(df) > 0:
-            send_telegram(bouw_telegram_bericht(df, datum, versie))
+        # Telegram-bericht
+        bericht = bouw_telegram_bericht(df, datum, versie)
+
+        # Waarschuwing vooraan bij weinig data
+        if n_gescoord < MIN_COMPLETE_RIJEN:
+            waarschuwing = (
+                f"⚠️ <i>Slechts {n_gescoord} van de {n_totaal} "
+                f"selecties hadden complete features voor deze datum.</i>\n\n"
+            )
+            bericht = waarschuwing + bericht
+
+        send_telegram(bericht)
+
+    except Exception as e:
+        import traceback
+        err = traceback.format_exc()
+        print(err)
+        send_telegram(
+            f"⚠️ <b>Meta-model score FOUT</b>\n\n"
+            f"<code>{html.escape(str(e)[:400])}</code>"
+        )
+        sys.exit(1)
     finally:
         conn.close()
 
