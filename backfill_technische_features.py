@@ -5,7 +5,8 @@ backfill_technische_features.py
 ================================
 Vult de nieuwe technische features (macd, macd_signaal, macd_hist,
 bb_breedte, bb_percent_b, stoch_k, stoch_d, adx14, rel_sterkte_20d, hv20,
-hv60, dagen_sinds_low52w, vol_ratio_50d) aan voor bestaande datums waar ze
+hv60, dagen_sinds_low52w, vol_ratio_50d, ema8, ema20, pct_from_ema8,
+pct_from_ema20, ema8_minus_ema20) aan voor bestaande datums waar ze
 nu NULL zijn in generieke_technicals.
 
 Methode:
@@ -66,6 +67,11 @@ G. DRY-RUN CONTROLEERT DE UPDATE-WHERE: in dry-run draait nu dezelfde WHERE
 F. Controle: ma50 en rsi14 (reeds in de tabel) worden herberekend en
    vergeleken met de opgeslagen waarde; dit toont of de koersdata/as-of
    uitlijning klopt (informatief, geen blokkade).
+
+WIJZIGINGEN v2 (2026-10-10):
+H. EMA8, EMA20, pct_from_ema8, pct_from_ema20 en ema8_minus_ema20
+   toegevoegd aan KOLOM_NAAR_G. De rest van het script werkt automatisch
+   met de nieuwe kolommen (loopt over de dict).
 """
 
 import os
@@ -161,6 +167,12 @@ KOLOM_NAAR_G = {
     "hv60": "HV60",
     "dagen_sinds_low52w": "DAGEN_SINDS_LOW52W",
     "vol_ratio_50d": "VOL_RATIO_50D",
+    # NIEUW (v2):
+    "ema8": "EMA8",
+    "ema20": "EMA20",
+    "pct_from_ema8": "PCT_FROM_EMA8",
+    "pct_from_ema20": "PCT_FROM_EMA20",
+    "ema8_minus_ema20": "EMA8_MINUS_EMA20",
 }
 DOEL_FEATURES = list(KOLOM_NAAR_G.keys())
 INT_FEATURES = {"dagen_sinds_low52w"}
@@ -182,7 +194,7 @@ def _veilig(waarde, is_int: bool = False):
     """Zelfde afronding als de live builder: 4 decimalen, NaN -> None."""
     try:
         f = float(waarde)
-        if math.isnan(f):
+        if math.isnan(f) or math.isinf(f):
             return None
         return int(round(f)) if is_int else round(f, 4)
     except Exception:
@@ -232,11 +244,7 @@ def update_features(conn, ticker, datum, waarden: dict) -> int:
     if DRY_RUN:
         # Zelfde WHERE als de echte UPDATE, maar als SELECT: er wordt niets
         # geschreven, maar het script controleert wel dat de rij gevonden
-        # wordt en dat het datumtype klopt. (De allereerste live run faalde
-        # op "text = timestamp" omdat datum een tekstkolom is; een dry-run
-        # die niets uitvoert had dat niet gezien.)
-        # OUDE CODE (dry-run raakte de database niet aan), bewust bewaard:
-        # return 1
+        # wordt en dat het datumtype klopt.
         query = (
             "SELECT count(*) FROM generieke_technicals "
             "WHERE ticker = %s AND datum = %s "
@@ -347,6 +355,8 @@ def verwerk_ticker(conn, ticker, datums, index_ret) -> dict:
 
         waarden = {}
         for kolom, g_kolom in KOLOM_NAAR_G.items():
+            if g_kolom not in g.columns:
+                continue
             v = _veilig(rij[g_kolom], is_int=(kolom in INT_FEATURES))
             if v is not None:
                 waarden[kolom] = v
@@ -474,7 +484,8 @@ def main():
                           f"controlewaarden (ma50/rsi14) wijken af van de opgeslagen waarde")
                 if stat["voorbeeld"] and voorbeelden_getoond < MAX_VOORBEELDEN:
                     d, w = stat["voorbeeld"]
-                    print(f"  voorbeeld {d}: " + ", ".join(f"{k}={v}" for k, v in w.items()))
+                    voorbeeld_txt = ", ".join(f"{k}={v}" for k, v in list(w.items())[:8])
+                    print(f"  voorbeeld {d}: {voorbeeld_txt} ...")
                     voorbeelden_getoond += 1
 
             time.sleep(SLEEP_SEC)
