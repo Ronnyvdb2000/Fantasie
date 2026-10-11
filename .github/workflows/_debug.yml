@@ -1,3 +1,3 @@
 - name: Debug yfinance output
   run: |
-    python debug_yfinance.py 2>&1 | tee results/debug_yf.txt
+    python _debug.py 2>&1 | tee results/debug_yf.txt
