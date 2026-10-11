@@ -112,14 +112,41 @@ def bereken_indicatoren(hist, index_ret=None):
     Berekent alle indicatoren voor één ticker.
     `hist` = OHLCV DataFrame met kolommen Open, High, Low, Close, Volume.
     `index_ret` = Series met index-rendementen (voor rel_sterkte_20d).
-    Retourneert DataFrame met alle indicatoren per datum.
+    Retourneert DataFrame met alle indicatoren + OHLCV per datum.
     """
-    df = hist.copy()
-    if df.empty or "Close" not in df.columns:
+    if hist is None or hist.empty:
         return pd.DataFrame()
 
-    df.index = pd.to_datetime(df.index).tz_localize(None)
+    df = hist.copy()
+
+    # --- Fix: yfinance kan MultiIndex teruggeven (robuustheid) -----------
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+        df = df.loc[:, ~df.columns.duplicated()]
+
+    if "Close" not in df.columns:
+        return pd.DataFrame()
+    if isinstance(df["Close"], pd.DataFrame):
+        df["Close"] = df["Close"].iloc[:, 0]
+
+    df.index = pd.to_datetime(df.index)
+    if df.index.tz is not None:
+        df.index = df.index.tz_localize(None)
     df = df.sort_index()
+
+    # Zorg dat alle OHLCV-kolommen Series zijn (float)
+    for col in ("Open", "High", "Low", "Close", "Volume"):
+        if col in df.columns:
+            if isinstance(df[col], pd.DataFrame):
+                df[col] = df[col].iloc[:, 0]
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    if "High" not in df.columns:
+        df["High"] = df["Close"]
+    if "Low" not in df.columns:
+        df["Low"] = df["Close"]
+    if "Volume" not in df.columns:
+        df["Volume"] = 0.0
 
     close = df["Close"]
     high = df["High"]
@@ -257,6 +284,14 @@ def bereken_indicatoren(hist, index_ret=None):
         out["PCT_FROM_EMA8"] = None
         out["PCT_FROM_EMA20"] = None
         out["EMA8_MINUS_EMA20"] = None
+
+    # --- OHLCV ook teruggeven (nodig voor onvolledige-balk-check in
+    #     backfill_technische_features.py) --------------------------------
+    out["Open"] = df["Open"] if "Open" in df.columns else df["Close"]
+    out["High"] = df["High"]
+    out["Low"] = df["Low"]
+    out["Close"] = df["Close"]
+    out["Volume"] = df["Volume"]
 
     return out
 
@@ -401,7 +436,9 @@ def main():
                     continue
 
                 rij = g.iloc[pos]
-                if pd.isna(rij.get("Close")) if "Close" in rij else False:
+
+                # Onvolledige balk-check (nu veilig, want OHLCV zit in g)
+                if pd.isna(rij.get("Close")) or pd.isna(rij.get("High")) or pd.isna(rij.get("Low")):
                     n_skip += 1
                     continue
 
