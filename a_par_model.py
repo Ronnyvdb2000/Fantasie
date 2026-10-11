@@ -50,6 +50,7 @@ EMBARGO_DAGEN_DEFAULT = 25
 IC_MAX_ABS_DEFAULT = 0.15
 MIN_DATUMS_IC_DEFAULT = 10
 MIN_TICKERS_PER_DATUM = 20
+MIN_PARAMS_VOOR_MODEL = 5
 
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -251,7 +252,7 @@ def ic_met_fallback(
             df, target_kolom, train_start, train_einde,
             min_datums, ic_max_abs,
         )
-        if not gewichten.empty and len(gewichten) >= 5:
+        if not gewichten.empty and len(gewichten) >= MIN_PARAMS_VOOR_MODEL:
             return gewichten, label
 
     return pd.DataFrame(), "geen"
@@ -283,4 +284,241 @@ def score_voor_datum(df, score_datum, gewichten, top_n):
 
     def _score(rij):
         score = 0.0
-        for p in
+        for p in params:
+            rang = rij.get(rang_kolommen[p])
+            if pd.isna(rang):
+                continue
+            score += gewicht_per_param[p] * rang
+        return score / totaal_gewicht
+
+    dag["score"] = dag.apply(_score, axis=1)
+
+    top = (
+        dag.dropna(subset=["score"])
+        .nlargest(top_n, "score")
+        [["ticker", "datum", "score"]]
+    )
+    return top
+  
+
+# ============================================================
+# TELEGRAM
+# ============================================================
+
+def bouw_telegram_bericht(
+    picks_per_horizon: dict,
+    gewichten_per_horizon: dict,
+    window_labels: dict,
+    score_datum: pd.Timestamp,
+) -> str:
+    regels = [
+        "🎯 <b>A Parameter-model — top picks</b>",
+        "",
+        f"Datum: <b>{_esc(score_datum.date())}</b>",
+        "",
+    ]
+
+    for horizon in ["5d", "10d", "20d", "30d", "60d"]:
+        picks = picks_per_horizon.get(horizon)
+        gewichten = gewichten_per_horizon.get(horizon)
+        window = window_labels.get(horizon, "?")
+
+        if picks is None or picks.empty:
+            regels.append(f"<b>{horizon}</b> — geen picks")
+            regels.append("")
+            continue
+
+        regels.append(
+            f"<b>Horizon {horizon}</b> ({window}, {len(gewichten)} params)"
+        )
+        for i, (_, r) in enumerate(picks.head(10).iterrows(), start=1):
+            ticker = str(r["ticker"])
+            yahoo_url = f"https://finance.yahoo.com/quote/{ticker}"
+            score = float(r["score"])
+            regels.append(
+                f"  {i:>2}. <b>{_esc(ticker)}</b> "
+                f"<code>{score:+.3f}</code> "
+                f'<a href="{yahoo_url}">📈</a>'
+            )
+        regels.append("")
+
+    return "\n".join(regels)
+
+
+# ============================================================
+# DB-WRITE
+# ============================================================
+
+def schrijf_naar_selecties(conn, picks_per_horizon, score_datum):
+    """Schrijft per horizon de top-N naar selecties onder a_par_model_v1."""
+    insert = """
+        INSERT INTO selecties (ticker, datum, strategie, beurs, koers, parameters)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT DO NOTHING;
+    """
+
+    rijen = []
+    for horizon, picks in picks_per_horizon.items():
+        if picks is None or picks.empty:
+            continue
+        for _, r in picks.iterrows():
+            params = {
+                "score": float(r["score"]),
+                "model": "a_par_model_v1",
+                "horizon": horizon,
+                "grafiek": f"https://finance.yahoo.com/quote/{r['ticker']}",
+            }
+            rijen.append((
+                r["ticker"],
+                score_datum.strftime("%Y-%m-%d"),
+                "a_par_model_v1",
+                None, None,
+                psycopg2.extras.Json(params),
+            ))
+
+    if not rijen:
+        return 0
+
+    try:
+        with conn.cursor() as cur:
+            psycopg2.extras.execute_batch(cur, insert, rijen, page_size=200)
+        conn.commit()
+        print(f"[DB] {len(rijen)} picks geschreven naar selecties.")
+        return len(rijen)
+    except Exception as e:
+        conn.rollback()
+        print(f"[DB] Schrijven mislukt: {e}")
+        return 0
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--horizons", default=HORIZONS_DEFAULT)
+    ap.add_argument("--top-n", type=int, default=TOP_N_DEFAULT)
+    ap.add_argument("--min-ic", type=float, default=MIN_IC_DEFAULT)
+    ap.add_argument("--rolling-dagen", type=int, default=ROLLING_DAGEN_DEFAULT)
+    ap.add_argument("--fallback-dagen", type=int, default=FALLBACK_DAGEN_DEFAULT)
+    ap.add_argument("--embargo-dagen", type=int, default=EMBARGO_DAGEN_DEFAULT)
+    ap.add_argument("--ic-max-abs", type=float, default=IC_MAX_ABS_DEFAULT)
+    ap.add_argument("--min-datums-ic", type=int, default=MIN_DATUMS_IC_DEFAULT)
+    ap.add_argument("--datum", default=None)
+    ap.add_argument("--geen-db-write", action="store_true")
+    ap.add_argument("--geen-notify", action="store_true")
+    return ap.parse_args()
+
+
+def main():
+    args = parse_args()
+    horizons = [h.strip() for h in args.horizons.split(",") if h.strip()]
+
+    if not SUPABASE_DB_URL:
+        print("FOUT: SUPABASE_DB_URL ontbreekt.", file=sys.stderr)
+        return 1
+
+    print()
+    print("=" * 70)
+    print("A PARAMETER-MODEL")
+    print("=" * 70)
+    print(f"Horizons        : {', '.join(horizons)}")
+    print(f"Top-N           : {args.top_n}")
+    print(f"Min |IC|        : {args.min_ic}")
+    print(f"Rolling window  : {args.rolling_dagen}d (fallback {args.fallback_dagen}d)")
+    print(f"Embargo         : {args.embargo_dagen}d")
+    print(f"Winsorize       : ±{args.ic_max_abs}")
+    print(f"Min datums IC   : {args.min_datums_ic}")
+
+    conn = psycopg2.connect(SUPABASE_DB_URL)
+    try:
+        print("\nData ophalen...")
+        df = get_data(conn)
+        print(f"{len(df):,} rijen | {df['datum'].nunique()} datums | "
+              f"{df['ticker'].nunique()} tickers")
+
+        if args.datum:
+            score_datum = pd.Timestamp(args.datum)
+        else:
+            score_datum = df["datum"].max()
+        print(f"\nScore-datum: {score_datum.date()}")
+        print(f"Train tot:   {(score_datum - pd.Timedelta(days=args.embargo_dagen)).date()}")
+
+        picks_per_horizon = {}
+        gewichten_per_horizon = {}
+        window_labels = {}
+
+        for horizon in horizons:
+            target_kolom = f"fwd_ret_{horizon}"
+            if target_kolom not in df.columns:
+                print(f"\n[{horizon}] kolom {target_kolom} ontbreekt — overgeslagen")
+                continue
+
+            print(f"\n[{horizon}] IC berekenen...")
+            gewichten, window = ic_met_fallback(
+                df, target_kolom, score_datum,
+                args.embargo_dagen, args.rolling_dagen, args.fallback_dagen,
+                args.min_datums_ic, args.ic_max_abs,
+            )
+
+            if gewichten.empty:
+                print(f"[{horizon}] geen parameters met genoeg data — overgeslagen")
+                continue
+
+            gewichten = gewichten[gewichten["ic_abs"] >= args.min_ic].copy()
+            if gewichten.empty:
+                print(f"[{horizon}] geen parameters met |IC| >= {args.min_ic}")
+                continue
+
+            print(f"[{horizon}] {len(gewichten)} parameters (window: {window})")
+            for _, r in gewichten.head(5).iterrows():
+                print(f"    {r['parameter']:<24} "
+                      f"IC={r['ic']:+.4f} (raw {r['ic_raw']:+.4f}) "
+                      f"IR={r['ic_ir']:+.2f} n={r['n_datums']}")
+
+            picks = score_voor_datum(df, score_datum, gewichten, args.top_n)
+            if picks.empty:
+                print(f"[{horizon}] geen picks (geen data voor score_datum)")
+                continue
+
+            picks_per_horizon[horizon] = picks
+            gewichten_per_horizon[horizon] = gewichten
+            window_labels[horizon] = window
+
+            print(f"[{horizon}] Top {len(picks)}:")
+            for i, (_, r) in enumerate(picks.iterrows(), start=1):
+                print(f"    {i:>2}. {r['ticker']:<12} score={r['score']:+.4f}")
+
+            csv_path = os.path.join(RESULTS_DIR, f"a_par_model_{horizon}_picks.csv")
+            picks.to_csv(csv_path, index=False)
+            w_path = os.path.join(RESULTS_DIR, f"a_par_model_{horizon}_weights.csv")
+            gewichten.to_csv(w_path, index=False)
+
+        if not picks_per_horizon:
+            print("\nGeen enkele horizon leverde picks op.")
+            return 1
+
+        if not args.geen_db_write:
+            schrijf_naar_selecties(conn, picks_per_horizon, score_datum)
+
+        if not args.geen_notify:
+            bericht = bouw_telegram_bericht(
+                picks_per_horizon, gewichten_per_horizon,
+                window_labels, score_datum,
+            )
+            send_telegram(bericht)
+
+        print("\n✅ Klaar.")
+        return 0
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return 1
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
