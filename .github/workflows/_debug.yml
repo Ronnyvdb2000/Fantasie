@@ -1,3 +1,33 @@
-  name: "_Debug yfinance output"
-  run: |
-    python _debug.py 2>&1 | tee results/debug_yf.txt
+name: Debug yfinance
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance pandas
+
+      - name: Run debug script
+        run: |
+          mkdir -p results
+          python _debug.py 2>&1 | tee results/debug_yf.txt
+
+      - name: Upload debug log
+        uses: actions/upload-artifact@v5
+        with:
+          name: debug-yf-log
+          path: results/debug_yf.txt
+          retention-days: 7
