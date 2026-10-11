@@ -2,7 +2,7 @@ name: "A trade volatiel: Q score x volatiliteit"
 
 on:
   schedule:
-    - cron: "0 6 * * 6"   # zaterdag 06:00 UTC
+    - cron: "0 5 * * 2,50"   # zaterdag 06:00 UTC
   workflow_dispatch:
 
 jobs:
