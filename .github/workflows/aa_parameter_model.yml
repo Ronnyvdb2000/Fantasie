@@ -1,0 +1,175 @@
+name: AA Parameter-model
+
+on:
+  workflow_dispatch:
+    inputs:
+      horizons:
+        description: "Horizons (komma-gescheiden, bv. 5d,10d,20d,30d,60d)"
+        required: false
+        default: "5d,10d,20d,30d,60d"
+        type: string
+      top_n:
+        description: "Aantal picks per horizon"
+        required: false
+        default: "10"
+        type: string
+      min_ic:
+        description: "Minimum |IC| om parameter te gebruiken"
+        required: false
+        default: "0.02"
+        type: string
+      rolling_dagen:
+        description: "Rolling window in dagen (≈20 handelsdagen)"
+        required: false
+        default: "28"
+        type: string
+      fallback_dagen:
+        description: "Fallback window als rolling te weinig data heeft"
+        required: false
+        default: "90"
+        type: string
+      embargo_dagen:
+        description: "Embargo tussen train en score (dagen)"
+        required: false
+        default: "25"
+        type: string
+      geen_db_write:
+        description: "Niet naar selecties schrijven (test-modus)"
+        required: false
+        default: false
+        type: boolean
+      geen_notify:
+        description: "Geen Telegram-bericht versturen"
+        required: false
+        default: false
+        type: boolean
+
+  schedule:
+    # Wekelijks op zondag 05:00 UTC
+    - cron: "0 5 * * 0"
+
+  push:
+    paths:
+      - "a_par_model.py"
+      - ".github/workflows/a_par_model.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  run-par-model:
+    name: run-par-model
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
+      TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            numpy==1.26.4 \
+            pandas==2.2.3 \
+            scipy==1.14.1 \
+            psycopg2-binary==2.9.10 \
+            requests==2.32.3
+
+      - name: Verify versions
+        run: |
+          python --version
+          python -c "import numpy;    print('numpy',    numpy.__version__)"
+          python -c "import pandas;   print('pandas',   pandas.__version__)"
+          python -c "import scipy;    print('scipy',    scipy.__version__)"
+          python -c "import psycopg2; print('psycopg2 OK')"
+          python -c "import requests; print('requests', requests.__version__)"
+
+      - name: Check secret
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "FOUT: SUPABASE_DB_URL secret ontbreekt"
+            exit 1
+          fi
+          echo "SUPABASE_DB_URL is gezet (lengte: ${#SUPABASE_DB_URL})"
+
+      - name: Run A Parameter-model
+        env:
+          INPUT_HORIZONS:      ${{ github.event.inputs.horizons }}
+          INPUT_TOP_N:         ${{ github.event.inputs.top_n }}
+          INPUT_MIN_IC:        ${{ github.event.inputs.min_ic }}
+          INPUT_ROLLING:       ${{ github.event.inputs.rolling_dagen }}
+          INPUT_FALLBACK:      ${{ github.event.inputs.fallback_dagen }}
+          INPUT_EMBARGO:       ${{ github.event.inputs.embargo_dagen }}
+          INPUT_GEEN_DB:       ${{ github.event.inputs.geen_db_write }}
+          INPUT_GEEN_NOTIFY:   ${{ github.event.inputs.geen_notify }}
+        run: |
+          mkdir -p results
+
+          HORIZONS="${INPUT_HORIZONS:-5d,10d,20d,30d,60d}"
+          TOPN="${INPUT_TOP_N:-10}"
+          MINIC="${INPUT_MIN_IC:-0.02}"
+          ROLLING="${INPUT_ROLLING:-28}"
+          FALLBACK="${INPUT_FALLBACK:-90}"
+          EMBARGO="${INPUT_EMBARGO:-25}"
+
+          ARGS=""
+          ARGS="$ARGS --horizons $HORIZONS"
+          ARGS="$ARGS --top-n $TOPN"
+          ARGS="$ARGS --min-ic $MINIC"
+          ARGS="$ARGS --rolling-dagen $ROLLING"
+          ARGS="$ARGS --fallback-dagen $FALLBACK"
+          ARGS="$ARGS --embargo-dagen $EMBARGO"
+
+          if [ "$INPUT_GEEN_DB" = "true" ]; then
+            ARGS="$ARGS --geen-db-write"
+          fi
+
+          if [ "$INPUT_GEEN_NOTIFY" = "true" ]; then
+            ARGS="$ARGS --geen-notify"
+          fi
+
+          echo "Command: python a_par_model.py $ARGS"
+          python a_par_model.py $ARGS
+
+      - name: Controle output
+        if: always()
+        run: |
+          echo "Bestanden in results/:"
+          ls -lh results/ || echo "(geen bestanden)"
+          echo ""
+          shopt -s nullglob
+          picks=(results/a_par_model_*_picks.csv)
+          if [ ${#picks[@]} -eq 0 ]; then
+            echo "WAARSCHUWING: geen enkele picks-CSV gegenereerd."
+          else
+            for p in "${picks[@]}"; do
+              echo "OK: $(basename "$p") ($(wc -l < "$p") regels)"
+            done
+          fi
+          echo ""
+          weights=(results/a_par_model_*_weights.csv)
+          if [ ${#weights[@]} -gt 0 ]; then
+            echo "Gewichten-bestanden: ${#weights[@]}"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: a-par-model-results-${{ github.run_id }}
+          path: results/
+          retention-days: 90
+          if-no-files-found: warn
