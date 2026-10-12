@@ -17,7 +17,7 @@ Werkwijze:
      sectioneel (0..1) en bereken score = Σ (IC_i × rang_i) / Σ |IC_i|.
   5. Top-N per horizon = picks.
   6. Output: CSV per horizon + Telegram-bericht + optioneel schrijven naar
-     selecties (strategie a_par_model_v1).
+     selecties (strategie a_par_model_v1) + metrics naar model_metrics.
 
 Env:
   SUPABASE_DB_URL          verplicht
@@ -33,6 +33,12 @@ WIJZIGINGEN:
     - Horizon-afhankelijke embargo (max(EMBARGO, horizon + 5)).
     - Extra fallback-windows (180d, 365d) voor trage horizons.
     - Uitgebreide logging per horizon in de console.
+  v1.3 (2026-10-12):
+    - Metrics per horizon worden weggeschreven naar tabel `model_metrics`
+      (run_datum, horizon_dagen, window_label, train_start/einde,
+       n_params_totaal/gefilterd, top_param_*, gem_ic/abs/ir, max_ic_abs,
+       n_picks). UNIQUE op (run_datum, model_versie, horizon_dagen) —
+      herhaalde runs op dezelfde dag updaten dezelfde rij.
 """
 
 import os
@@ -63,7 +69,8 @@ MIN_DATUMS_IC_DEFAULT = 10
 MIN_TICKERS_PER_DATUM = 20
 MIN_PARAMS_VOOR_MODEL = 5
 
-# Extra fallback-windows voor trage horizons (in kalenderdagen)
+MODEL_VERSIE = "a_par_model_v1"
+
 EXTRA_FALLBACK_STAPPEN = [180, 365]
 
 RESULTS_DIR = os.environ.get("RESULTS_DIR", "results")
@@ -73,7 +80,6 @@ SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-# Kolommen die geen factor zijn: identifiers, absolute prijsniveaus, targets
 NIET_FACTOR = {
     "ticker", "datum", "beurs", "strategie", "bijgewerkt_op", "id",
     "entry_koers", "high52w", "ma50", "ma200", "market_cap",
@@ -103,7 +109,6 @@ def fmt(v, decimals=4) -> str:
 
 
 def _format_koers(koers) -> str:
-    """Formatteer koers voor Telegram: 2 decimalen, of '-' bij ontbreken."""
     try:
         if koers is None or pd.isna(koers):
             return "-"
@@ -113,7 +118,6 @@ def _format_koers(koers) -> str:
 
 
 def _horizon_naar_dagen(horizon: str) -> int:
-    """'20d' → 20. Robuust voor eventuele suffix-varianten."""
     try:
         return int(str(horizon).strip().lower().rstrip("d"))
     except Exception:
@@ -150,7 +154,6 @@ def send_telegram(tekst: str) -> bool:
 # ============================================================
 
 def get_data(conn) -> pd.DataFrame:
-    """Haal technische + fundamentele + forward returns + koers op."""
     query = """
     WITH tech AS (
         SELECT DISTINCT ON (ticker, datum)
@@ -215,7 +218,7 @@ def get_data(conn) -> pd.DataFrame:
 
 
 # ============================================================
-# IC-BEREKENING (rolling window + fallback)
+# IC-BEREKENING
 # ============================================================
 
 def bereken_ic_per_parameter(
@@ -227,7 +230,6 @@ def bereken_ic_per_parameter(
     ic_max_abs: float,
     min_tickers: int = MIN_TICKERS_PER_DATUM,
 ) -> pd.DataFrame:
-    """Bereken per parameter IC op [train_start, train_einde], winsorized."""
     train = df[(df["datum"] >= train_start) & (df["datum"] <= train_einde)]
     if len(train) < min_tickers:
         return pd.DataFrame()
@@ -282,10 +284,6 @@ def ic_met_fallback(
     embargo_dagen, rolling_dagen, fallback_dagen,
     min_datums, ic_max_abs,
 ):
-    """
-    Probeert rolling → fallback → extra fallbacks (180d, 365d).
-    Geeft (gewichten_df, window_label).
-    """
     train_einde = effectieve_score_datum - pd.Timedelta(days=embargo_dagen)
 
     stappen = [
@@ -297,6 +295,8 @@ def ic_met_fallback(
             stappen.append((extra, f"extended {extra}d"))
 
     laatste_poging = pd.DataFrame()
+    laatste_start = train_einde
+    laatste_label = "geen"
 
     for dagen, label in stappen:
         train_start = train_einde - pd.Timedelta(days=dagen)
@@ -306,10 +306,14 @@ def ic_met_fallback(
         )
         if not gewichten.empty:
             laatste_poging = gewichten
+            laatste_start = train_start
+            laatste_label = label
         if not gewichten.empty and len(gewichten) >= MIN_PARAMS_VOOR_MODEL:
             return gewichten, label, train_start, train_einde
 
-    return pd.DataFrame(), "geen", train_einde, train_einde
+    if laatste_poging.empty:
+        return pd.DataFrame(), "geen", train_einde, train_einde
+    return laatste_poging, laatste_label, laatste_start, train_einde
 
 
 # ============================================================
@@ -317,7 +321,6 @@ def ic_met_fallback(
 # ============================================================
 
 def score_voor_datum(df, score_datum, gewichten, top_n):
-    """Scoort alle aandelen op score_datum; top-N met score (+ koers)."""
     dag = df[df["datum"] == score_datum].copy()
     if dag.empty:
         return pd.DataFrame()
@@ -411,7 +414,6 @@ def bouw_telegram_bericht(
 # ============================================================
 
 def schrijf_naar_selecties(conn, picks_per_horizon, score_datum):
-    """Schrijft per horizon de top-N naar selecties onder a_par_model_v1."""
     insert = """
         INSERT INTO selecties (ticker, datum, strategie, beurs, koers, parameters)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -425,7 +427,7 @@ def schrijf_naar_selecties(conn, picks_per_horizon, score_datum):
         for _, r in picks.iterrows():
             params = {
                 "score": float(r["score"]),
-                "model": "a_par_model_v1",
+                "model": MODEL_VERSIE,
                 "horizon": horizon,
                 "grafiek": f"https://finance.yahoo.com/quote/{r['ticker']}",
             }
@@ -441,7 +443,7 @@ def schrijf_naar_selecties(conn, picks_per_horizon, score_datum):
             rijen.append((
                 r["ticker"],
                 score_datum.strftime("%Y-%m-%d"),
-                "a_par_model_v1",
+                MODEL_VERSIE,
                 None,
                 koers_val,
                 psycopg2.extras.Json(params),
@@ -458,8 +460,105 @@ def schrijf_naar_selecties(conn, picks_per_horizon, score_datum):
         return len(rijen)
     except Exception as e:
         conn.rollback()
-        print(f"[DB] Schrijven mislukt: {e}")
+        print(f"[DB] Schrijven naar selecties mislukt: {e}")
         return 0
+
+
+def schrijf_model_metrics(
+    conn,
+    run_datum,
+    horizon,
+    window_label,
+    train_start,
+    train_einde,
+    embargo_dagen,
+    gewichten_totaal_df,
+    gewichten_gefilterd_df,
+    n_picks,
+):
+    insert = """
+        INSERT INTO model_metrics (
+            run_datum, model_versie, horizon_dagen,
+            window_label, train_start, train_einde, embargo_dagen,
+            n_params_totaal, n_params_gefilterd,
+            top_param_naam, top_param_ic, top_param_ir,
+            gem_ic, gem_ic_abs, gem_ir, max_ic_abs,
+            n_picks
+        ) VALUES (
+            %s, %s, %s,
+            %s, %s, %s, %s,
+            %s, %s,
+            %s, %s, %s,
+            %s, %s, %s, %s,
+            %s
+        )
+        ON CONFLICT (run_datum, model_versie, horizon_dagen)
+        DO UPDATE SET
+            run_tijdstip       = NOW(),
+            window_label       = EXCLUDED.window_label,
+            train_start        = EXCLUDED.train_start,
+            train_einde        = EXCLUDED.train_einde,
+            embargo_dagen      = EXCLUDED.embargo_dagen,
+            n_params_totaal    = EXCLUDED.n_params_totaal,
+            n_params_gefilterd = EXCLUDED.n_params_gefilterd,
+            top_param_naam     = EXCLUDED.top_param_naam,
+            top_param_ic       = EXCLUDED.top_param_ic,
+            top_param_ir       = EXCLUDED.top_param_ir,
+            gem_ic             = EXCLUDED.gem_ic,
+            gem_ic_abs         = EXCLUDED.gem_ic_abs,
+            gem_ir             = EXCLUDED.gem_ir,
+            max_ic_abs         = EXCLUDED.max_ic_abs,
+            n_picks            = EXCLUDED.n_picks;
+    """
+
+    n_totaal = int(len(gewichten_totaal_df)) if gewichten_totaal_df is not None else 0
+    n_gefilterd = int(len(gewichten_gefilterd_df)) if gewichten_gefilterd_df is not None else 0
+
+    if gewichten_gefilterd_df is None or gewichten_gefilterd_df.empty:
+        top_param_naam = None
+        top_param_ic = None
+        top_param_ir = None
+        gem_ic = None
+        gem_ic_abs = None
+        gem_ir = None
+        max_ic_abs = None
+    else:
+        top = gewichten_gefilterd_df.iloc[0]
+        top_param_naam = str(top["parameter"])
+        top_param_ic = float(top["ic"])
+        top_param_ir = float(top["ic_ir"])
+        gem_ic = float(gewichten_gefilterd_df["ic"].mean())
+        gem_ic_abs = float(gewichten_gefilterd_df["ic_abs"].mean())
+        gem_ir = float(gewichten_gefilterd_df["ic_ir"].mean())
+        max_ic_abs = float(gewichten_gefilterd_df["ic_abs"].max())
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(insert, [
+                run_datum,
+                MODEL_VERSIE,
+                _horizon_naar_dagen(horizon),
+                window_label,
+                train_start.date() if train_start is not None else None,
+                train_einde.date() if train_einde is not None else None,
+                int(embargo_dagen),
+                n_totaal,
+                n_gefilterd,
+                top_param_naam,
+                top_param_ic,
+                top_param_ir,
+                gem_ic,
+                gem_ic_abs,
+                gem_ir,
+                max_ic_abs,
+                int(n_picks),
+            ])
+        conn.commit()
+        print(f"[DB] metrics opgeslagen voor horizon {horizon} "
+              f"(run_datum={run_datum}, n_params={n_gefilterd}, n_picks={n_picks}).")
+    except Exception as e:
+        conn.rollback()
+        print(f"[DB] Metrics wegschrijven mislukt voor horizon {horizon}: {e}")
 
 
 # ============================================================
@@ -516,7 +615,6 @@ def main():
             print(f"Koers beschikbaar voor {n_koers:,} rijen "
                   f"({100 * n_koers / len(df):.1f}%).")
 
-        # score_datum voor picks (dit is de datum waarop we aandelen kiezen)
         if args.datum:
             score_datum = pd.Timestamp(args.datum)
         else:
@@ -537,7 +635,6 @@ def main():
                 print(f"[{horizon}] kolom {target_kolom} ontbreekt — overgeslagen")
                 continue
 
-            # === Optie A: effectieve score_datum voor IC-berekening ===
             target_series = df[["datum", target_kolom]].dropna()
             if target_series.empty:
                 print(f"[{horizon}] geen niet-lege {target_kolom} in DB — overgeslagen")
@@ -546,7 +643,6 @@ def main():
 
             effectieve_score = min(score_datum, laatste_target_datum)
 
-            # Horizon-afhankelijke embargo
             horizon_dagen = _horizon_naar_dagen(horizon)
             effectieve_embargo = max(args.embargo_dagen, horizon_dagen + 5)
 
@@ -564,6 +660,13 @@ def main():
                 print(f"[{horizon}] geen parameters met genoeg data — overgeslagen")
                 print(f"[{horizon}] (geprobeerd tot {train_einde.date()}, "
                       f"minste start {train_start.date()})")
+                schrijf_model_metrics(
+                    conn, run_datum=score_datum.date(), horizon=horizon,
+                    window_label=window, train_start=train_start,
+                    train_einde=train_einde, embargo_dagen=effectieve_embargo,
+                    gewichten_totaal_df=pd.DataFrame(),
+                    gewichten_gefilterd_df=pd.DataFrame(), n_picks=0,
+                )
                 continue
 
             print(f"[{horizon}] window: {window}")
@@ -576,6 +679,13 @@ def main():
             if gewichten.empty:
                 print(f"[{horizon}] geen params met |IC| >= {args.min_ic} "
                       f"(hoogste was {gewichten_ruw['ic_abs'].max():.4f})")
+                schrijf_model_metrics(
+                    conn, run_datum=score_datum.date(), horizon=horizon,
+                    window_label=window, train_start=train_start,
+                    train_einde=train_einde, embargo_dagen=effectieve_embargo,
+                    gewichten_totaal_df=gewichten_ruw,
+                    gewichten_gefilterd_df=pd.DataFrame(), n_picks=0,
+                )
                 continue
 
             print(f"[{horizon}] {len(gewichten)} params na |IC|-filter")
@@ -584,11 +694,17 @@ def main():
                       f"IC={r['ic']:+.4f} (raw {r['ic_raw']:+.4f}) "
                       f"IR={r['ic_ir']:+.2f} n={r['n_datums']}")
 
-            # === Picks op de ECHTE score_datum ===
             picks = score_voor_datum(df, score_datum, gewichten, args.top_n)
             if picks.empty:
                 print(f"[{horizon}] geen picks op score_datum {score_datum.date()} "
                       f"(geen data voor die datum?)")
+                schrijf_model_metrics(
+                    conn, run_datum=score_datum.date(), horizon=horizon,
+                    window_label=window, train_start=train_start,
+                    train_einde=train_einde, embargo_dagen=effectieve_embargo,
+                    gewichten_totaal_df=gewichten_ruw,
+                    gewichten_gefilterd_df=gewichten, n_picks=0,
+                )
                 continue
 
             picks_per_horizon[horizon] = picks
@@ -605,6 +721,16 @@ def main():
             picks.to_csv(csv_path, index=False)
             w_path = os.path.join(RESULTS_DIR, f"a_par_model_{horizon}_weights.csv")
             gewichten.to_csv(w_path, index=False)
+
+            # === Metrics wegschrijven ===
+            schrijf_model_metrics(
+                conn, run_datum=score_datum.date(), horizon=horizon,
+                window_label=window, train_start=train_start,
+                train_einde=train_einde, embargo_dagen=effectieve_embargo,
+                gewichten_totaal_df=gewichten_ruw,
+                gewichten_gefilterd_df=gewichten,
+                n_picks=len(picks),
+            )
 
         print(f"\n{'=' * 70}")
         if not picks_per_horizon:
