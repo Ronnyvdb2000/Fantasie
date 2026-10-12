@@ -2,7 +2,7 @@ name: "Bot 00: FULL scanner (041-059) Fisher wekelijks"
 
 on:
   schedule:
-    - cron: "0 12 * * 0"
+    - cron: "0 22 * * 5"
   workflow_dispatch:
 
 jobs:
