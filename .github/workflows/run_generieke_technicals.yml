@@ -3,7 +3,7 @@ name: "Feature Store: Generieke Technicals (ATR/RSI/MA/volume, strategie-onafhan
 on:
   schedule:
     # Ma-vr 20:50 UTC (na US-close 20:00/21:00 UTC afhankelijk van DST)
-    - cron: "50 20 * * 1-5"
+    - cron: "0 22 * * 1-5"
   workflow_dispatch:
 
 jobs:
