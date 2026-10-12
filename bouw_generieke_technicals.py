@@ -22,7 +22,14 @@ Features (kolommen):
 
 Env:
   SUPABASE_DB_URL    verplicht
-  BACKFILL_DATUM     optioneel; default = vandaag (YYYY-MM-DD)
+  BACKFILL_DATUM     optioneel; default = LAATSTE bar per ticker
+                     (bar_datum, NIET vandaag). Zo kan de cron op elk
+                     moment draaien zonder weekend-rijen te produceren.
+
+Wijziging 2026-10-12:
+  - datum_doel is nu optioneel. Zonder env-var schrijft de builder
+    de BAR-DATUM (echte handelsdag) i.p.v. vandaag. Voorkomt
+    zaterdag/zondag-rijen bij vertraagde of weekend-crons.
 """
 
 import os
@@ -392,17 +399,27 @@ def main():
     if not DB_URL:
         sys.exit("SUPABASE_DB_URL ontbreekt")
 
-    datum_doel = os.environ.get("BACKFILL_DATUM") or dt.date.today().isoformat()
-    datum_doel_ts = pd.Timestamp(datum_doel).normalize()
+    # BACKFILL_DATUM = optionele override (voor handmatige runs op een specifieke datum).
+    # Zonder override gebruiken we de LAATSTE beschikbare bar (bar_datum), niet vandaag.
+    datum_doel = os.environ.get("BACKFILL_DATUM")
+    datum_doel_ts = pd.Timestamp(datum_doel).normalize() if datum_doel else None
 
     tickers = alle_tickers()
     if not tickers:
         sys.exit("Geen tickers gevonden in tickers_*.txt")
 
     print(f"Tickers: {len(tickers)}")
-    print(f"Doeldatum: {datum_doel_ts.date()}")
+    if datum_doel_ts is not None:
+        print(f"Doeldatum (override): {datum_doel_ts.date()}")
+    else:
+        print("Doeldatum: (laatste bar per ticker)")
 
-    start = (datum_doel_ts - pd.Timedelta(days=LOOKBACK_BUFFER_DAGEN)).strftime("%Y-%m-%d")
+    # Voor de referentie-index: gebruik of de override, of vandaag.
+    ref_start_ts = (
+        datum_doel_ts if datum_doel_ts is not None
+        else pd.Timestamp.now().normalize()
+    )
+    start = (ref_start_ts - pd.Timedelta(days=LOOKBACK_BUFFER_DAGEN)).strftime("%Y-%m-%d")
     index_ret = download_index_returns(start)
 
     conn = psycopg2.connect(DB_URL)
@@ -426,23 +443,44 @@ def main():
                     n_skip += 1
                     continue
 
-                # Zoek bar op of vóór doeldatum
-                pos = g.index.searchsorted(datum_doel_ts, side="right") - 1
+                # Bepaal de bar-positie:
+                #  - als BACKFILL_DATUM gezet is: laatste bar OP OF VÓÓR die datum
+                #  - anders: de laatste bar in de reeks (meest recente handelsdag)
+                if datum_doel_ts is not None:
+                    pos = g.index.searchsorted(datum_doel_ts, side="right") - 1
+                else:
+                    pos = len(g) - 1
+
                 if pos < 0:
                     n_skip += 1
                     continue
-                if (datum_doel_ts - g.index[pos]).days > MAX_BAR_AFSTAND_DAGEN:
+
+                bar_datum_ts = g.index[pos]
+
+                # Afstandscheck: bar mag niet te ver in het verleden liggen
+                referentie_ts = (
+                    datum_doel_ts if datum_doel_ts is not None
+                    else pd.Timestamp.now().normalize()
+                )
+                if (referentie_ts - bar_datum_ts).days > MAX_BAR_AFSTAND_DAGEN:
                     n_skip += 1
                     continue
 
                 rij = g.iloc[pos]
 
-                # Onvolledige balk-check (nu veilig, want OHLCV zit in g)
-                if pd.isna(rij.get("Close")) or pd.isna(rij.get("High")) or pd.isna(rij.get("Low")):
+                # Onvolledige balk-check
+                if (
+                    pd.isna(rij.get("Close"))
+                    or pd.isna(rij.get("High"))
+                    or pd.isna(rij.get("Low"))
+                ):
                     n_skip += 1
                     continue
 
-                schrijf_rij(conn, ticker, datum_doel_ts.date(), rij)
+                # BELANGRIJK: schrijf de BAR-DATUM, niet vandaag.
+                # Zo kan de cron op elk moment draaien (ook weekend, ook met
+                # vertraging) zonder weekend-rijen te produceren.
+                schrijf_rij(conn, ticker, bar_datum_ts.date(), rij)
                 n_ok += 1
 
                 if i % 100 == 0:
