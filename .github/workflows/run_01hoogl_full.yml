@@ -5,7 +5,7 @@ on:
     # Zaterdag 03:00 UTC — geen enkele beurs wereldwijd open (VS/Europa/Azië
     # allemaal in het weekend gesloten), en buiten de populaire ronde
     # cron-tijden waar GitHub Actions-jobs vaker in de wachtrij belanden.
-    - cron: "0 3 * * 6"
+    - cron: "0 23 * * 5"
   workflow_dispatch:
 
 jobs:
