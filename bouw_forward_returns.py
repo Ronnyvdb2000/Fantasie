@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-bouw_forward_returns.py  —  FEATURE STORE: selecties -> forward-rendement  v1.6
+bouw_forward_returns.py  —  FEATURE STORE: selecties -> forward-rendement  v1.7
 
 DOEL
 ====
@@ -89,6 +89,15 @@ MELDINGEN (v1.6)
 - Waarschuwingen (bv. 'HLX: geen koersdata') worden verzameld en in het
   bericht getoond.
 
+HORIZONS (v1.7, 2026-10-12)
+===========================
+- v1.7 DEFAULT 5,10,20,30,60: de default HORIZONS was 5,10,20. Daardoor werd
+  fwd_ret_30d/60d nooit geschreven als de workflow HORIZONS niet expliciet
+  zette. Met de nieuwe default 5,10,20,30,60 worden alle vijf horizons
+  automatisch gevuld zodra er genoeg handelsdagen verstreken zijn. De
+  kolommen fwd_close_<h>d en fwd_ret_<h>d moeten wel al bestaan in
+  forward_returns.
+
 GEBRUIK
 =======
   python bouw_forward_returns.py build
@@ -103,7 +112,7 @@ Env vars:
   MAX_TICKERS_PER_RUN - veiligheidslimiet tegen te lange/rate-limited
                         runs (default 400)
   HORIZONS            - komma-gescheiden lijst handelsdagen (default
-                        "5,10,20")
+                        "5,10,20,30,60")
   DUBBELE_SELECTIE    - "eerste" (default) of "laatste": welke rij van
                         dubbele selecties-rijen (zelfde ticker/datum/
                         strategie) de entry-koers levert
@@ -139,7 +148,8 @@ MAX_TICKERS_PER_RUN = int(os.environ.get("MAX_TICKERS_PER_RUN", "400"))
 # (fwd_close_<h>d/fwd_ret_<h>d-kolommen moeten al bestaan voor elke horizon
 # in deze lijst) -- de kolomnamen hier worden dynamisch opgebouwd, maar
 # de tabel zelf niet automatisch.
-HORIZONS = sorted(int(h) for h in os.environ.get("HORIZONS", "5,10,20").split(","))
+# v1.7: default uitgebreid van "5,10,20" naar "5,10,20,30,60".
+HORIZONS = sorted(int(h) for h in os.environ.get("HORIZONS", "5,10,20,30,60").split(","))
 
 # Eenheidsbreuk (pence <-> ponden e.d.): verhouding fwd_close / entry buiten
 # elke realistische koersbeweging, maar vlak bij een factor 100.
@@ -174,19 +184,6 @@ def waarschuw(tekst: str) -> None:
 # --------------------------------------------------------------------------
 # Versturen (v1.6: Telegram HTML + mail, zoals a_trade.py)
 # --------------------------------------------------------------------------
-# v1.5 (Markdown, status niet gecontroleerd: een 400 bleef onzichtbaar):
-# def send_telegram(tekst: str) -> None:
-#     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-#         print(tekst)
-#         return
-#     try:
-#         requests.post(
-#             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-#             json={"chat_id": TELEGRAM_CHAT_ID, "text": tekst, "parse_mode": "Markdown"},
-#             timeout=10,
-#         )
-#     except Exception as e:
-#         print(f"Telegram fout: {e}")
 def send_telegram(tekst_html: str) -> None:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("Telegram-secrets ontbreken, overslaan.", file=sys.stderr)
@@ -295,10 +292,6 @@ def meld_fout(fout_tekst: str) -> None:
 # --------------------------------------------------------------------------
 def haal_openstaande_rijen(conn) -> List[dict]:
     nu = datetime.now(timezone.utc)
-    # Per horizon een eigen cutoff -- een rij wordt al opgepikt zodra ÉÉN
-    # horizon oud genoeg is en nog een ontbrekend label heeft, niet pas
-    # wanneer de LANGSTE horizon (bv. 60d) matuur is. Zo hoeft fwd_ret_30d
-    # niet nodeloos ~48 dagen te wachten tot de rij ook oud genoeg is voor 60d.
     voorwaarden = []
     params: Dict[str, str] = {}
     for h in HORIZONS:
@@ -311,32 +304,11 @@ def haal_openstaande_rijen(conn) -> List[dict]:
         )
     horizon_filter = " OR ".join(voorwaarden)
 
-    # ticker NOT LIKE '%/%' sluit bot_01cointegr.py's samengestelde
-    # "TICKER_A/TICKER_B"-paarstrings uit (zie bouw_generieke_technicals.py
-    # voor dezelfde fix en de uitleg) -- kunnen nooit via yfinance opgelost
-    # worden, en koers is voor die rijen sowieso een spread-ratio, geen
-    # echte prijs, dus een forward-rendement erop zou toch niet zinvol zijn.
-    # De %% (i.p.v. losse %) is nodig omdat psycopg2 een bare % anders
-    # verwart met zijn eigen %(naam)s-placeholder-syntax.
-    # v1.5: per (ticker, datum, strategie) EEN selecties-rij (DISTINCT ON),
-    # deterministisch gekozen op created_at/id. NULLS LAST zodat een rij zonder
-    # created_at nooit voor een rij met tijdstip wordt gekozen.
     if DUBBELE_SELECTIE == "eerste":
         volgorde_dubbel = "created_at ASC NULLS LAST, id ASC"
     else:
         volgorde_dubbel = "created_at DESC NULLS LAST, id DESC"
 
-    # v1.4 (alle selecties-rijen; bij dubbelen won de laatst verwerkte rij):
-    # query = f"""
-    #     SELECT s.ticker, s.datum, s.strategie, s.beurs, s.koers
-    #     FROM selecties s
-    #     LEFT JOIN forward_returns f
-    #       ON s.ticker = f.ticker AND s.datum = f.datum AND s.strategie = f.strategie
-    #     WHERE s.koers IS NOT NULL
-    #       AND s.ticker NOT LIKE '%%/%%'
-    #       AND ({horizon_filter})
-    #     ORDER BY s.ticker, s.datum;
-    # """
     query = f"""
         WITH s AS (
             SELECT DISTINCT ON (ticker, datum, strategie)
@@ -362,9 +334,7 @@ def haal_openstaande_rijen(conn) -> List[dict]:
 # Hulpfuncties voor de kwaliteit van het label (v1.4)
 # --------------------------------------------------------------------------
 def split_factor_na(splits: pd.Series, prijsdatum: pd.Timestamp) -> float:
-    """Product van alle split-ratio's met ex-datum STRIKT NA prijsdatum.
-    splits: Series (index = ex-datum, waarde = ratio, bv. 2.0 voor 2:1,
-    0.1 voor een omgekeerde 1:10). Lege reeks -> 1.0."""
+    """Product van alle split-ratio's met ex-datum STRIKT NA prijsdatum."""
     if splits is None or splits.empty:
         return 1.0
     na = splits[splits.index > prijsdatum]
@@ -374,8 +344,7 @@ def split_factor_na(splits: pd.Series, prijsdatum: pd.Timestamp) -> float:
 
 
 def corrigeer_eenheid(fwd_close: float, entry_adj: float) -> Tuple[float, bool]:
-    """Corrigeert een factor-100 eenheidsbreuk (pence <-> ponden).
-    Geeft (gecorrigeerde_koers, is_gecorrigeerd) terug."""
+    """Corrigeert een factor-100 eenheidsbreuk (pence <-> ponden)."""
     ratio = fwd_close / entry_adj
     if EENHEID_RATIO_MIN <= ratio <= EENHEID_RATIO_MAX:
         return fwd_close / 100.0, True
@@ -389,25 +358,15 @@ def corrigeer_eenheid(fwd_close: float, entry_adj: float) -> Tuple[float, bool]:
 # --------------------------------------------------------------------------
 def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
     """rijen = alle openstaande (datum, strategie, beurs, koers)-combinaties
-    voor deze ene ticker. Geeft een lijst dicts terug, klaar voor upsert.
-
-    v1.2: een forward-koers die NaN/inf is of <= 0 wordt behandeld als
-    ONTBREKEND (None -> NULL).
-    v1.3: ruwe slotkoersen (auto_adjust=False), consistent met entry_koers.
-    v1.4: entry_koers wordt gecorrigeerd voor splits na de prijsdatum, en
-    een factor-100 eenheidsbreuk in de koersreeks wordt hersteld.
-    v1.6: waarschuwingen worden ook verzameld voor het eindbericht."""
+    voor deze ene ticker. Geeft een lijst dicts terug, klaar voor upsert."""
     vroegste = min(r["datum"] for r in rijen)
     try:
-        # v1.2: hist = yf.Ticker(ticker).history(start=vroegste, auto_adjust=True)
         hist = yf.Ticker(ticker).history(start=vroegste, auto_adjust=False)
     except Exception as e:
-        # v1.5: print(f"  [WARN] {ticker}: download mislukt ({e})")
         waarschuw(f"{ticker}: download mislukt ({e})")
         return []
 
     if hist is None or hist.empty or "Close" not in hist.columns:
-        # v1.5: print(f"  [WARN] {ticker}: geen koersdata")
         waarschuw(f"{ticker}: geen koersdata")
         return []
 
@@ -415,7 +374,6 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
     closes.index = pd.to_datetime(closes.index).tz_localize(None)
     datums = closes.index
 
-    # v1.4: splits (ex-datum -> ratio). Ontbreekt de kolom, dan geen correctie.
     splits = None
     if "Stock Splits" in hist.columns:
         sp = hist["Stock Splits"].copy()
@@ -431,14 +389,11 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
             doel = pd.Timestamp(r["datum"])
             pos_kandidaten = datums.searchsorted(doel)
             if pos_kandidaten >= len(datums):
-                continue  # datum ligt na alle beschikbare koersdata, niets te doen
+                continue
             entry_koers = float(r["koers"])
             if not entry_koers or math.isnan(entry_koers) or entry_koers <= 0:
                 continue
 
-            # v1.4: prijsdatum = laatste handelsdag <= datum (een weekend-
-            # selectie logt de slotkoers van vrijdag). Ligt er geen
-            # handelsdag voor `datum` in de reeks, dan gebruiken we `datum`.
             pos_vorige = datums.searchsorted(doel, side="right") - 1
             prijsdatum = datums[pos_vorige] if pos_vorige >= 0 else doel
 
@@ -456,19 +411,15 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
                 if idx < len(closes):
                     fwd_close = float(closes.iloc[idx])
 
-                    # v1.2: onbruikbare koers (NaN/inf of <= 0) = ontbrekend (NULL).
                     if not math.isfinite(fwd_close) or fwd_close <= 0:
                         rij[f"fwd_close_{h}d"] = None
                         rij[f"fwd_ret_{h}d"] = None
                         continue
 
-                    # v1.4: factor-100 eenheidsbreuk herstellen.
                     fwd_close, hersteld = corrigeer_eenheid(fwd_close, entry_adj)
                     if hersteld:
                         n_eenheid_gecorr += 1
 
-                    # v1.3 (zonder split-correctie):
-                    # rij[f"fwd_ret_{h}d"] = round((fwd_close / entry_koers - 1) * 100, 3)
                     rij[f"fwd_close_{h}d"] = fwd_close
                     rij[f"fwd_ret_{h}d"] = round((fwd_close / entry_adj - 1) * 100, 3)
                 else:
@@ -476,7 +427,6 @@ def bereken_labels_voor_ticker(ticker: str, rijen: List[dict]) -> List[dict]:
                     rij[f"fwd_ret_{h}d"] = None
             resultaten.append(rij)
         except Exception as e:
-            # v1.5: print(f"  [WARN] {ticker} {r['datum']}/{r['strategie']}: {e}")
             waarschuw(f"{ticker} {r['datum']}/{r['strategie']}: {e}")
             continue
 
@@ -533,11 +483,6 @@ def run_build():
         for r in open_rijen:
             per_ticker.setdefault(r["ticker"], []).append(r)
 
-        # Prioriteer tickers op hun OUDSTE nog openstaande datum (langst
-        # wachtend eerst) i.p.v. alfabetisch -- anders blijft een ticker als
-        # AAPL (bijna dagelijks opnieuw geselecteerd door meerdere
-        # strategieën) elke run in de eerste MAX_TICKERS_PER_RUN vallen, en
-        # komen alfabetisch latere tickers structureel nooit aan de beurt.
         oudste_datum_per_ticker = {
             t: min(r["datum"] for r in rijen) for t, rijen in per_ticker.items()
         }
@@ -560,17 +505,6 @@ def run_build():
 
         nog_wachtend = len(open_rijen) - totaal_bijgewerkt
 
-        # v1.5 (Markdown, enkel Telegram):
-        # bericht = (
-        #     f"📊 *Forward-Returns Feature Store — {vandaag()}*\n\n"
-        #     f"{totaal_bijgewerkt} rijen bijgewerkt in forward_returns "
-        #     f"({totaal_compleet} daarvan nu volledig, alle {HORIZONS[-1]} handelsdagen ingevuld)\n"
-        #     f"{len(tickers)} unieke tickers verwerkt dit run"
-        #     + (f" ({overgeslagen} tickers nog te gaan)" if overgeslagen > 0 else "")
-        # )
-        # send_telegram(bericht)
-
-        # v1.6: ALTIJD Telegram + mail, ook als er niets te doen was.
         argumenten = (len(open_rijen), totaal_bijgewerkt, totaal_compleet,
                       len(tickers), overgeslagen, nog_wachtend)
         send_telegram(maak_telegram_bericht(*argumenten))
@@ -588,8 +522,6 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception:
-        # v1.6: ook bij een crash een bericht, daarna opnieuw opgooien
-        # zodat de workflow rood wordt.
         fout = traceback.format_exc()
         print(fout, file=sys.stderr)
         meld_fout(fout)
