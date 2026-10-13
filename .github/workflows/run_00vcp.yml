@@ -18,8 +18,8 @@ jobs:
       - run: pip install yfinance pandas numpy requests python-dotenv libsql-experimental psycopg2-binary
       - name: Run bot_00vcp
         env:
-          TELEGRAM_TOKEN:      ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+          # TELEGRAM_TOKEN:      ${{ secrets.TELEGRAM_TOKEN }}
+          # TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
           EMAIL_USER:          ${{ secrets.EMAIL_USER }}
           EMAIL_PASS:          ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:      ${{ secrets.EMAIL_RECEIVER }}
@@ -86,6 +86,6 @@ jobs:
       - name: Run TradingAgents-bridge
         env:
           GROQ_API_KEY:     ${{ secrets.GROQ_API_KEY }}
-          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          # TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python tradingagents_bridge.py --signals-file vcp_signals.json --channel telegram
