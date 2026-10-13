@@ -25,8 +25,8 @@ jobs:
       - run: pip install yfinance pandas numpy requests python-dotenv psycopg2-binary
       - name: Run bot_01hoogl (full scan, a-lijsten, strenger)
         env:
-          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          # TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           EMAIL_USER:       ${{ secrets.EMAIL_USER }}
           EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
           EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
