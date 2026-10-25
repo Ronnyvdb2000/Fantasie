@@ -3,36 +3,49 @@
 """
 analyse_parameter_ic.py
 ========================
-Bereken voor ELKE parameter de voorspellende waarde voor ELKE horizon
-(5d, 10d, 20d, 30d, 60d).
-
-Methode (standaard factor-onderzoek):
-  1. Per datum: Spearman rank-correlatie tussen parameter en fwd_ret_Xd
-  2. Middel over alle datums -> IC (Information Coefficient)
-  3. IC-IR = IC / std(IC) -> hoe consistent werkt de parameter
-  4. Hit rate = % datums met het juiste teken
-
-Interpretatie:
-  |IC| > 0.03 en |IC-IR| > 0.5   -> bruikbaar
-  |IC| > 0.05 en |IC-IR| > 1.0   -> sterk
-  Teken: + = hoge waarde goed, - = lage waarde goed
+Bereken voor ELKE parameter de voorspellende waarde (Spearman IC) voor ELKE horizon
+(5d, 10d, 20d, 30d, 60d), inclusief:
+  - Newey-West HAC t-statistieken (gecorrigeerd voor overlappende returns)
+  - Benjamini-Hochberg (BH-FDR) correctie per horizon voor valse ontdekkingen
+  - Automatische Telegram- en E-mailnotificaties met de resultaten
 
 Env:
-  SUPABASE_DB_URL
+  SUPABASE_DB_URL, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,
+  EMAIL_USER, EMAIL_PASS, EMAIL_RECEIVER
 Output:
-  results/parameter_ic_matrix.csv   (parameters x horizons)
-  Console: top-10 per horizon
+  results/parameter_ic_matrix.csv   (parameters x horizons full stats)
+  Telegram & Email samenvatting
 """
 
 import os
 import sys
+import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import warnings
 import numpy as np
 import pandas as pd
 import psycopg2
 from scipy.stats import spearmanr
+import statsmodels.api as sm
+import requests
+from dotenv import load_dotenv
 
+load_dotenv()
+warnings.filterwarnings("ignore")
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+# Notificatie credentials
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 
 HORIZONS = ["5d", "10d", "20d", "30d", "60d"]
+HORIZON_DAYS = {"5d": 5, "10d": 10, "20d": 20, "30d": 30, "60d": 60}
 TARGET_KOLOM = {h: f"fwd_ret_{h}" for h in HORIZONS}
 RESULTS_DIR = "results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -47,6 +60,41 @@ NIET_FACTOR = {
     "fwd_close_5d", "fwd_close_10d", "fwd_close_20d",
     "fwd_close_30d", "fwd_close_60d",
 }
+
+
+def stuur_telegram(bericht):
+    if not TOKEN or not CHAT_ID:
+        logger.info("Telegram-secrets ontbreken, overslaan.")
+        return
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+            data={"chat_id": CHAT_ID, "text": bericht, "parse_mode": "HTML"},
+            timeout=30,
+        )
+        if not resp.ok:
+            logger.error("Telegram-fout: %s %s", resp.status_code, resp.text)
+    except Exception as exc:
+        logger.error("Telegram-fout (exception): %s", exc)
+
+
+def stuur_email(html_body: str, onderwerp: str):
+    if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
+        logger.info("Email-secrets ontbreken, overslaan.")
+        return
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = onderwerp
+        msg["From"] = EMAIL_USER
+        msg["To"] = EMAIL_RECEIVER
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.sendmail(EMAIL_USER, EMAIL_RECEIVER, msg.as_string())
+    except Exception as exc:
+        logger.error("Email-fout: %s", exc)
 
 
 def get_data(conn) -> pd.DataFrame:
@@ -99,114 +147,162 @@ def get_data(conn) -> pd.DataFrame:
     return pd.read_sql(query, conn)
 
 
-def ic_voor_parameter(df: pd.DataFrame, parameter: str, target: str) -> dict:
-    """Bereken IC/IC-IR/hitrate voor 1 parameter op 1 horizon."""
+def benjamini_hochberg(p_values: np.ndarray, alpha: float = 0.05) -> np.ndarray:
+    p_values = np.asarray(p_values)
+    n = len(p_values)
+    if n == 0:
+        return np.array([], dtype=bool)
+
+    sorted_idx = np.argsort(p_values)
+    sorted_p = p_values[sorted_idx]
+    thresholds = (np.arange(1, n + 1) / n) * alpha
+    significant_sorted = sorted_p <= thresholds
+    
+    if np.any(significant_sorted):
+        max_sig_idx = np.max(np.where(significant_sorted)[0])
+        significant_sorted[:max_sig_idx + 1] = True
+    else:
+        significant_sorted[:] = False
+
+    reject = np.empty(n, dtype=bool)
+    reject[sorted_idx] = significant_sorted
+    return reject
+
+
+def bereken_ic_hac(df: pd.DataFrame, parameter: str, target: str, max_lag: int) -> dict:
     sub = df[["datum", parameter, target]].dropna()
     if len(sub) < MIN_TICKERS_PER_DATUM:
         return None
 
-    ics = []
-    for _, groep in sub.groupby("datum"):
+    date_ics = []
+    for datum, groep in sub.groupby("datum"):
         if len(groep) < MIN_TICKERS_PER_DATUM:
             continue
         rho, _ = spearmanr(groep[parameter], groep[target])
         if not np.isnan(rho):
-            ics.append(rho)
+            date_ics.append({"datum": datum, "ic": rho})
 
-    if len(ics) < MIN_DATUMS:
+    if len(date_ics) < MIN_DATUMS:
         return None
 
-    ics = np.array(ics)
+    ic_df = pd.DataFrame(date_ics).sort_values("datum")
+    ics = ic_df["ic"].values
+
     ic_gem = float(np.mean(ics))
-    ic_std = float(np.std(ics))
+    ic_std = float(np.std(ics, ddof=1))
     ic_ir = ic_gem / ic_std if ic_std > 1e-9 else 0.0
     hit = float(np.mean(ics > 0)) if ic_gem > 0 else float(np.mean(ics < 0))
+
+    X = np.ones(len(ics))
+    try:
+        model = sm.OLS(ics, X).fit(cov_type='HAC', cov_kwds={'maxlags': max_lag})
+        t_stat = float(model.tvalues[0])
+        p_val = float(model.pvalues[0])
+    except Exception:
+        t_stat = 0.0
+        p_val = 1.0
 
     return {
         "ic": round(ic_gem, 4),
         "ic_ir": round(ic_ir, 3),
+        "t_stat": round(t_stat, 3),
+        "p_value": p_val,
         "hit": round(hit, 3),
         "n_datums": len(ics),
         "n_obs": len(sub),
     }
 
 
+def bouw_html_rapport(matrix: pd.DataFrame, stats_summary: dict) -> str:
+    """Bouwt een overzichtelijk HTML e-mailrapport met resultaten."""
+    return f"""
+    <html><body style="font-family:Arial,sans-serif;font-size:13px;">
+    <h2>📊 Parameter IC & Newey-West Analyse</h2>
+    <p><b>Samenvatting significante parameters na Benjamini-Hochberg FDR-correctie (alpha=0.05):</b></p>
+    <ul>
+        <li>5d: {stats_summary.get('5d', 0)} significant</li>
+        <li>10d: {stats_summary.get('10d', 0)} significant</li>
+        <li>20d: {stats_summary.get('20d', 0)} significant</li>
+        <li>30d: {stats_summary.get('30d', 0)} significant</li>
+        <li>60d: {stats_summary.get('60d', 0)} significant</li>
+    </ul>
+    <p>Volledige datamatrix is opgeslagen als CSV-artifact in de run.</p>
+    </body></html>
+    """
+
+
 def main():
-    db_url = os.environ.get("SUPABASE_DB_URL")
-    if not db_url:
-        sys.exit("SUPABASE_DB_URL ontbreekt")
+    try:
+        logger.info("Data ophalen uit Supabase...")
+        with psycopg2.connect(os.environ["SUPABASE_DB_URL"]) as conn:
+            df = get_data(conn)
+        logger.info(f"{len(df):,} rijen | {df['datum'].nunique()} datums | {df['ticker'].nunique()} tickers")
 
-    print("Data ophalen...")
-    with psycopg2.connect(db_url) as conn:
-        df = get_data(conn)
-    print(f"{len(df):,} rijen | {df['datum'].nunique()} datums | "
-          f"{df['ticker'].nunique()} tickers\n")
+        params = [
+            c for c in df.columns
+            if c not in NIET_FACTOR and pd.api.types.is_numeric_dtype(df[c])
+        ]
 
-    # Alle numerieke kolommen behalve identifiers
-    params = [
-        c for c in df.columns
-        if c not in NIET_FACTOR and pd.api.types.is_numeric_dtype(df[c])
-    ]
+        results = {h: {} for h in HORIZONS}
+        for p in params:
+            for h in HORIZONS:
+                res = bereken_ic_hac(df, p, TARGET_KOLOM[h], max_lag=HORIZON_DAYS[h])
+                if res:
+                    results[h][p] = res
 
-    # Matrix: rijen = parameters, kolommen = horizons
-    rijen = []
-    for p in params:
-        rij = {"parameter": p}
+        bh_significance = {h: {} for h in HORIZONS}
+        stats_summary = {}
         for h in HORIZONS:
-            r = ic_voor_parameter(df, p, TARGET_KOLOM[h])
-            rij[f"ic_{h}"] = r["ic"] if r else np.nan
-            rij[f"ir_{h}"] = r["ic_ir"] if r else np.nan
-        rijen.append(rij)
+            p_names = [p for p in params if p in results[h]]
+            if not p_names:
+                stats_summary[h] = 0
+                continue
+            p_vals = [results[h][p]["p_value"] for p in p_names]
+            rejects = benjamini_hochberg(p_vals, alpha=0.05)
+            for p, rej in zip(p_names, rejects):
+                bh_significance[h][p] = bool(rej)
+            stats_summary[h] = int(sum(rejects))
 
-    matrix = pd.DataFrame(rijen)
+        rijen = []
+        for p in params:
+            rij = {"parameter": p}
+            for h in HORIZONS:
+                r = results[h].get(p)
+                rij[f"ic_{h}"] = r["ic"] if r else np.nan
+                rij[f"ir_{h}"] = r["ic_ir"] if r else np.nan
+                rij[f"tstat_{h}"] = r["t_stat"] if r else np.nan
+                rij[f"pval_{h}"] = r["p_value"] if r else np.nan
+                rij[f"sig_bh_{h}"] = bh_significance[h].get(p, False) if r else False
+            rijen.append(rij)
 
-    # Sorteer op absolute IC op 10d (of eerste horizon met data)
-    sort_kolom = "ic_10d"
-    matrix["abs_sort"] = matrix[sort_kolom].abs()
-    matrix = matrix.sort_values("abs_sort", ascending=False).drop(columns="abs_sort")
+        matrix = pd.DataFrame(rijen)
+        out = os.path.join(RESULTS_DIR, "parameter_ic_matrix.csv")
+        matrix.to_csv(out, index=False)
+        logger.info(f"Opgeslagen: {out}")
 
-    # Opslaan
-    out = os.path.join(RESULTS_DIR, "parameter_ic_matrix.csv")
-    matrix.to_csv(out, index=False)
-    print(f"Opgeslagen: {out}\n")
+        # Telegram samenvatting opbouwen
+        tg_bericht = (
+            f"📊 <b>Parameter IC Analyse Voltooid</b>\n\n"
+            f"<b>Aantal significante parameters (BH-FDR, alpha=0.05):</b>\n"
+            f"• 5d: {stats_summary.get('5d', 0)}\n"
+            f"• 10d: {stats_summary.get('10d', 0)}\n"
+            f"• 20d: {stats_summary.get('20d', 0)}\n"
+            f"• 30d: {stats_summary.get('30d', 0)}\n"
+            f"• 60d: {stats_summary.get('60d', 0)}\n\n"
+            f"<i>Zie e-mail of CSV-artifact voor details.</i>"
+        )
 
-    # Console: top 15 per horizon
-    for h in HORIZONS:
-        kolom = f"ic_{h}"
-        if kolom not in matrix.columns or matrix[kolom].isna().all():
-            print(f"[{h}] geen data\n")
-            continue
+        stuur_telegram(tg_bericht)
+        stuur_email(
+            bouw_html_rapport(matrix, stats_summary),
+            "Parameter IC & Newey-West Analyse Rapport",
+        )
+        logger.info("Notificaties succesvol verzonden.")
 
-        sub = matrix.dropna(subset=[kolom]).copy()
-        sub["abs"] = sub[kolom].abs()
-        top = sub.sort_values("abs", ascending=False).head(15)
-
-        print("=" * 78)
-        print(f"TOP 15 PARAMETERS — horizon {h}")
-        print("=" * 78)
-        print(f"{'Parameter':<22} {'IC':>8} {'IC-IR':>7} {'hit_10d':>8}")
-        print("-" * 50)
-        for _, r in top.iterrows():
-            print(
-                f"{r['parameter']:<22} {r[kolom]:>8.4f} "
-                f"{r.get(f'ir_{h}', 0):>7.3f} "
-                f"{r.get('ic_10d', np.nan):>8.4f}"
-            )
-        print()
-
-    # Samenvatting: parameters die op ALLE horizons werken
-    print("=" * 78)
-    print("PARAMETERS MET CONSISTENTE VOORSPELLENDE WAARDE (|IC|>0.02 op alle horizons)")
-    print("=" * 78)
-    ic_kolommen = [f"ic_{h}" for h in HORIZONS]
-    mask = (matrix[ic_kolommen].abs() > 0.02).all(axis=1)
-    consistent = matrix[mask]
-    if len(consistent) == 0:
-        print("  Geen enkele parameter werkt consistent op alle horizons.\n")
-    else:
-        for _, r in consistent.iterrows():
-            waarden = " | ".join(f"{h}={r[f'ic_{h}']:+.3f}" for h in HORIZONS)
-            print(f"  {r['parameter']:<22} {waarden}")
+    except Exception as e:
+        logger.error("Kritieke fout in main(): %s", e, exc_info=True)
+        stuur_telegram(f"❌ <b>Parameter IC Analyse gecrasht:</b> {str(e)}")
+        raise e
 
 
 if __name__ == "__main__":
