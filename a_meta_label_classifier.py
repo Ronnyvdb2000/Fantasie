@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.0 (Fantasie-versie)
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.2 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
@@ -11,6 +11,12 @@ worden doorgelaten.
 BELANGRIJK: dit script voorspelt NIETS. Het bouwt een model, past het
 walk-forward toe, en rapporteert eerlijk of het filter iets toevoegt
 t.o.v. de baseline. Het kan ook slechter presteren.
+
+v1.2 wijzigingen t.o.v. v1.0:
+  - 'datum' wordt in main() direct naar tz-naive Timestamp geconverteerd
+    (fix voor: TypeError: unsupported operand type(s) for -: 'str' and 'str')
+  - walk_forward() doet dezelfde conversie bovenaan (zelfvoorzienend)
+  - schrijf_scores() converteert Timestamp -> datetime.date vóór insert
 
 Deze versie is standalone (geen common/ package nodig) en werkt direct
 in de originele Fantasie-repo. Het gebruikt features.py voor MODEL_FEATURES.
@@ -174,12 +180,18 @@ def maak_features(df: pd.DataFrame, base_features: List[str]) -> pd.DataFrame:
 def walk_forward(df: pd.DataFrame, feature_cols: List[str],
                  embargo_dagen: int, min_train: int, min_test: int,
                  model_type: str) -> pd.DataFrame:
+    # v1.2: dwing datetime af, ongeacht wat de caller aanlevert (vangnet)
+    df = df.copy()
+    df["datum"] = pd.to_datetime(df["datum"], errors="coerce", utc=True)
+    df["datum"] = df["datum"].dt.tz_localize(None).dt.normalize()
+    df = df.dropna(subset=["datum"]).reset_index(drop=True)
+
     df = df.sort_values("datum").reset_index(drop=True)
     datums = sorted(df["datum"].unique())
     resultaten = []
 
     for i in range(len(datums)):
-        test_datum = datums[i]
+        test_datum = pd.Timestamp(datums[i])
         train_datums = [d for d in datums[:i] if (test_datum - d).days > embargo_dagen]
         if not train_datums:
             continue
@@ -211,7 +223,7 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
         proba = model.predict_proba(X_te)[:, 1]
         if len(np.unique(proba)) < 2:
             continue
-            
+
         try:
             ic = float(stats.spearmanr(proba, test["fwd_ret"].values).correlation)
         except Exception:
@@ -269,8 +281,12 @@ def schrijf_scores(conn, df: pd.DataFrame, versie: str, horizon: int):
         ON CONFLICT (datum, ticker, strategie, horizon_dagen, model_versie)
         DO UPDATE SET proba = EXCLUDED.proba, created_at = now();
     """
+    # v1.2: Timestamp -> datetime.date vóór insert
     rijen = [
-        (r["datum"], r["ticker"], r["strategie"], horizon, versie, float(r["proba"]))
+        (
+            r["datum"].date() if hasattr(r["datum"], "date") else r["datum"],
+            r["ticker"], r["strategie"], horizon, versie, float(r["proba"])
+        )
         for _, r in df.iterrows()
     ]
     with conn.cursor() as cur:
@@ -317,6 +333,11 @@ def main():
         if df.empty:
             print("Geen data.")
             return
+
+        # v1.2: dwing 'datum' als tz-naive Timestamp af (fix voor str - str)
+        df["datum"] = pd.to_datetime(df["datum"], errors="coerce", utc=True)
+        df["datum"] = df["datum"].dt.tz_localize(None).dt.normalize()
+        df = df.dropna(subset=["datum"]).reset_index(drop=True)
 
         df = df[df["strategie"].isin(strategieen)].copy()
         print(f"{len(df)} rijen na strategie-filter.")
