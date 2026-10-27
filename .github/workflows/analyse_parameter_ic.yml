@@ -1,75 +1,67 @@
-name: Parameter IC analyse
+name: Analyse Parameter IC
 
 on:
-  workflow_dispatch:
   schedule:
-    # Wekelijks op zondag om 05:00 UTC
-    - cron: "0 5 * * 0"
-  push:
-    paths:
-      - "analyse_parameter_ic.py"
-      - ".github/workflows/analyse_parameter_ic.yml"
-
-permissions:
-  contents: read
+    # Voer indien gewenst een cron toe (bijvoorbeeld dagelijks om 04:38 UTC, gebaseerd op je log)
+    - cron: '38 4 * * *'
+  workflow_dispatch: # Handmatig starten via GitHub UI
 
 jobs:
   analyse-ic:
-    name: analyse-ic
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-
-    env:
-      SUPABASE_DB_URL:  ${{ secrets.SUPABASE_DB_URL }}
-      TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      EMAIL_USER:       ${{ secrets.EMAIL_USER }}
-      EMAIL_PASS:       ${{ secrets.EMAIL_PASS }}
-      EMAIL_RECEIVER:   ${{ secrets.EMAIL_RECEIVER }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Python
+      - name: Python setup
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
-          cache: pip
+          python-version: '3.11'
+          cache: 'pip'
 
-      - name: Install dependencies
+      - name: Dependencies installeren
         run: |
           python -m pip install --upgrade pip
           pip install \
             numpy==1.26.4 \
             pandas==2.2.3 \
             scipy==1.14.1 \
-            psycopg2-binary==2.9.10
+            psycopg2-binary==2.9.10 \
+            statsmodels==0.14.4 \
+            python-dotenv
 
-      - name: Verify install
+      - name: Verifieer installaties
         run: |
           python --version
-          python -c "import numpy;    print('numpy',    numpy.__version__)"
-          python -c "import pandas;   print('pandas',   pandas.__version__)"
-          python -c "import scipy;    print('scipy',    scipy.__version__)"
+          python -c "import numpy; print('numpy', numpy.__version__)"
+          python -c "import pandas; print('pandas', pandas.__version__)"
+          python -c "import scipy; print('scipy', scipy.__version__)"
           python -c "import psycopg2; print('psycopg2 OK')"
+          python -c "import statsmodels; print('statsmodels', statsmodels.__version__)"
+          python -c "import dotenv; print('dotenv OK')"
 
-      - name: Check secret
+      - name: Check secrets
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
             echo "FOUT: SUPABASE_DB_URL secret ontbreekt"
             exit 1
           fi
 
-      - name: Run IC analysis
+      - name: Bot draaien
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           mkdir -p results
           python analyse_parameter_ic.py
-
-      - name: Controle output
-        if: always()
-        run: |
           echo "Bestanden in results/:"
           ls -lh results/ || echo "(geen results map)"
           if [ ! -f results/parameter_ic_matrix.csv ]; then
@@ -79,10 +71,10 @@ jobs:
           fi
 
       - name: Upload artifact
-        if: always()
         uses: actions/upload-artifact@v5
+        if: always() # Zorgt dat we het bestand ook uploaden als de vorige stap een waarschuwing gaf
         with:
-          name: parameter-ic-results-${{ github.run_id }}
+          name: parameter-ic-results-${{ github.run_number }}
           path: results/parameter_ic_matrix.csv
           retention-days: 90
           if-no-files-found: warn
