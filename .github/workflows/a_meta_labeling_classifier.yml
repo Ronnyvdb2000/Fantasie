@@ -1,4 +1,4 @@
-name: Meta-labeling Classifier
+name: A Meta-labeling Classifier
 
 on:
   schedule:
