@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.0
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.0 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
@@ -12,13 +12,8 @@ BELANGRIJK: dit script voorspelt NIETS. Het bouwt een model, past het
 walk-forward toe, en rapporteert eerlijk of het filter iets toevoegt
 t.o.v. de baseline. Het kan ook slechter presteren.
 
-Methode:
-  - Label: +1 als fwd_ret_{H}d > +THRESHOLD, 0 als < -THRESHOLD,
-    middenzone wordt uitgesloten.
-  - Features: MODEL_FEATURES + strategie (one-hot) + score (bot-score).
-  - Walk-forward: expanding window, embargo = horizon + 5 dagen.
-  - Model: LogisticRegression (default) of XGBoost (--model xgb).
-  - Output: meta_label_scores tabel + samenvatting via Telegram/e-mail.
+Deze versie is standalone (geen common/ package nodig) en werkt direct
+in de originele Fantasie-repo. Het gebruikt features.py voor MODEL_FEATURES.
 
 Env:
   SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID,
@@ -29,6 +24,8 @@ import os
 import sys
 import argparse
 import uuid
+import html
+import smtplib
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
 
@@ -36,15 +33,23 @@ import numpy as np
 import pandas as pd
 import psycopg2
 import psycopg2.extras
+import requests
 from scipy import stats
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-from common import send_telegram, send_email, safe_float
+# features.py bestaat in de originele repo
 from features import MODEL_FEATURES
 
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+EMAIL_USER = os.environ.get("EMAIL_USER", "")
+EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
+EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER", "")
 
 GENERIEKE_TECHNICALS = [
     "atr14", "atr14_pct", "rsi14", "ibs", "ma50", "ma200",
@@ -60,12 +65,57 @@ DEFAULT_DREMPELS = [0.55, 0.60, 0.65]
 
 
 # ============================================================
+# LOKALE HULPFUNCTIES (vervangen common/)
+# ============================================================
+
+def safe_float(val, default: float = float("nan")) -> float:
+    try:
+        f = float(val)
+        return default if np.isnan(f) else f
+    except Exception:
+        return default
+
+def send_telegram(text: str) -> None:
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("[Telegram] Secrets ontbreken, overslaan.")
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    try:
+        requests.post(
+            url,
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "HTML"},
+            timeout=10,
+        )
+        print("[Telegram] Bericht verzonden.")
+    except Exception as e:
+        print(f"[Telegram] Fout: {e}")
+
+def send_email(subject: str, body: str) -> None:
+    if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
+        print("[Email] Secrets ontbreken, overslaan.")
+        return
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = EMAIL_USER
+        msg["To"] = EMAIL_RECEIVER
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.send_message(msg)
+        server.quit()
+        print("[Email] Bericht verzonden.")
+    except Exception as e:
+        print(f"[Email] Fout: {e}")
+
+
+# ============================================================
 # DATA
 # ============================================================
 
 def haal_data(conn, features: List[str], horizon: int) -> pd.DataFrame:
-    """Haalt selecties + forward_returns + technicals op. Enkel rijen met
-    een niet-lege fwd_ret_{horizon}d."""
     s_feats = [f for f in features if f not in GENERIEKE_TECHNICALS]
     g_feats = [f for f in features if f in GENERIEKE_TECHNICALS]
 
@@ -91,8 +141,6 @@ def haal_data(conn, features: List[str], horizon: int) -> pd.DataFrame:
 
 
 def bouw_labels(df: pd.DataFrame, threshold: float) -> pd.DataFrame:
-    """Binary label: +1 als fwd_ret > +threshold, 0 als < -threshold.
-    Middenzone (|fwd_ret| <= threshold) wordt uitgesloten."""
     out = df.copy()
     out = out[out["fwd_ret"].notna()].copy()
     out["label"] = np.nan
@@ -113,12 +161,13 @@ def cross_sectionele_rank(df: pd.DataFrame, kolommen: List[str]) -> pd.DataFrame
 # ============================================================
 
 def maak_features(df: pd.DataFrame, base_features: List[str]) -> pd.DataFrame:
-    """Bouwt de design matrix: numerieke features + one-hot strategie + score."""
     out = df.copy()
     strat_dummies = pd.get_dummies(out["strategie"], prefix="strat", dtype=float)
-    X = pd.concat([out[base_features].reset_index(drop=True),
-                   strat_dummies.reset_index(drop=True),
-                   out["score"].fillna(0.0).reset_index(drop=True)], axis=1)
+    X = pd.concat([
+        out[base_features].reset_index(drop=True),
+        strat_dummies.reset_index(drop=True),
+        out["score"].fillna(0.0).reset_index(drop=True)
+    ], axis=1)
     return X
 
 
@@ -131,8 +180,7 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
 
     for i in range(len(datums)):
         test_datum = datums[i]
-        train_datums = [d for d in datums[:i]
-                        if (test_datum - d).days > embargo_dagen]
+        train_datums = [d for d in datums[:i] if (test_datum - d).days > embargo_dagen]
         if not train_datums:
             continue
 
@@ -153,19 +201,17 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
             model = XGBClassifier(
                 n_estimators=300, max_depth=4, learning_rate=0.05,
                 subsample=0.8, colsample_bytree=0.8, min_child_weight=5,
-                objective="binary:logistic", eval_metric="auc",
-                use_label_encoder=False, n_jobs=-1,
+                objective="binary:logistic", eval_metric="auc", n_jobs=-1,
             )
             model.fit(X_tr, train["label"].values)
         else:
-            model = LogisticRegression(
-                C=1.0, max_iter=2000, class_weight="balanced", solver="lbfgs"
-            )
+            model = LogisticRegression(C=1.0, max_iter=2000, class_weight="balanced", solver="lbfgs")
             model.fit(X_tr, train["label"].values)
 
         proba = model.predict_proba(X_te)[:, 1]
         if len(np.unique(proba)) < 2:
             continue
+            
         try:
             ic = float(stats.spearmanr(proba, test["fwd_ret"].values).correlation)
         except Exception:
@@ -175,15 +221,10 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
         except Exception:
             auc = float("nan")
 
-        test = test.assign(proba=proba)
-        test["fold_datum"] = test_datum
-        test["fold_ic"] = ic
-        test["fold_auc"] = auc
+        test = test.assign(proba=proba, fold_datum=test_datum, fold_ic=ic, fold_auc=auc)
         resultaten.append(test)
 
-    if not resultaten:
-        return pd.DataFrame()
-    return pd.concat(resultaten, ignore_index=True)
+    return pd.concat(resultaten, ignore_index=True) if resultaten else pd.DataFrame()
 
 
 # ============================================================
@@ -191,9 +232,6 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
 # ============================================================
 
 def evalueer(df: pd.DataFrame, drempel: float) -> Dict:
-    """Vergelijkt baseline (alle trades) vs filter (proba >= drempel).
-    Gebruikt fwd_ret als proxy voor netto rendement (kosten niet
-    meegerekend; dat doet de bot zelf bij uitvoering)."""
     if df.empty:
         return {}
 
@@ -202,8 +240,7 @@ def evalueer(df: pd.DataFrame, drempel: float) -> Dict:
 
     def _stats(arr):
         if len(arr) < 2:
-            return {"n": len(arr), "mean": None, "sharpe": None,
-                    "hit": None, "max_dd": None, "pf": None}
+            return {"n": len(arr), "mean": None, "sharpe": None, "hit": None, "max_dd": None, "pf": None}
         mean = float(np.mean(arr))
         std = float(np.std(arr, ddof=1))
         sharpe = mean / std if std > 1e-9 else None
@@ -215,8 +252,7 @@ def evalueer(df: pd.DataFrame, drempel: float) -> Dict:
         gains = arr[arr > 0].sum()
         losses = -arr[arr < 0].sum()
         pf = float(gains / losses) if losses > 1e-9 else None
-        return {"n": len(arr), "mean": mean, "sharpe": sharpe,
-                "hit": hit, "max_dd": max_dd, "pf": pf}
+        return {"n": len(arr), "mean": mean, "sharpe": sharpe, "hit": hit, "max_dd": max_dd, "pf": pf}
 
     return {"baseline": _stats(baseline), "filter": _stats(gefilterd)}
 
@@ -299,8 +335,7 @@ def main():
 
         print(f"Features: {len(feature_cols)} kolommen.")
 
-        res = walk_forward(df, feature_cols, embargo,
-                           args.min_train, args.min_test, args.model)
+        res = walk_forward(df, feature_cols, embargo, args.min_train, args.min_test, args.model)
         if res.empty:
             print("Geen folds met resultaat.")
             return
