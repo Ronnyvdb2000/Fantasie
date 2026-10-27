@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.0 (Fantasie-versie)
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.1 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
@@ -15,6 +15,11 @@ t.o.v. de baseline. Het kan ook slechter presteren.
 Deze versie is standalone (geen common/ package nodig) en werkt direct
 in de originele Fantasie-repo. Het gebruikt features.py voor MODEL_FEATURES.
 
+v1.1 (2026-10-27): fix voor TypeError bij walk_forward. De kolom
+`datum` wordt nu meteen na het ophalen geconverteerd naar datetime.
+Bij het wegschrijven naar meta_label_scores wordt hij teruggezet
+naar date.
+
 Env:
   SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID,
   EMAIL_USER/EMAIL_PASS/EMAIL_RECEIVER (optioneel).
@@ -24,7 +29,6 @@ import os
 import sys
 import argparse
 import uuid
-import html
 import smtplib
 from datetime import datetime, timezone
 from typing import List, Optional, Dict
@@ -75,6 +79,7 @@ def safe_float(val, default: float = float("nan")) -> float:
     except Exception:
         return default
 
+
 def send_telegram(text: str) -> None:
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("[Telegram] Secrets ontbreken, overslaan.")
@@ -89,6 +94,7 @@ def send_telegram(text: str) -> None:
         print("[Telegram] Bericht verzonden.")
     except Exception as e:
         print(f"[Telegram] Fout: {e}")
+
 
 def send_email(subject: str, body: str) -> None:
     if not EMAIL_USER or not EMAIL_PASS or not EMAIL_RECEIVER:
@@ -144,7 +150,7 @@ def bouw_labels(df: pd.DataFrame, threshold: float) -> pd.DataFrame:
     out = df.copy()
     out = out[out["fwd_ret"].notna()].copy()
     out["label"] = np.nan
-    out.loc[out["fwd_ret"] >  threshold, "label"] = 1.0
+    out.loc[out["fwd_ret"] > threshold, "label"] = 1.0
     out.loc[out["fwd_ret"] < -threshold, "label"] = 0.0
     return out.dropna(subset=["label"]).copy()
 
@@ -166,7 +172,7 @@ def maak_features(df: pd.DataFrame, base_features: List[str]) -> pd.DataFrame:
     X = pd.concat([
         out[base_features].reset_index(drop=True),
         strat_dummies.reset_index(drop=True),
-        out["score"].fillna(0.0).reset_index(drop=True)
+        out["score"].fillna(0.0).reset_index(drop=True),
     ], axis=1)
     return X
 
@@ -211,7 +217,7 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
         proba = model.predict_proba(X_te)[:, 1]
         if len(np.unique(proba)) < 2:
             continue
-            
+
         try:
             ic = float(stats.spearmanr(proba, test["fwd_ret"].values).correlation)
         except Exception:
@@ -270,7 +276,14 @@ def schrijf_scores(conn, df: pd.DataFrame, versie: str, horizon: int):
         DO UPDATE SET proba = EXCLUDED.proba, created_at = now();
     """
     rijen = [
-        (r["datum"], r["ticker"], r["strategie"], horizon, versie, float(r["proba"]))
+        (
+            r["datum"].date() if hasattr(r["datum"], "date") else r["datum"],
+            r["ticker"],
+            r["strategie"],
+            horizon,
+            versie,
+            float(r["proba"]),
+        )
         for _, r in df.iterrows()
     ]
     with conn.cursor() as cur:
@@ -303,8 +316,10 @@ def main():
 
     strategieen = [s.strip() for s in args.strategieen.split(",") if s.strip()]
     embargo = args.horizon + args.embargo_extra
-    versie = f"meta_label_{args.model}_h{args.horizon}_t{args.threshold}_" \
-             f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:6]}"
+    versie = (
+        f"meta_label_{args.model}_h{args.horizon}_t{args.threshold}_"
+        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:6]}"
+    )
 
     print(f"Versie: {versie}")
     print(f"Strategieën: {strategieen}")
@@ -317,6 +332,9 @@ def main():
         if df.empty:
             print("Geen data.")
             return
+
+        # FIX: converteer datum van string naar datetime
+        df["datum"] = pd.to_datetime(df["datum"]).dt.tz_localize(None).dt.normalize()
 
         df = df[df["strategie"].isin(strategieen)].copy()
         print(f"{len(df)} rijen na strategie-filter.")
@@ -349,12 +367,16 @@ def main():
             ev = evalueer(res, d)
             b, f = ev["baseline"], ev["filter"]
             print(f"\n  drempel {d:.2f}:")
-            print(f"    baseline n={b['n']}, mean={b['mean']:+.2f}%, "
-                  f"sharpe={b['sharpe']:+.3f}, hit={b['hit']:.1%}, "
-                  f"max_dd={b['max_dd']:.1%}, pf={b['pf']:.2f}")
-            print(f"    filter   n={f['n']}, mean={f['mean']:+.2f}%, "
-                  f"sharpe={f['sharpe']:+.3f}, hit={f['hit']:.1%}, "
-                  f"max_dd={f['max_dd']:.1%}, pf={f['pf']:.2f}")
+            print(
+                f"    baseline n={b['n']}, mean={b['mean']:+.2f}%, "
+                f"sharpe={b['sharpe']:+.3f}, hit={b['hit']:.1%}, "
+                f"max_dd={b['max_dd']:.1%}, pf={b['pf']:.2f}"
+            )
+            print(
+                f"    filter   n={f['n']}, mean={f['mean']:+.2f}%, "
+                f"sharpe={f['sharpe']:+.3f}, hit={f['hit']:.1%}, "
+                f"max_dd={f['max_dd']:.1%}, pf={f['pf']:.2f}"
+            )
 
         if not args.geen_db_write:
             schrijf_scores(conn, res, versie, args.horizon)
