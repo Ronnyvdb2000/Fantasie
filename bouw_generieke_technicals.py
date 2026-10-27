@@ -30,6 +30,8 @@ Wijziging 2026-10-12:
   - datum_doel is nu optioneel. Zonder env-var schrijft de builder
     de BAR-DATUM (echte handelsdag) i.p.v. vandaag. Voorkomt
     zaterdag/zondag-rijen bij vertraagde of weekend-crons.
+Wijziging 2026-10-27:
+  - Telegram- en e-mailnotificaties toegevoegd (zonder refactor).
 """
 
 import os
@@ -38,6 +40,10 @@ import math
 import time
 import datetime as dt
 import warnings
+import smtplib
+import requests
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 import numpy as np
 import pandas as pd
@@ -58,6 +64,44 @@ MAX_BAR_AFSTAND_DAGEN = 7
 # Index voor relatieve sterkte (referentie voor REL_STERKTE_20D)
 INDEX_TICKER = "^GSPC"
 
+# ============================================================
+# NOTIFICATIE FUNCTIES
+# ============================================================
+def stuur_telegram(tekst: str) -> None:
+    token = os.environ.get("TELEGRAM_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print("[Telegram] Secrets ontbreken, overslaan.")
+        return
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    try:
+        requests.post(url, json={"chat_id": chat_id, "text": tekst, "parse_mode": "Markdown"}, timeout=10)
+        print("[Telegram] Bericht verzonden.")
+    except Exception as e:
+        print(f"[Telegram] Fout: {e}")
+
+def stuur_email(onderwerp: str, body: str) -> None:
+    user = os.environ.get("EMAIL_USER")
+    wachtwoord = os.environ.get("EMAIL_PASS")
+    ontvanger = os.environ.get("EMAIL_RECEIVER")
+    if not user or not wachtwoord or not ontvanger:
+        print("[Email] Secrets ontbreken, overslaan.")
+        return
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = user
+        msg["To"] = ontvanger
+        msg["Subject"] = onderwerp
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(user, wachtwoord)
+        server.send_message(msg)
+        server.quit()
+        print("[Email] Bericht verzonden.")
+    except Exception as e:
+        print(f"[Email] Fout: {e}")
 
 # --------------------------------------------------------------------------
 # Bestandslijst tickers
@@ -506,6 +550,37 @@ def main():
         print(f"Fouten           : {len(fouten)}")
         for t, e in fouten[:10]:
             print(f"  {t}: {e}")
+
+    # ============================================================
+    # TELEGRAM EN E-MAIL NOTIFICATIE
+    # ============================================================
+    datum_str = dt.date.today().strftime("%Y-%m-%d")
+    
+    # Telegram
+    tg_bericht = (
+        f"📊 *Generieke Technicals Update*\n"
+        f"_{datum_str}_\n\n"
+        f"✅ *Rijen geschreven:* {n_ok}\n"
+        f"⏭️ *Overgeslagen:* {n_skip}\n"
+    )
+    if fouten:
+        tg_bericht += f"⚠️ *Fouten:* {len(fouten)}\n"
+    stuur_telegram(tg_bericht)
+
+    # E-mail
+    email_onderwerp = f"Generieke Technicals Update - {datum_str}"
+    email_body = (
+        f"Generieke Technicals Update\n"
+        f"Datum: {datum_str}\n\n"
+        f"Tickers verwerkt: {len(tickers)}\n"
+        f"Rijen geschreven: {n_ok}\n"
+        f"Overgeslagen: {n_skip}\n"
+    )
+    if fouten:
+        email_body += f"\nAantal fouten: {len(fouten)}\n"
+        for t, e in fouten[:10]:
+            email_body += f"  {t}: {e}\n"
+    stuur_email(email_onderwerp, email_body)
 
 
 if __name__ == "__main__":
