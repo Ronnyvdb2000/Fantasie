@@ -1,42 +1,47 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.6 (Fantasie-versie)
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.7 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
-kans wordt gebruikt als filter: alleen signalen met proba >= drempel
-worden doorgelaten.
+kans wordt gebruikt als filter.
 
-BELANGRIJK: dit script voorspelt NIETS. Het bouwt een model, past het
-walk-forward toe, en rapporteert eerlijk of het filter iets toevoegt
-t.o.v. de baseline. Het kan ook slechter presteren.
+BELANGRIJK: dit script voorspelt NIETS. Het rapporteeert eerlijk of
+het filter iets toevoegt t.o.v. de baseline, per strategie en
+gecombineerd.
+
+v1.7 wijziging t.o.v. v1.6:
+  - aparte walk-forward per strategie (geen strat_*-dummies meer in
+    features, want constant binnen één strategie -> zinloos)
+  - rapport toont eerst GECOMBINEERD (referentie, ~vergelijkbaar met v1.6)
+    en daarna PER STRATEGIE met eigen AUC, IC, per-fold, feature importance
+    en drempel-evaluatie
+  - DB-write blijft gecombineerd (één tabel, strategie-kolom onderscheidt)
 
 v1.6 wijziging t.o.v. v1.5:
-  - maak_features() sluit 'score' uit base_features voordat X wordt
-    opgebouwd (bug: score zat 2x in X -> len(coefs)=12 != len(feature_cols)=10)
+  - maak_features() sluit 'score' uit base_features (bug: score zat 2x)
   - extra vangnet: dedupliceer X-kolommen als ze toch dubbel zijn
 
 v1.5 wijziging t.o.v. v1.4:
-  - maak_features() prefix alle X-kolommen met 'F_' om dubbele kolommen
-    in df te voorkomen
+  - maak_features() prefix alle X-kolommen met 'F_'
 
 v1.4 wijzigingen t.o.v. v1.3:
   - max_dd nu in PROCENTPUNTEN via cumsum
-  - evaluatie toont zowel ruwe als gewinsoriseerde cijfers
+  - evaluatie toont ruwe + gewinsoriseerde cijfers
   - per-fold: gewogen + ongewogen gemiddelde AUC, folds n<20 gemarkeerd
   - duplicaat-rapport: unieke (ticker, datum) vs rijen
-  - feature-importance debug: eerste fold toont reden bij falen
+  - feature-importance debug bij falen
 
 v1.3 wijzigingen t.o.v. v1.2:
   - per-fold AUC/IC tabel + aantal folds met AUC > 0.5
-  - feature importance per fold, gemiddeld
+  - feature importance per fold
   - walk_forward retourneert (resultaten_df, coef_df)
 
 v1.2 wijzigingen t.o.v. v1.0:
-  - 'datum' wordt in main() direct naar tz-naive Timestamp geconverteerd
-  - walk_forward() doet dezelfde conversie bovenaan
-  - schrijf_scores() converteert Timestamp -> datetime.date vóór insert
+  - 'datum' tz-naive Timestamp
+  - walk_forward conversie bovenaan
+  - schrijf_scores Timestamp -> date
 
 Env:
   SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID,
@@ -184,17 +189,13 @@ def cross_sectionele_rank(df: pd.DataFrame, kolommen: List[str]) -> pd.DataFrame
 def maak_features(df: pd.DataFrame, base_features: List[str]) -> pd.DataFrame:
     out = df.copy()
     strat_dummies = pd.get_dummies(out["strategie"], prefix="strat", dtype=float)
-    # v1.6: 'score' kan in base_features zitten (MODEL_FEATURES bevat het)
-    # -> sluit uit en voeg score expliciet 1x toe, zodat er geen duplicaat ontstaat
     bf = [f for f in base_features if f != "score"]
     X = pd.concat([
         out[bf].reset_index(drop=True),
         strat_dummies.reset_index(drop=True),
         out["score"].fillna(0.0).reset_index(drop=True),
     ], axis=1)
-    # v1.5: prefix alle feature-kolommen zodat concat met df geen duplicaten geeft
     X.columns = [f"F_{c}" for c in X.columns]
-    # v1.6: vangnet — nooit duplicaat-kolommen doorlaten
     if not X.columns.is_unique:
         dup = X.columns[X.columns.duplicated()].unique().tolist()
         print(f"[WARN] maak_features: dubbele kolommen {dup} — wordt gededupliceerd")
@@ -243,7 +244,8 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
             )
             model.fit(X_tr, train["label"].values)
         else:
-            model = LogisticRegression(C=1.0, max_iter=2000, class_weight="balanced", solver="lbfgs")
+            model = LogisticRegression(C=1.0, max_iter=2000,
+                                       class_weight="balanced", solver="lbfgs")
             model.fit(X_tr, train["label"].values)
 
         proba = model.predict_proba(X_te)[:, 1]
@@ -286,6 +288,31 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
     res_df = pd.concat(resultaten, ignore_index=True) if resultaten else pd.DataFrame()
     coef_df = pd.DataFrame(coef_lijst) if coef_lijst else pd.DataFrame()
     return res_df, coef_df
+
+
+def walk_forward_per_strategie(df: pd.DataFrame, feature_cols: List[str],
+                                embargo_dagen: int, min_train: int, min_test: int,
+                                model_type: str) -> Tuple[Dict[str, pd.DataFrame],
+                                                          Dict[str, pd.DataFrame]]:
+    """v1.7: aparte walk-forward per strategie, strat_*-dummies eruit."""
+    resultaten: Dict[str, pd.DataFrame] = {}
+    coefs: Dict[str, pd.DataFrame] = {}
+    # v1.7: strat_dummies zijn constant binnen één strategie -> zinloos
+    sf = [f for f in feature_cols if not f.startswith("F_strat_")]
+    for strat in sorted(df["strategie"].unique()):
+        sub = df[df["strategie"] == strat].copy()
+        print(f"\n  --- strategie {strat} (n={len(sub)}) ---")
+        res, cf = walk_forward(sub, sf, embargo_dagen, min_train, min_test, model_type)
+        if res.empty:
+            print(f"  {strat}: geen folds met resultaat.")
+        else:
+            print(f"  {strat}: {len(res)} voorspellingen over "
+                  f"{res['fold_datum'].nunique()} folds, "
+                  f"AUC={res['fold_auc'].mean():+.4f}, "
+                  f"IC={res['fold_ic'].mean():+.4f}")
+        resultaten[strat] = res
+        coefs[strat] = cf
+    return resultaten, coefs
 
 
 # ============================================================
@@ -488,38 +515,100 @@ def main():
 
         print(f"Features: {len(feature_cols)} kolommen.")
 
-        res, coefs_df = walk_forward(
+        # =========================================================
+        # v1.7: eerst GECOMBINEERD (referentie, vergelijkbaar met v1.6)
+        # =========================================================
+        print("\n============================================================")
+        print("GECOMBINEERD (referentie, ~vergelijkbaar met v1.6)")
+        print("============================================================")
+        res_all, coefs_all = walk_forward(
             df, feature_cols, embargo, args.min_train, args.min_test, args.model
         )
-        if res.empty:
-            print("Geen folds met resultaat.")
-            return
+        if res_all.empty:
+            print("Geen folds met resultaat (gecombineerd).")
+        else:
+            print(f"\n{len(res_all)} voorspellingen over "
+                  f"{res_all['fold_datum'].nunique()} folds.")
+            print(f"Gemiddelde IC:  {res_all['fold_ic'].mean():+.4f}")
+            print(f"Gemiddelde AUC: {res_all['fold_auc'].mean():+.4f}")
+            print_per_fold(res_all)
+            print_feature_importance(coefs_all, args.model)
+            print("\nEvaluatie per drempel (gecombineerd):")
+            for d in DEFAULT_DREMPELS:
+                ev = evalueer(res_all, d, args.winsor_pct)
+                print(f"\n  drempel {d:.2f}:")
+                for key in ("baseline", "baseline_w", "filter", "filter_w"):
+                    _print_stats(ev[key])
 
-        print(f"\n{len(res)} voorspellingen over {res['fold_datum'].nunique()} folds.")
-        print(f"Gemiddelde IC: {res['fold_ic'].mean():+.4f}")
-        print(f"Gemiddelde AUC: {res['fold_auc'].mean():+.4f}")
+        # =========================================================
+        # v1.7: daarna PER STRATEGIE
+        # =========================================================
+        print("\n\n============================================================")
+        print("PER STRATEGIE (v1.7, strat-dummies verwijderd)")
+        print("============================================================")
+        res_per_strat, coefs_per_strat = walk_forward_per_strategie(
+            df, feature_cols, embargo, args.min_train, args.min_test, args.model
+        )
 
-        print_per_fold(res)
-        print_feature_importance(coefs_df, args.model)
+        geldige_strats = [s for s, r in res_per_strat.items() if not r.empty]
+        if not geldige_strats:
+            print("\nGeen enkele strategie leverde folds op.")
+        else:
+            for strat in geldige_strats:
+                res = res_per_strat[strat]
+                coefs = coefs_per_strat[strat]
+                print(f"\n\n--- {strat} — detail ---")
+                print(f"Gemiddelde IC:  {res['fold_ic'].mean():+.4f}")
+                print(f"Gemiddelde AUC: {res['fold_auc'].mean():+.4f}")
+                print_per_fold(res)
+                print_feature_importance(coefs, args.model)
+                print(f"\nEvaluatie per drempel ({strat}):")
+                for d in DEFAULT_DREMPELS:
+                    ev = evalueer(res, d, args.winsor_pct)
+                    print(f"\n  drempel {d:.2f}:")
+                    for key in ("baseline", "baseline_w", "filter", "filter_w"):
+                        _print_stats(ev[key])
 
-        print("\nEvaluatie per drempel:")
-        for d in DEFAULT_DREMPELS:
-            ev = evalueer(res, d, args.winsor_pct)
-            print(f"\n  drempel {d:.2f}:")
-            for key in ("baseline", "baseline_w", "filter", "filter_w"):
-                _print_stats(ev[key])
+            # =========================================================
+            # Samenvattingstabel per strategie
+            # =========================================================
+            print("\n\n=== SAMENVATTING PER STRATEGIE ===")
+            print(f"{'strategie':<20} {'n':>6} {'folds':>6} {'AUC':>8} {'IC':>8} "
+                  f"{'AUC>0.5':>10}")
+            for strat in geldige_strats:
+                res = res_per_strat[strat]
+                folds = (
+                    res.groupby("fold_datum")
+                       .agg(n=("label", "size"), auc=("fold_auc", "first"))
+                )
+                g = folds[folds["n"] >= KLEINE_FOLD_DREMPEL]
+                n_pos = int((g["auc"] > 0.5).sum())
+                n_tot = len(g)
+                print(f"{strat:<20} {len(res):>6} {res['fold_datum'].nunique():>6} "
+                      f"{res['fold_auc'].mean():>+8.4f} "
+                      f"{res['fold_ic'].mean():>+8.4f} "
+                      f"{n_pos:>4}/{n_tot:<4}")
 
-        if not args.geen_db_write:
-            schrijf_scores(conn, res, versie, args.horizon)
+        # =========================================================
+        # DB-write: gecombineerd (huidig gedrag), strategie-kolom
+        # onderscheidt vanzelf
+        # =========================================================
+        if not res_all.empty and not args.geen_db_write:
+            schrijf_scores(conn, res_all, versie, args.horizon)
 
         if not args.geen_notify:
             samenvatting = (
                 f"Meta-labeling {versie}\n"
-                f"Folds: {res['fold_datum'].nunique()}\n"
-                f"Gem. AUC: {res['fold_auc'].mean():.3f}\n"
-                f"Gem. IC: {res['fold_ic'].mean():+.3f}\n\n"
-                "Zie console voor baseline vs filter."
+                f"Strategieën: {strategieen}\n"
+                f"Gecombineerd: AUC={res_all['fold_auc'].mean():.3f}, "
+                f"IC={res_all['fold_ic'].mean():+.3f}\n"
             )
+            for strat in geldige_strats:
+                res = res_per_strat[strat]
+                samenvatting += (
+                    f"{strat}: AUC={res['fold_auc'].mean():.3f}, "
+                    f"IC={res['fold_ic'].mean():+.3f}\n"
+                )
             send_telegram(samenvatting)
             send_email(f"Meta-labeling {versie}", samenvatting)
 
