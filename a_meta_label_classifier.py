@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.5 (Fantasie-versie)
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.6 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
@@ -12,10 +12,14 @@ BELANGRIJK: dit script voorspelt NIETS. Het bouwt een model, past het
 walk-forward toe, en rapporteert eerlijk of het filter iets toevoegt
 t.o.v. de baseline. Het kan ook slechter presteren.
 
+v1.6 wijziging t.o.v. v1.5:
+  - maak_features() sluit 'score' uit base_features voordat X wordt
+    opgebouwd (bug: score zat 2x in X -> len(coefs)=12 != len(feature_cols)=10)
+  - extra vangnet: dedupliceer X-kolommen als ze toch dubbel zijn
+
 v1.5 wijziging t.o.v. v1.4:
   - maak_features() prefix alle X-kolommen met 'F_' om dubbele kolommen
-    in df te voorkomen (bug: len(coefs)=20 != len(feature_cols)=10).
-    Feature importance werkt nu correct.
+    in df te voorkomen
 
 v1.4 wijzigingen t.o.v. v1.3:
   - max_dd nu in PROCENTPUNTEN via cumsum
@@ -180,13 +184,21 @@ def cross_sectionele_rank(df: pd.DataFrame, kolommen: List[str]) -> pd.DataFrame
 def maak_features(df: pd.DataFrame, base_features: List[str]) -> pd.DataFrame:
     out = df.copy()
     strat_dummies = pd.get_dummies(out["strategie"], prefix="strat", dtype=float)
+    # v1.6: 'score' kan in base_features zitten (MODEL_FEATURES bevat het)
+    # -> sluit uit en voeg score expliciet 1x toe, zodat er geen duplicaat ontstaat
+    bf = [f for f in base_features if f != "score"]
     X = pd.concat([
-        out[base_features].reset_index(drop=True),
+        out[bf].reset_index(drop=True),
         strat_dummies.reset_index(drop=True),
-        out["score"].fillna(0.0).reset_index(drop=True)
+        out["score"].fillna(0.0).reset_index(drop=True),
     ], axis=1)
     # v1.5: prefix alle feature-kolommen zodat concat met df geen duplicaten geeft
     X.columns = [f"F_{c}" for c in X.columns]
+    # v1.6: vangnet — nooit duplicaat-kolommen doorlaten
+    if not X.columns.is_unique:
+        dup = X.columns[X.columns.duplicated()].unique().tolist()
+        print(f"[WARN] maak_features: dubbele kolommen {dup} — wordt gededupliceerd")
+        X = X.loc[:, ~X.columns.duplicated()]
     return X
 
 
