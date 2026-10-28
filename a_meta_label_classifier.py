@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.3 (Fantasie-versie)
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.4 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
@@ -12,13 +12,21 @@ BELANGRIJK: dit script voorspelt NIETS. Het bouwt een model, past het
 walk-forward toe, en rapporteert eerlijk of het filter iets toevoegt
 t.o.v. de baseline. Het kan ook slechter presteren.
 
+v1.4 wijzigingen t.o.v. v1.3:
+  - max_dd nu in PROCENTPUNTEN via cumsum (was: cumprod -> -100% door
+    extreme forward returns zoals AMD.TO +542%)
+  - evaluatie toont zowel ruwe als gewinsoriseerde cijfers (cap ±30%,
+    instelbaar via --winsor-pct) zodat 1-2 uitschieters het beeld niet
+    domineren
+  - per-fold: gewogen + ongewogen gemiddelde AUC, folds n<20 gemarkeerd
+  - duplicaat-rapport: unieke (ticker, datum) vs rijen (JOIN-effect)
+  - feature-importance debug: eerste fold toont reden bij falen
+
 v1.3 wijzigingen t.o.v. v1.2:
-  - max_dd nu via multiplicatieve equity-curve (cumprod), altijd in [-1, 0]
-    (was: cumsum van procenten -> absurde waarden zoals -83286%)
+  - max_dd poging via cumprod (teruggedraaid in v1.4)
   - per-fold AUC/IC tabel + aantal folds met AUC > 0.5
-  - feature importance per fold, gemiddeld (|coef| + richting voor logreg,
-    gain voor xgb)
-  - walk_forward retourneert nu (resultaten_df, coef_df)
+  - feature importance per fold, gemiddeld
+  - walk_forward retourneert (resultaten_df, coef_df)
 
 v1.2 wijzigingen t.o.v. v1.0:
   - 'datum' wordt in main() direct naar tz-naive Timestamp geconverteerd
@@ -75,6 +83,8 @@ DEFAULT_EMBARGO_EXTRA = 5
 DEFAULT_MIN_TRAIN = 200
 DEFAULT_MIN_TEST = 20
 DEFAULT_DREMPELS = [0.55, 0.60, 0.65]
+DEFAULT_WINSOR_PCT = 30.0
+KLEINE_FOLD_DREMPEL = 20
 
 
 # ============================================================
@@ -197,6 +207,7 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
     datums = sorted(df["datum"].unique())
     resultaten = []
     coef_lijst = []
+    eerste_coef_poging = False  # v1.4: debug-warning 1x tonen, niet 29x
 
     for i in range(len(datums)):
         test_datum = pd.Timestamp(datums[i])
@@ -232,7 +243,7 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
         if len(np.unique(proba)) < 2:
             continue
 
-        # v1.3: feature importance per fold verzamelen
+        # v1.4: feature importance per fold met debug bij falen
         try:
             if model_type == "xgb":
                 coefs = np.asarray(model.feature_importances_, dtype=float)
@@ -243,8 +254,16 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
                 )
             if len(coefs) == len(feature_cols):
                 coef_lijst.append(pd.Series(coefs, index=feature_cols, name=test_datum))
-        except Exception:
-            pass  # importance is nice-to-have, nooit de run laten crashen
+            else:
+                if not eerste_coef_poging:
+                    print(f"[WARN] fold {test_datum.date()}: "
+                          f"len(coefs)={len(coefs)} != len(feature_cols)={len(feature_cols)}")
+                    eerste_coef_poging = True
+        except Exception as e:
+            if not eerste_coef_poging:
+                print(f"[WARN] fold {test_datum.date()}: coef-extractie faalde: "
+                      f"{type(e).__name__}: {e}")
+                eerste_coef_poging = True
 
         try:
             ic = float(stats.spearmanr(proba, test["fwd_ret"].values).correlation)
@@ -264,52 +283,62 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
 
 
 # ============================================================
-# EVALUATIE: BASELINE VS FILTER
+# EVALUATIE: BASELINE VS FILTER (ruw + gewinsoriseerd)
 # ============================================================
 
-def evalueer(df: pd.DataFrame, drempel: float) -> Dict:
+def evalueer(df: pd.DataFrame, drempel: float,
+             winsor_pct: float = DEFAULT_WINSOR_PCT) -> Dict:
     if df.empty:
         return {}
 
-    baseline = df["fwd_ret"].values
-    gefilterd = df.loc[df["proba"] >= drempel, "fwd_ret"].values
-
-    def _stats(arr):
+    def _stats(arr, label):
         if len(arr) < 2:
-            return {"n": len(arr), "mean": None, "sharpe": None,
-                    "hit": None, "max_dd": None, "pf": None}
+            return {"n": len(arr), "label": label,
+                    "mean": None, "sharpe": None,
+                    "hit": None, "max_dd_pp": None, "pf": None}
         mean = float(np.mean(arr))
         std = float(np.std(arr, ddof=1))
         sharpe = mean / std if std > 1e-9 else None
         hit = float(np.mean(arr > 0))
-        # v1.3: multiplicatieve equity-curve, max_dd in [-1, 0]
-        eq = np.cumprod(1.0 + arr / 100.0)
+        # v1.4: drawdown in PROCENTPUNTEN via cumsum
+        eq = np.cumsum(arr)
         peak = np.maximum.accumulate(eq)
-        dd = (eq - peak) / peak
-        max_dd = float(dd.min())
+        dd = eq - peak                  # in procentpunten
+        max_dd_pp = float(dd.min())     # bv -48.3
         gains = arr[arr > 0].sum()
         losses = -arr[arr < 0].sum()
         pf = float(gains / losses) if losses > 1e-9 else None
-        return {"n": len(arr), "mean": mean, "sharpe": sharpe,
-                "hit": hit, "max_dd": max_dd, "pf": pf}
+        return {"n": len(arr), "label": label, "mean": mean, "sharpe": sharpe,
+                "hit": hit, "max_dd_pp": max_dd_pp, "pf": pf}
 
-    return {"baseline": _stats(baseline), "filter": _stats(gefilterd)}
+    baseline = df["fwd_ret"].values
+    gefilterd = df.loc[df["proba"] >= drempel, "fwd_ret"].values
+
+    baseline_w = np.clip(baseline, -winsor_pct, winsor_pct)
+    gefilterd_w = np.clip(gefilterd, -winsor_pct, winsor_pct)
+
+    return {
+        "baseline":   _stats(baseline,    "baseline (ruw)"),
+        "baseline_w": _stats(baseline_w,  f"baseline (winsor ±{winsor_pct:.0f}%)"),
+        "filter":     _stats(gefilterd,   "filter   (ruw)"),
+        "filter_w":   _stats(gefilterd_w, f"filter   (winsor ±{winsor_pct:.0f}%)"),
+    }
 
 
-def _print_stats(label: str, s: Dict) -> None:
+def _print_stats(s: Dict) -> None:
     if s["mean"] is None:
-        print(f"    {label} n={s['n']} — te weinig data voor statistieken")
+        print(f"    {s['label']:<30} n={s['n']:>4}  te weinig data")
         return
-    print(f"    {label} n={s['n']}, mean={s['mean']:+.2f}%, "
-          f"sharpe={s['sharpe']:+.3f}, hit={s['hit']:.1%}, "
-          f"max_dd={s['max_dd']:.2%}, pf={s['pf']:.2f}")
+    print(f"    {s['label']:<30} n={s['n']:>4}  "
+          f"mean={s['mean']:+.2f}%  sharpe={s['sharpe']:+.3f}  "
+          f"hit={s['hit']:.1%}  max_dd={s['max_dd_pp']:+.1f}pp  pf={s['pf']:.2f}")
 
 
 # ============================================================
 # DIAGNOSTIEK: PER-FOLD + FEATURE IMPORTANCE
 # ============================================================
 
-def print_per_fold(res: pd.DataFrame) -> None:
+def print_per_fold(res: pd.DataFrame, klein_drempel: int = KLEINE_FOLD_DREMPEL) -> None:
     print("\nPer-fold AUC/IC:")
     folds_df = (
         res.groupby("fold_datum")
@@ -319,12 +348,22 @@ def print_per_fold(res: pd.DataFrame) -> None:
            .sort_index()
     )
     for datum, row in folds_df.iterrows():
+        mark = "  (klein)" if row["n"] < klein_drempel else ""
         print(f"  {datum.date()}  n={int(row['n']):>4}  "
-              f"AUC={row['auc']:+.3f}  IC={row['ic']:+.4f}")
-    n_tot = len(folds_df)
-    n_pos = int((folds_df["auc"] > 0.5).sum())
-    pct = 100.0 * n_pos / n_tot if n_tot else 0.0
-    print(f"  Folds met AUC > 0.5: {n_pos}/{n_tot} ({pct:.1f}%)")
+              f"AUC={row['auc']:+.3f}  IC={row['ic']:+.4f}{mark}")
+
+    geldig = folds_df[folds_df["n"] >= klein_drempel]
+    n_tot = len(geldig)
+    if n_tot == 0:
+        print(f"\n  Geen folds met n>={klein_drempel}.")
+        return
+    n_pos = int((geldig["auc"] > 0.5).sum())
+    ong = float(geldig["auc"].mean())
+    gew = float((geldig["auc"] * geldig["n"]).sum() / geldig["n"].sum())
+    print(f"\n  Folds met AUC > 0.5 (n>={klein_drempel}): "
+          f"{n_pos}/{n_tot} ({100*n_pos/n_tot:.1f}%)")
+    print(f"  Gemiddelde AUC  (ongewogen, n>={klein_drempel}): {ong:+.4f}")
+    print(f"  Gemiddelde AUC  (gewogen naar n):              {gew:+.4f}")
 
 
 def print_feature_importance(coef_df: pd.DataFrame, model_type: str) -> None:
@@ -339,7 +378,6 @@ def print_feature_importance(coef_df: pd.DataFrame, model_type: str) -> None:
             print(f"  {feat:<20} gain={val:.4f}")
         return
 
-    # LogReg: eerst absolute sterkte, dan richting
     gem_abs = coef_df.abs().mean().sort_values(ascending=False)
     print("  Top 10 op |coef|:")
     for feat, val in gem_abs.head(10).items():
@@ -391,6 +429,8 @@ def main():
     ap.add_argument("--model", choices=["logreg", "xgb"], default="logreg")
     ap.add_argument("--strategieen", type=str,
                     default="bot_00xxxV2,bot_00vcp,bot_00mr,bot_00dm,bot_00ms")
+    ap.add_argument("--winsor-pct", type=float, default=DEFAULT_WINSOR_PCT,
+                    help="Cap op fwd_ret in %% voor gewinsoriseerde evaluatie")
     ap.add_argument("--geen-db-write", action="store_true")
     ap.add_argument("--geen-notify", action="store_true")
     args = ap.parse_args()
@@ -406,7 +446,8 @@ def main():
 
     print(f"Versie: {versie}")
     print(f"Strategieën: {strategieen}")
-    print(f"Horizon: {args.horizon}d, threshold: ±{args.threshold}%, embargo: {embargo}d")
+    print(f"Horizon: {args.horizon}d, threshold: ±{args.threshold}%, embargo: {embargo}d, "
+          f"winsor: ±{args.winsor_pct:.0f}%")
 
     conn = psycopg2.connect(SUPABASE_DB_URL)
     try:
@@ -420,6 +461,13 @@ def main():
         df["datum"] = pd.to_datetime(df["datum"], errors="coerce", utc=True)
         df["datum"] = df["datum"].dt.tz_localize(None).dt.normalize()
         df = df.dropna(subset=["datum"]).reset_index(drop=True)
+
+        # v1.4: duplicaat-rapport (JOIN-effect)
+        n_rijen = len(df)
+        n_uniek = df[["ticker", "datum"]].drop_duplicates().shape[0]
+        if n_uniek > 0:
+            print(f"Unieke (ticker, datum): {n_uniek} "
+                  f"(rijen: {n_rijen}, factor {n_rijen/n_uniek:.2f}x)")
 
         df = df[df["strategie"].isin(strategieen)].copy()
         print(f"{len(df)} rijen na strategie-filter.")
@@ -438,7 +486,6 @@ def main():
 
         print(f"Features: {len(feature_cols)} kolommen.")
 
-        # v1.3: walk_forward retourneert nu (resultaten, coefs)
         res, coefs_df = walk_forward(
             df, feature_cols, embargo, args.min_train, args.min_test, args.model
         )
@@ -450,20 +497,15 @@ def main():
         print(f"Gemiddelde IC: {res['fold_ic'].mean():+.4f}")
         print(f"Gemiddelde AUC: {res['fold_auc'].mean():+.4f}")
 
-        # v1.3: per-fold breakdown
         print_per_fold(res)
-
-        # v1.3: feature importance
         print_feature_importance(coefs_df, args.model)
 
-        # Evaluatie per drempel (max_dd nu correct)
         print("\nEvaluatie per drempel:")
         for d in DEFAULT_DREMPELS:
-            ev = evalueer(res, d)
-            b, f = ev["baseline"], ev["filter"]
+            ev = evalueer(res, d, args.winsor_pct)
             print(f"\n  drempel {d:.2f}:")
-            _print_stats("baseline", b)
-            _print_stats("filter  ", f)
+            for key in ("baseline", "baseline_w", "filter", "filter_w"):
+                _print_stats(ev[key])
 
         if not args.geen_db_write:
             schrijf_scores(conn, res, versie, args.horizon)
