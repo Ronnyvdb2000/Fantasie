@@ -27,9 +27,9 @@ on:
         required: false
         default: 'bot_01kasstr'
       train_tot:
-        description: 'OOS-cutoff (YYYY-MM-DD). Leeg = rolling walk-forward.'
+        description: 'OOS-cutoff (YYYY-MM-DD). Leeg = rolling walk-forward (cron-gedrag).'
         required: false
-        default: '2026-09-30'
+        default: ''
       geen_db_write:
         description: 'Schrijf niet naar meta_label_scores (alleen console)'
         required: false
@@ -128,7 +128,8 @@ jobs:
           THRESHOLD="${{ github.event.inputs.threshold || '3.0' }}"
           MODEL="${{ github.event.inputs.model || 'logreg' }}"
           STRATS="${{ github.event.inputs.strategieen || 'bot_01kasstr' }}"
-          TRAIN_TOT="${{ github.event.inputs.train_tot || '2026-09-30' }}"
+          # v1.8: leeg = rolling walk-forward (cron-gedrag); gevuld = OOS-modus
+          TRAIN_TOT="${{ github.event.inputs.train_tot }}"
 
           FLAGS=""
           if [ "${{ github.event.inputs.geen_db_write }}" = "true" ]; then
@@ -138,7 +139,7 @@ jobs:
             FLAGS="$FLAGS --geen-notify"
           fi
 
-          # v1.8: bouw optionele --train-tot flag (leeg = rolling walk-forward)
+          # v1.8: bouw optionele --train-tot flag
           TRAIN_FLAG=""
           if [ -n "$TRAIN_TOT" ]; then
             TRAIN_FLAG="--train-tot $TRAIN_TOT"
