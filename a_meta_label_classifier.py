@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.4 (Fantasie-versie)
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.5 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
@@ -12,29 +12,27 @@ BELANGRIJK: dit script voorspelt NIETS. Het bouwt een model, past het
 walk-forward toe, en rapporteert eerlijk of het filter iets toevoegt
 t.o.v. de baseline. Het kan ook slechter presteren.
 
+v1.5 wijziging t.o.v. v1.4:
+  - maak_features() prefix alle X-kolommen met 'F_' om dubbele kolommen
+    in df te voorkomen (bug: len(coefs)=20 != len(feature_cols)=10).
+    Feature importance werkt nu correct.
+
 v1.4 wijzigingen t.o.v. v1.3:
-  - max_dd nu in PROCENTPUNTEN via cumsum (was: cumprod -> -100% door
-    extreme forward returns zoals AMD.TO +542%)
-  - evaluatie toont zowel ruwe als gewinsoriseerde cijfers (cap ±30%,
-    instelbaar via --winsor-pct) zodat 1-2 uitschieters het beeld niet
-    domineren
+  - max_dd nu in PROCENTPUNTEN via cumsum
+  - evaluatie toont zowel ruwe als gewinsoriseerde cijfers
   - per-fold: gewogen + ongewogen gemiddelde AUC, folds n<20 gemarkeerd
-  - duplicaat-rapport: unieke (ticker, datum) vs rijen (JOIN-effect)
+  - duplicaat-rapport: unieke (ticker, datum) vs rijen
   - feature-importance debug: eerste fold toont reden bij falen
 
 v1.3 wijzigingen t.o.v. v1.2:
-  - max_dd poging via cumprod (teruggedraaid in v1.4)
   - per-fold AUC/IC tabel + aantal folds met AUC > 0.5
   - feature importance per fold, gemiddeld
   - walk_forward retourneert (resultaten_df, coef_df)
 
 v1.2 wijzigingen t.o.v. v1.0:
   - 'datum' wordt in main() direct naar tz-naive Timestamp geconverteerd
-  - walk_forward() doet dezelfde conversie bovenaan (zelfvoorzienend)
+  - walk_forward() doet dezelfde conversie bovenaan
   - schrijf_scores() converteert Timestamp -> datetime.date vóór insert
-
-Deze versie is standalone (geen common/ package nodig) en werkt direct
-in de originele Fantasie-repo. Het gebruikt features.py voor MODEL_FEATURES.
 
 Env:
   SUPABASE_DB_URL (verplicht), TELEGRAM_TOKEN/TELEGRAM_CHAT_ID,
@@ -62,7 +60,6 @@ from sklearn.metrics import roc_auc_score
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# features.py bestaat in de originele repo
 from features import MODEL_FEATURES
 
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
@@ -88,7 +85,7 @@ KLEINE_FOLD_DREMPEL = 20
 
 
 # ============================================================
-# LOKALE HULPFUNCTIES (vervangen common/)
+# LOKALE HULPFUNCTIES
 # ============================================================
 
 def safe_float(val, default: float = float("nan")) -> float:
@@ -123,7 +120,6 @@ def send_email(subject: str, body: str) -> None:
         msg["To"] = EMAIL_RECEIVER
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "plain", "utf-8"))
-
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
         server.login(EMAIL_USER, EMAIL_PASS)
@@ -141,11 +137,9 @@ def send_email(subject: str, body: str) -> None:
 def haal_data(conn, features: List[str], horizon: int) -> pd.DataFrame:
     s_feats = [f for f in features if f not in GENERIEKE_TECHNICALS]
     g_feats = [f for f in features if f in GENERIEKE_TECHNICALS]
-
     s_lijst = ", ".join(f"s.{k}" for k in s_feats)
     g_lijst = ("," + ", ".join(f"g.{k}" for k in g_feats)) if g_feats else ""
     target = f"fwd_ret_{horizon}d"
-
     query = f"""
         SELECT s.ticker, s.datum, s.strategie, s.score,
                {s_lijst}{g_lijst},
@@ -191,13 +185,14 @@ def maak_features(df: pd.DataFrame, base_features: List[str]) -> pd.DataFrame:
         strat_dummies.reset_index(drop=True),
         out["score"].fillna(0.0).reset_index(drop=True)
     ], axis=1)
+    # v1.5: prefix alle feature-kolommen zodat concat met df geen duplicaten geeft
+    X.columns = [f"F_{c}" for c in X.columns]
     return X
 
 
 def walk_forward(df: pd.DataFrame, feature_cols: List[str],
                  embargo_dagen: int, min_train: int, min_test: int,
                  model_type: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    # v1.2: dwing datetime af, ongeacht wat de caller aanlevert (vangnet)
     df = df.copy()
     df["datum"] = pd.to_datetime(df["datum"], errors="coerce", utc=True)
     df["datum"] = df["datum"].dt.tz_localize(None).dt.normalize()
@@ -207,7 +202,7 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
     datums = sorted(df["datum"].unique())
     resultaten = []
     coef_lijst = []
-    eerste_coef_poging = False  # v1.4: debug-warning 1x tonen, niet 29x
+    eerste_coef_poging = False
 
     for i in range(len(datums)):
         test_datum = pd.Timestamp(datums[i])
@@ -243,7 +238,6 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
         if len(np.unique(proba)) < 2:
             continue
 
-        # v1.4: feature importance per fold met debug bij falen
         try:
             if model_type == "xgb":
                 coefs = np.asarray(model.feature_importances_, dtype=float)
@@ -283,7 +277,7 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
 
 
 # ============================================================
-# EVALUATIE: BASELINE VS FILTER (ruw + gewinsoriseerd)
+# EVALUATIE
 # ============================================================
 
 def evalueer(df: pd.DataFrame, drempel: float,
@@ -300,11 +294,10 @@ def evalueer(df: pd.DataFrame, drempel: float,
         std = float(np.std(arr, ddof=1))
         sharpe = mean / std if std > 1e-9 else None
         hit = float(np.mean(arr > 0))
-        # v1.4: drawdown in PROCENTPUNTEN via cumsum
         eq = np.cumsum(arr)
         peak = np.maximum.accumulate(eq)
-        dd = eq - peak                  # in procentpunten
-        max_dd_pp = float(dd.min())     # bv -48.3
+        dd = eq - peak
+        max_dd_pp = float(dd.min())
         gains = arr[arr > 0].sum()
         losses = -arr[arr < 0].sum()
         pf = float(gains / losses) if losses > 1e-9 else None
@@ -313,7 +306,6 @@ def evalueer(df: pd.DataFrame, drempel: float,
 
     baseline = df["fwd_ret"].values
     gefilterd = df.loc[df["proba"] >= drempel, "fwd_ret"].values
-
     baseline_w = np.clip(baseline, -winsor_pct, winsor_pct)
     gefilterd_w = np.clip(gefilterd, -winsor_pct, winsor_pct)
 
@@ -335,7 +327,7 @@ def _print_stats(s: Dict) -> None:
 
 
 # ============================================================
-# DIAGNOSTIEK: PER-FOLD + FEATURE IMPORTANCE
+# DIAGNOSTIEK
 # ============================================================
 
 def print_per_fold(res: pd.DataFrame, klein_drempel: int = KLEINE_FOLD_DREMPEL) -> None:
@@ -375,19 +367,19 @@ def print_feature_importance(coef_df: pd.DataFrame, model_type: str) -> None:
     if model_type == "xgb":
         gem = coef_df.mean().sort_values(ascending=False)
         for feat, val in gem.head(15).items():
-            print(f"  {feat:<20} gain={val:.4f}")
+            print(f"  {feat:<28} gain={val:.4f}")
         return
 
     gem_abs = coef_df.abs().mean().sort_values(ascending=False)
     print("  Top 10 op |coef|:")
     for feat, val in gem_abs.head(10).items():
-        print(f"  {feat:<20} |coef|={val:.4f}")
+        print(f"  {feat:<28} |coef|={val:.4f}")
 
     gem_signed = coef_df.mean()
     order = gem_signed.abs().sort_values(ascending=False).index
     print("\n  Richting (gemiddelde coef, + = voorspelt 'wint'):")
     for feat in order[:10]:
-        print(f"  {feat:<20} coef={gem_signed[feat]:+.4f}")
+        print(f"  {feat:<28} coef={gem_signed[feat]:+.4f}")
 
 
 # ============================================================
@@ -457,12 +449,10 @@ def main():
             print("Geen data.")
             return
 
-        # v1.2: dwing 'datum' als tz-naive Timestamp af
         df["datum"] = pd.to_datetime(df["datum"], errors="coerce", utc=True)
         df["datum"] = df["datum"].dt.tz_localize(None).dt.normalize()
         df = df.dropna(subset=["datum"]).reset_index(drop=True)
 
-        # v1.4: duplicaat-rapport (JOIN-effect)
         n_rijen = len(df)
         n_uniek = df[["ticker", "datum"]].drop_duplicates().shape[0]
         if n_uniek > 0:
