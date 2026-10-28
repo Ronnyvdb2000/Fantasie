@@ -1,40 +1,41 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.7 (Fantasie-versie)
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.8 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
 kans wordt gebruikt als filter.
 
-BELANGRIJK: dit script voorspelt NIETS. Het rapporteeert eerlijk of
-het filter iets toevoegt t.o.v. de baseline, per strategie en
-gecombineerd.
+BELANGRIJK: dit script voorspelt NIETS. Het rapporteert eerlijk of
+het filter iets toevoegt t.o.v. de baseline.
+
+v1.8 wijziging t.o.v. v1.7:
+  - nieuwe CLI-arg --train-tot YYYY-MM-DD: harde grens op de
+    trainingsset. Testset = alle datums > cutoff. Zonder deze arg
+    werkt het script exact als v1.7 (rolling walk-forward).
+  - versie-string bevat 'oos<YYYYMMDD>' als cutoff gezet is.
+  - per-fold markering '(OOS)' om verwarring te voorkomen.
 
 v1.7 wijziging t.o.v. v1.6:
-  - aparte walk-forward per strategie (geen strat_*-dummies meer in
-    features, want constant binnen één strategie -> zinloos)
-  - rapport toont eerst GECOMBINEERD (referentie, ~vergelijkbaar met v1.6)
-    en daarna PER STRATEGIE met eigen AUC, IC, per-fold, feature importance
-    en drempel-evaluatie
-  - DB-write blijft gecombineerd (één tabel, strategie-kolom onderscheidt)
+  - aparte walk-forward per strategie (strat_*-dummies eruit)
+  - rapport: GECOMBINEERD + PER STRATEGIE + SAMENVATTING
 
 v1.6 wijziging t.o.v. v1.5:
-  - maak_features() sluit 'score' uit base_features (bug: score zat 2x)
-  - extra vangnet: dedupliceer X-kolommen als ze toch dubbel zijn
+  - maak_features() sluit 'score' uit base_features (bug: score 2x)
+  - vangnet: dedupliceer X-kolommen
 
 v1.5 wijziging t.o.v. v1.4:
   - maak_features() prefix alle X-kolommen met 'F_'
 
 v1.4 wijzigingen t.o.v. v1.3:
-  - max_dd nu in PROCENTPUNTEN via cumsum
-  - evaluatie toont ruwe + gewinsoriseerde cijfers
-  - per-fold: gewogen + ongewogen gemiddelde AUC, folds n<20 gemarkeerd
-  - duplicaat-rapport: unieke (ticker, datum) vs rijen
-  - feature-importance debug bij falen
+  - max_dd in PROCENTPUNTEN via cumsum
+  - ruwe + gewinsoriseerde cijfers
+  - per-fold: gewogen + ongewogen AUC, folds n<20 gemarkeerd
+  - duplicaat-rapport, feature-importance debug
 
 v1.3 wijzigingen t.o.v. v1.2:
-  - per-fold AUC/IC tabel + aantal folds met AUC > 0.5
+  - per-fold AUC/IC + folds met AUC>0.5
   - feature importance per fold
   - walk_forward retourneert (resultaten_df, coef_df)
 
@@ -205,7 +206,9 @@ def maak_features(df: pd.DataFrame, base_features: List[str]) -> pd.DataFrame:
 
 def walk_forward(df: pd.DataFrame, feature_cols: List[str],
                  embargo_dagen: int, min_train: int, min_test: int,
-                 model_type: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+                 model_type: str,
+                 train_tot: Optional[pd.Timestamp] = None
+                 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     df = df.copy()
     df["datum"] = pd.to_datetime(df["datum"], errors="coerce", utc=True)
     df["datum"] = df["datum"].dt.tz_localize(None).dt.normalize()
@@ -213,13 +216,27 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
 
     df = df.sort_values("datum").reset_index(drop=True)
     datums = sorted(df["datum"].unique())
+
+    # v1.8: welke datums worden getest?
+    if train_tot is not None:
+        test_datums = [d for d in datums if d > train_tot]
+    else:
+        test_datums = datums  # rolling: alles testen
+
     resultaten = []
     coef_lijst = []
     eerste_coef_poging = False
 
-    for i in range(len(datums)):
-        test_datum = pd.Timestamp(datums[i])
-        train_datums = [d for d in datums[:i] if (test_datum - d).days > embargo_dagen]
+    for test_datum in test_datums:
+        test_datum = pd.Timestamp(test_datum)
+        # v1.8: alleen historische datums vóór test_datum, embargo
+        train_datums = [
+            d for d in datums
+            if d < test_datum and (test_datum - d).days > embargo_dagen
+        ]
+        # v1.8: harde grens op trainingsset indien opgegeven
+        if train_tot is not None:
+            train_datums = [d for d in train_datums if d <= train_tot]
         if not train_datums:
             continue
 
@@ -292,17 +309,19 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
 
 def walk_forward_per_strategie(df: pd.DataFrame, feature_cols: List[str],
                                 embargo_dagen: int, min_train: int, min_test: int,
-                                model_type: str) -> Tuple[Dict[str, pd.DataFrame],
-                                                          Dict[str, pd.DataFrame]]:
+                                model_type: str,
+                                train_tot: Optional[pd.Timestamp] = None
+                                ) -> Tuple[Dict[str, pd.DataFrame],
+                                          Dict[str, pd.DataFrame]]:
     """v1.7: aparte walk-forward per strategie, strat_*-dummies eruit."""
     resultaten: Dict[str, pd.DataFrame] = {}
     coefs: Dict[str, pd.DataFrame] = {}
-    # v1.7: strat_dummies zijn constant binnen één strategie -> zinloos
     sf = [f for f in feature_cols if not f.startswith("F_strat_")]
     for strat in sorted(df["strategie"].unique()):
         sub = df[df["strategie"] == strat].copy()
         print(f"\n  --- strategie {strat} (n={len(sub)}) ---")
-        res, cf = walk_forward(sub, sf, embargo_dagen, min_train, min_test, model_type)
+        res, cf = walk_forward(sub, sf, embargo_dagen, min_train, min_test,
+                               model_type, train_tot)
         if res.empty:
             print(f"  {strat}: geen folds met resultaat.")
         else:
@@ -369,7 +388,8 @@ def _print_stats(s: Dict) -> None:
 # DIAGNOSTIEK
 # ============================================================
 
-def print_per_fold(res: pd.DataFrame, klein_drempel: int = KLEINE_FOLD_DREMPEL) -> None:
+def print_per_fold(res: pd.DataFrame, klein_drempel: int = KLEINE_FOLD_DREMPEL,
+                   oos: bool = False) -> None:
     print("\nPer-fold AUC/IC:")
     folds_df = (
         res.groupby("fold_datum")
@@ -380,8 +400,9 @@ def print_per_fold(res: pd.DataFrame, klein_drempel: int = KLEINE_FOLD_DREMPEL) 
     )
     for datum, row in folds_df.iterrows():
         mark = "  (klein)" if row["n"] < klein_drempel else ""
+        oos_mark = "  (OOS)" if oos else ""
         print(f"  {datum.date()}  n={int(row['n']):>4}  "
-              f"AUC={row['auc']:+.3f}  IC={row['ic']:+.4f}{mark}")
+              f"AUC={row['auc']:+.3f}  IC={row['ic']:+.4f}{oos_mark}{mark}")
 
     geldig = folds_df[folds_df["n"] >= klein_drempel]
     n_tot = len(geldig)
@@ -462,6 +483,9 @@ def main():
                     default="bot_00xxxV2,bot_00vcp,bot_00mr,bot_00dm,bot_00ms")
     ap.add_argument("--winsor-pct", type=float, default=DEFAULT_WINSOR_PCT,
                     help="Cap op fwd_ret in %% voor gewinsoriseerde evaluatie")
+    ap.add_argument("--train-tot", type=str, default=None,
+                    help="Train alleen op datums <= YYYY-MM-DD (out-of-sample test). "
+                         "Zonder deze arg: rolling walk-forward.")
     ap.add_argument("--geen-db-write", action="store_true")
     ap.add_argument("--geen-notify", action="store_true")
     args = ap.parse_args()
@@ -470,15 +494,33 @@ def main():
         print("FOUT: SUPABASE_DB_URL ontbreekt.", file=sys.stderr)
         sys.exit(1)
 
+    # v1.8: parse cutoff
+    train_tot: Optional[pd.Timestamp] = None
+    if args.train_tot:
+        try:
+            train_tot = pd.Timestamp(args.train_tot)
+            if train_tot.tzinfo is not None:
+                train_tot = train_tot.tz_convert(None)
+        except Exception as e:
+            print(f"FOUT: --train-tot '{args.train_tot}' is geen geldige datum: {e}",
+                  file=sys.stderr)
+            sys.exit(1)
+
     strategieen = [s.strip() for s in args.strategieen.split(",") if s.strip()]
     embargo = args.horizon + args.embargo_extra
-    versie = f"meta_label_{args.model}_h{args.horizon}_t{args.threshold}_" \
+    oos_tag = f"_oos{train_tot.strftime('%Y%m%d')}" if train_tot is not None else ""
+    versie = f"meta_label_{args.model}_h{args.horizon}_t{args.threshold}{oos_tag}_" \
              f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:6]}"
 
     print(f"Versie: {versie}")
     print(f"Strategieën: {strategieen}")
     print(f"Horizon: {args.horizon}d, threshold: ±{args.threshold}%, embargo: {embargo}d, "
           f"winsor: ±{args.winsor_pct:.0f}%")
+    if train_tot is not None:
+        print(f"OOS-modus: train_tot={train_tot.date()} "
+              f"(test = alle datums > {train_tot.date()})")
+    else:
+        print("Modus: rolling walk-forward (geen OOS-cutoff)")
 
     conn = psycopg2.connect(SUPABASE_DB_URL)
     try:
@@ -515,14 +557,17 @@ def main():
 
         print(f"Features: {len(feature_cols)} kolommen.")
 
+        oos_label = "OOS" if train_tot is not None else "rolling"
+
         # =========================================================
-        # v1.7: eerst GECOMBINEERD (referentie, vergelijkbaar met v1.6)
+        # GECOMBINEERD
         # =========================================================
         print("\n============================================================")
-        print("GECOMBINEERD (referentie, ~vergelijkbaar met v1.6)")
+        print(f"GECOMBINEERD ({oos_label})")
         print("============================================================")
         res_all, coefs_all = walk_forward(
-            df, feature_cols, embargo, args.min_train, args.min_test, args.model
+            df, feature_cols, embargo, args.min_train, args.min_test,
+            args.model, train_tot,
         )
         if res_all.empty:
             print("Geen folds met resultaat (gecombineerd).")
@@ -531,9 +576,9 @@ def main():
                   f"{res_all['fold_datum'].nunique()} folds.")
             print(f"Gemiddelde IC:  {res_all['fold_ic'].mean():+.4f}")
             print(f"Gemiddelde AUC: {res_all['fold_auc'].mean():+.4f}")
-            print_per_fold(res_all)
+            print_per_fold(res_all, oos=(train_tot is not None))
             print_feature_importance(coefs_all, args.model)
-            print("\nEvaluatie per drempel (gecombineerd):")
+            print(f"\nEvaluatie per drempel (gecombineerd, {oos_label}):")
             for d in DEFAULT_DREMPELS:
                 ev = evalueer(res_all, d, args.winsor_pct)
                 print(f"\n  drempel {d:.2f}:")
@@ -541,13 +586,14 @@ def main():
                     _print_stats(ev[key])
 
         # =========================================================
-        # v1.7: daarna PER STRATEGIE
+        # PER STRATEGIE
         # =========================================================
         print("\n\n============================================================")
-        print("PER STRATEGIE (v1.7, strat-dummies verwijderd)")
+        print(f"PER STRATEGIE ({oos_label}, strat-dummies verwijderd)")
         print("============================================================")
         res_per_strat, coefs_per_strat = walk_forward_per_strategie(
-            df, feature_cols, embargo, args.min_train, args.min_test, args.model
+            df, feature_cols, embargo, args.min_train, args.min_test,
+            args.model, train_tot,
         )
 
         geldige_strats = [s for s, r in res_per_strat.items() if not r.empty]
@@ -560,18 +606,16 @@ def main():
                 print(f"\n\n--- {strat} — detail ---")
                 print(f"Gemiddelde IC:  {res['fold_ic'].mean():+.4f}")
                 print(f"Gemiddelde AUC: {res['fold_auc'].mean():+.4f}")
-                print_per_fold(res)
+                print_per_fold(res, oos=(train_tot is not None))
                 print_feature_importance(coefs, args.model)
-                print(f"\nEvaluatie per drempel ({strat}):")
+                print(f"\nEvaluatie per drempel ({strat}, {oos_label}):")
                 for d in DEFAULT_DREMPELS:
                     ev = evalueer(res, d, args.winsor_pct)
                     print(f"\n  drempel {d:.2f}:")
                     for key in ("baseline", "baseline_w", "filter", "filter_w"):
                         _print_stats(ev[key])
 
-            # =========================================================
             # Samenvattingstabel per strategie
-            # =========================================================
             print("\n\n=== SAMENVATTING PER STRATEGIE ===")
             print(f"{'strategie':<20} {'n':>6} {'folds':>6} {'AUC':>8} {'IC':>8} "
                   f"{'AUC>0.5':>10}")
@@ -589,10 +633,7 @@ def main():
                       f"{res['fold_ic'].mean():>+8.4f} "
                       f"{n_pos:>4}/{n_tot:<4}")
 
-        # =========================================================
-        # DB-write: gecombineerd (huidig gedrag), strategie-kolom
-        # onderscheidt vanzelf
-        # =========================================================
+        # DB-write: gecombineerd
         if not res_all.empty and not args.geen_db_write:
             schrijf_scores(conn, res_all, versie, args.horizon)
 
@@ -600,9 +641,13 @@ def main():
             samenvatting = (
                 f"Meta-labeling {versie}\n"
                 f"Strategieën: {strategieen}\n"
-                f"Gecombineerd: AUC={res_all['fold_auc'].mean():.3f}, "
-                f"IC={res_all['fold_ic'].mean():+.3f}\n"
+                f"Modus: {oos_label}\n"
             )
+            if not res_all.empty:
+                samenvatting += (
+                    f"Gecombineerd: AUC={res_all['fold_auc'].mean():.3f}, "
+                    f"IC={res_all['fold_ic'].mean():+.3f}\n"
+                )
             for strat in geldige_strats:
                 res = res_per_strat[strat]
                 samenvatting += (
