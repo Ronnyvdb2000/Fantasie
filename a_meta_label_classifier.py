@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.2 (Fantasie-versie)
+a_meta_label_classifier.py — META-LABELING CLASSIFIER v1.3 (Fantasie-versie)
 
 Doel: per historisch signaal leren voorspellen of de trade slaagt
 (forward return > +threshold) of faalt (< -threshold). De voorspelde
@@ -12,9 +12,16 @@ BELANGRIJK: dit script voorspelt NIETS. Het bouwt een model, past het
 walk-forward toe, en rapporteert eerlijk of het filter iets toevoegt
 t.o.v. de baseline. Het kan ook slechter presteren.
 
+v1.3 wijzigingen t.o.v. v1.2:
+  - max_dd nu via multiplicatieve equity-curve (cumprod), altijd in [-1, 0]
+    (was: cumsum van procenten -> absurde waarden zoals -83286%)
+  - per-fold AUC/IC tabel + aantal folds met AUC > 0.5
+  - feature importance per fold, gemiddeld (|coef| + richting voor logreg,
+    gain voor xgb)
+  - walk_forward retourneert nu (resultaten_df, coef_df)
+
 v1.2 wijzigingen t.o.v. v1.0:
   - 'datum' wordt in main() direct naar tz-naive Timestamp geconverteerd
-    (fix voor: TypeError: unsupported operand type(s) for -: 'str' and 'str')
   - walk_forward() doet dezelfde conversie bovenaan (zelfvoorzienend)
   - schrijf_scores() converteert Timestamp -> datetime.date vóór insert
 
@@ -33,7 +40,7 @@ import uuid
 import html
 import smtplib
 from datetime import datetime, timezone
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -179,7 +186,7 @@ def maak_features(df: pd.DataFrame, base_features: List[str]) -> pd.DataFrame:
 
 def walk_forward(df: pd.DataFrame, feature_cols: List[str],
                  embargo_dagen: int, min_train: int, min_test: int,
-                 model_type: str) -> pd.DataFrame:
+                 model_type: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     # v1.2: dwing datetime af, ongeacht wat de caller aanlevert (vangnet)
     df = df.copy()
     df["datum"] = pd.to_datetime(df["datum"], errors="coerce", utc=True)
@@ -189,6 +196,7 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
     df = df.sort_values("datum").reset_index(drop=True)
     datums = sorted(df["datum"].unique())
     resultaten = []
+    coef_lijst = []
 
     for i in range(len(datums)):
         test_datum = pd.Timestamp(datums[i])
@@ -224,6 +232,20 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
         if len(np.unique(proba)) < 2:
             continue
 
+        # v1.3: feature importance per fold verzamelen
+        try:
+            if model_type == "xgb":
+                coefs = np.asarray(model.feature_importances_, dtype=float)
+            else:
+                coefs = np.asarray(
+                    model.coef_[0] if model.coef_.ndim > 1 else model.coef_,
+                    dtype=float,
+                )
+            if len(coefs) == len(feature_cols):
+                coef_lijst.append(pd.Series(coefs, index=feature_cols, name=test_datum))
+        except Exception:
+            pass  # importance is nice-to-have, nooit de run laten crashen
+
         try:
             ic = float(stats.spearmanr(proba, test["fwd_ret"].values).correlation)
         except Exception:
@@ -236,7 +258,9 @@ def walk_forward(df: pd.DataFrame, feature_cols: List[str],
         test = test.assign(proba=proba, fold_datum=test_datum, fold_ic=ic, fold_auc=auc)
         resultaten.append(test)
 
-    return pd.concat(resultaten, ignore_index=True) if resultaten else pd.DataFrame()
+    res_df = pd.concat(resultaten, ignore_index=True) if resultaten else pd.DataFrame()
+    coef_df = pd.DataFrame(coef_lijst) if coef_lijst else pd.DataFrame()
+    return res_df, coef_df
 
 
 # ============================================================
@@ -252,21 +276,80 @@ def evalueer(df: pd.DataFrame, drempel: float) -> Dict:
 
     def _stats(arr):
         if len(arr) < 2:
-            return {"n": len(arr), "mean": None, "sharpe": None, "hit": None, "max_dd": None, "pf": None}
+            return {"n": len(arr), "mean": None, "sharpe": None,
+                    "hit": None, "max_dd": None, "pf": None}
         mean = float(np.mean(arr))
         std = float(np.std(arr, ddof=1))
         sharpe = mean / std if std > 1e-9 else None
         hit = float(np.mean(arr > 0))
-        eq = np.cumsum(arr)
+        # v1.3: multiplicatieve equity-curve, max_dd in [-1, 0]
+        eq = np.cumprod(1.0 + arr / 100.0)
         peak = np.maximum.accumulate(eq)
-        dd = (eq - peak) / np.where(peak == 0, 1, peak)
+        dd = (eq - peak) / peak
         max_dd = float(dd.min())
         gains = arr[arr > 0].sum()
         losses = -arr[arr < 0].sum()
         pf = float(gains / losses) if losses > 1e-9 else None
-        return {"n": len(arr), "mean": mean, "sharpe": sharpe, "hit": hit, "max_dd": max_dd, "pf": pf}
+        return {"n": len(arr), "mean": mean, "sharpe": sharpe,
+                "hit": hit, "max_dd": max_dd, "pf": pf}
 
     return {"baseline": _stats(baseline), "filter": _stats(gefilterd)}
+
+
+def _print_stats(label: str, s: Dict) -> None:
+    if s["mean"] is None:
+        print(f"    {label} n={s['n']} — te weinig data voor statistieken")
+        return
+    print(f"    {label} n={s['n']}, mean={s['mean']:+.2f}%, "
+          f"sharpe={s['sharpe']:+.3f}, hit={s['hit']:.1%}, "
+          f"max_dd={s['max_dd']:.2%}, pf={s['pf']:.2f}")
+
+
+# ============================================================
+# DIAGNOSTIEK: PER-FOLD + FEATURE IMPORTANCE
+# ============================================================
+
+def print_per_fold(res: pd.DataFrame) -> None:
+    print("\nPer-fold AUC/IC:")
+    folds_df = (
+        res.groupby("fold_datum")
+           .agg(n=("label", "size"),
+                auc=("fold_auc", "first"),
+                ic=("fold_ic", "first"))
+           .sort_index()
+    )
+    for datum, row in folds_df.iterrows():
+        print(f"  {datum.date()}  n={int(row['n']):>4}  "
+              f"AUC={row['auc']:+.3f}  IC={row['ic']:+.4f}")
+    n_tot = len(folds_df)
+    n_pos = int((folds_df["auc"] > 0.5).sum())
+    pct = 100.0 * n_pos / n_tot if n_tot else 0.0
+    print(f"  Folds met AUC > 0.5: {n_pos}/{n_tot} ({pct:.1f}%)")
+
+
+def print_feature_importance(coef_df: pd.DataFrame, model_type: str) -> None:
+    if coef_df.empty:
+        print("\nFeature importance: geen coëfficiënten verzameld.")
+        return
+
+    print("\nFeature importance (gemiddeld over folds):")
+    if model_type == "xgb":
+        gem = coef_df.mean().sort_values(ascending=False)
+        for feat, val in gem.head(15).items():
+            print(f"  {feat:<20} gain={val:.4f}")
+        return
+
+    # LogReg: eerst absolute sterkte, dan richting
+    gem_abs = coef_df.abs().mean().sort_values(ascending=False)
+    print("  Top 10 op |coef|:")
+    for feat, val in gem_abs.head(10).items():
+        print(f"  {feat:<20} |coef|={val:.4f}")
+
+    gem_signed = coef_df.mean()
+    order = gem_signed.abs().sort_values(ascending=False).index
+    print("\n  Richting (gemiddelde coef, + = voorspelt 'wint'):")
+    for feat in order[:10]:
+        print(f"  {feat:<20} coef={gem_signed[feat]:+.4f}")
 
 
 # ============================================================
@@ -281,7 +364,6 @@ def schrijf_scores(conn, df: pd.DataFrame, versie: str, horizon: int):
         ON CONFLICT (datum, ticker, strategie, horizon_dagen, model_versie)
         DO UPDATE SET proba = EXCLUDED.proba, created_at = now();
     """
-    # v1.2: Timestamp -> datetime.date vóór insert
     rijen = [
         (
             r["datum"].date() if hasattr(r["datum"], "date") else r["datum"],
@@ -334,7 +416,7 @@ def main():
             print("Geen data.")
             return
 
-        # v1.2: dwing 'datum' als tz-naive Timestamp af (fix voor str - str)
+        # v1.2: dwing 'datum' als tz-naive Timestamp af
         df["datum"] = pd.to_datetime(df["datum"], errors="coerce", utc=True)
         df["datum"] = df["datum"].dt.tz_localize(None).dt.normalize()
         df = df.dropna(subset=["datum"]).reset_index(drop=True)
@@ -356,7 +438,10 @@ def main():
 
         print(f"Features: {len(feature_cols)} kolommen.")
 
-        res = walk_forward(df, feature_cols, embargo, args.min_train, args.min_test, args.model)
+        # v1.3: walk_forward retourneert nu (resultaten, coefs)
+        res, coefs_df = walk_forward(
+            df, feature_cols, embargo, args.min_train, args.min_test, args.model
+        )
         if res.empty:
             print("Geen folds met resultaat.")
             return
@@ -365,17 +450,20 @@ def main():
         print(f"Gemiddelde IC: {res['fold_ic'].mean():+.4f}")
         print(f"Gemiddelde AUC: {res['fold_auc'].mean():+.4f}")
 
+        # v1.3: per-fold breakdown
+        print_per_fold(res)
+
+        # v1.3: feature importance
+        print_feature_importance(coefs_df, args.model)
+
+        # Evaluatie per drempel (max_dd nu correct)
         print("\nEvaluatie per drempel:")
         for d in DEFAULT_DREMPELS:
             ev = evalueer(res, d)
             b, f = ev["baseline"], ev["filter"]
             print(f"\n  drempel {d:.2f}:")
-            print(f"    baseline n={b['n']}, mean={b['mean']:+.2f}%, "
-                  f"sharpe={b['sharpe']:+.3f}, hit={b['hit']:.1%}, "
-                  f"max_dd={b['max_dd']:.1%}, pf={b['pf']:.2f}")
-            print(f"    filter   n={f['n']}, mean={f['mean']:+.2f}%, "
-                  f"sharpe={f['sharpe']:+.3f}, hit={f['hit']:.1%}, "
-                  f"max_dd={f['max_dd']:.1%}, pf={f['pf']:.2f}")
+            _print_stats("baseline", b)
+            _print_stats("filter  ", f)
 
         if not args.geen_db_write:
             schrijf_scores(conn, res, versie, args.horizon)
