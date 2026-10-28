@@ -25,7 +25,7 @@ on:
       strategieen:
         description: 'Komma-gescheiden lijst van strategieën'
         required: false
-        default: 'bot_00xxxV2,bot_00vcp,bot_00mr,bot_00dm,bot_00ms'
+        default: 'bot_01kasstr,bot_00kr'
       geen_db_write:
         description: 'Schrijf niet naar meta_label_scores (alleen console)'
         required: false
@@ -119,12 +119,12 @@ jobs:
           EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
         run: |
           set -o pipefail
-          
+
           HORIZON="${{ github.event.inputs.horizon || '10' }}"
           THRESHOLD="${{ github.event.inputs.threshold || '3.0' }}"
           MODEL="${{ github.event.inputs.model || 'logreg' }}"
-          STRATS="${{ github.event.inputs.strategieen || 'bot_00xxxV2,bot_00vcp,bot_00mr,bot_00dm,bot_00ms' }}"
-          
+          STRATS="${{ github.event.inputs.strategieen || 'bot_01kasstr,bot_00kr' }}"
+
           FLAGS=""
           if [ "${{ github.event.inputs.geen_db_write }}" = "true" ]; then
             FLAGS="$FLAGS --geen-db-write"
@@ -132,7 +132,7 @@ jobs:
           if [ "${{ github.event.inputs.geen_notify }}" = "true" ]; then
             FLAGS="$FLAGS --geen-notify"
           fi
-          
+
           echo "============================================================"
           echo "Meta-labeling classifier start"
           echo "  horizon     = $HORIZON"
@@ -141,12 +141,14 @@ jobs:
           echo "  strategieen = $STRATS"
           echo "  extra flags = $FLAGS"
           echo "============================================================"
-          
+
           python a_meta_label_classifier.py \
             --horizon "$HORIZON" \
             --threshold "$THRESHOLD" \
             --model "$MODEL" \
             --strategieen "$STRATS" \
+            --min-train 100 \
+            --min-test 5 \
             $FLAGS \
             2>&1 | tee meta_label_output.log
 
