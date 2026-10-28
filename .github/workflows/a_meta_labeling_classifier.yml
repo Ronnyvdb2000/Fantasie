@@ -25,7 +25,11 @@ on:
       strategieen:
         description: 'Komma-gescheiden lijst van strategieën'
         required: false
-        default: 'bot_01kasstr,bot_00kr'
+        default: 'bot_01kasstr'
+      train_tot:
+        description: 'OOS-cutoff (YYYY-MM-DD). Leeg = rolling walk-forward.'
+        required: false
+        default: '2026-09-30'
       geen_db_write:
         description: 'Schrijf niet naar meta_label_scores (alleen console)'
         required: false
@@ -123,7 +127,8 @@ jobs:
           HORIZON="${{ github.event.inputs.horizon || '10' }}"
           THRESHOLD="${{ github.event.inputs.threshold || '3.0' }}"
           MODEL="${{ github.event.inputs.model || 'logreg' }}"
-          STRATS="${{ github.event.inputs.strategieen || 'bot_01kasstr,bot_00kr' }}"
+          STRATS="${{ github.event.inputs.strategieen || 'bot_01kasstr' }}"
+          TRAIN_TOT="${{ github.event.inputs.train_tot || '2026-09-30' }}"
 
           FLAGS=""
           if [ "${{ github.event.inputs.geen_db_write }}" = "true" ]; then
@@ -133,12 +138,19 @@ jobs:
             FLAGS="$FLAGS --geen-notify"
           fi
 
+          # v1.8: bouw optionele --train-tot flag (leeg = rolling walk-forward)
+          TRAIN_FLAG=""
+          if [ -n "$TRAIN_TOT" ]; then
+            TRAIN_FLAG="--train-tot $TRAIN_TOT"
+          fi
+
           echo "============================================================"
           echo "Meta-labeling classifier start"
           echo "  horizon     = $HORIZON"
           echo "  threshold   = $THRESHOLD"
           echo "  model       = $MODEL"
           echo "  strategieen = $STRATS"
+          echo "  train_tot   = ${TRAIN_TOT:-<leeg, rolling>}"
           echo "  extra flags = $FLAGS"
           echo "============================================================"
 
@@ -149,6 +161,7 @@ jobs:
             --strategieen "$STRATS" \
             --min-train 100 \
             --min-test 5 \
+            $TRAIN_FLAG \
             $FLAGS \
             2>&1 | tee meta_label_output.log
 
