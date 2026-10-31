@@ -1,312 +1,142 @@
 [
   {
     "beurs": "01 Hoogland",
-    "ticker": "RIG",
-    "week_perf": 8.83
+    "ticker": "SFRRF",
+    "week_perf": 16.0
   },
   {
     "beurs": "01 Hoogland",
-    "ticker": "NE",
-    "week_perf": 8.31
+    "ticker": "BNNLF",
+    "week_perf": 15.38
   },
   {
     "beurs": "01 Hoogland",
-    "ticker": "ABBRF",
-    "week_perf": 6.03
+    "ticker": "PAUIF",
+    "week_perf": 8.97
   },
   {
     "beurs": "01 Hoogland",
-    "ticker": "TTE",
-    "week_perf": 3.15
+    "ticker": "COSAF",
+    "week_perf": 8.75
   },
   {
     "beurs": "01 Hoogland",
     "ticker": "YLLXF",
-    "week_perf": 2.37
+    "week_perf": 6.21
   },
   {
     "beurs": "02 Macrotrends",
-    "ticker": "RIG",
-    "week_perf": 8.83
+    "ticker": "GLO",
+    "week_perf": 1.11
   },
   {
     "beurs": "02 Macrotrends",
-    "ticker": "STNG",
-    "week_perf": 6.34
-  },
-  {
-    "beurs": "02 Macrotrends",
-    "ticker": "OXY",
-    "week_perf": 2.31
-  },
-  {
-    "beurs": "02 Macrotrends",
-    "ticker": "AMR",
-    "week_perf": 2.19
-  },
-  {
-    "beurs": "02 Macrotrends",
-    "ticker": "NTR",
-    "week_perf": 0.43
+    "ticker": "JAG.TO",
+    "week_perf": -6.1
   },
   {
     "beurs": "03 Beursbrink",
-    "ticker": "WTI",
-    "week_perf": 8.83
+    "ticker": "BKY.AX",
+    "week_perf": 11.56
   },
   {
     "beurs": "03 Beursbrink",
-    "ticker": "COLD",
-    "week_perf": 5.47
+    "ticker": "AEE.AX",
+    "week_perf": 8.82
   },
   {
     "beurs": "03 Beursbrink",
-    "ticker": "COP",
-    "week_perf": 3.83
+    "ticker": "LAM.TO",
+    "week_perf": 6.98
   },
   {
     "beurs": "03 Beursbrink",
-    "ticker": "AMGN",
-    "week_perf": 3.37
+    "ticker": "KAP.L",
+    "week_perf": 5.6
   },
   {
     "beurs": "03 Beursbrink",
-    "ticker": "GTE",
-    "week_perf": 3.08
-  },
-  {
-    "beurs": "05 Parijs",
-    "ticker": "AIR",
-    "week_perf": -3.39
+    "ticker": "TPZ.TO",
+    "week_perf": 2.29
   },
   {
     "beurs": "06 Power & AI",
-    "ticker": "PANW",
-    "week_perf": 9.68
-  },
-  {
-    "beurs": "06 Power & AI",
-    "ticker": "SMCI",
-    "week_perf": 2.62
-  },
-  {
-    "beurs": "06 Power & AI",
-    "ticker": "QUBT",
-    "week_perf": 2.18
-  },
-  {
-    "beurs": "06 Power & AI",
-    "ticker": "BBAI",
-    "week_perf": 0.94
-  },
-  {
-    "beurs": "06 Power & AI",
-    "ticker": "U",
-    "week_perf": 0.52
+    "ticker": "KAP.L",
+    "week_perf": 5.6
   },
   {
     "beurs": "07 Metalen",
-    "ticker": "UMI",
-    "week_perf": 2.48
+    "ticker": "IVN.TO",
+    "week_perf": -1.53
   },
   {
     "beurs": "07 Metalen",
-    "ticker": "GOLD",
-    "week_perf": 0.81
+    "ticker": "CS.TO",
+    "week_perf": -2.74
   },
   {
     "beurs": "07 Metalen",
-    "ticker": "ALB",
-    "week_perf": -1.02
-  },
-  {
-    "beurs": "07 Metalen",
-    "ticker": "MP",
-    "week_perf": -1.67
-  },
-  {
-    "beurs": "07 Metalen",
-    "ticker": "LAC",
-    "week_perf": -3.27
+    "ticker": "ERO.TO",
+    "week_perf": -6.98
   },
   {
     "beurs": "08 Defensie",
-    "ticker": "LMT",
-    "week_perf": 10.21
+    "ticker": "NANO.TO",
+    "week_perf": -1.25
   },
   {
     "beurs": "08 Defensie",
-    "ticker": "NOC",
-    "week_perf": 7.99
+    "ticker": "CAE.TO",
+    "week_perf": -1.58
   },
   {
     "beurs": "08 Defensie",
-    "ticker": "AVAV",
-    "week_perf": 4.54
-  },
-  {
-    "beurs": "08 Defensie",
-    "ticker": "GD",
-    "week_perf": 2.32
-  },
-  {
-    "beurs": "08 Defensie",
-    "ticker": "HII",
-    "week_perf": 1.65
-  },
-  {
-    "beurs": "09 Varia",
-    "ticker": "AWK",
-    "week_perf": 6.87
-  },
-  {
-    "beurs": "09 Varia",
-    "ticker": "CARR",
-    "week_perf": 1.87
-  },
-  {
-    "beurs": "09 Varia",
-    "ticker": "NKE",
-    "week_perf": 0.24
-  },
-  {
-    "beurs": "09 Varia",
-    "ticker": "HIMS",
-    "week_perf": -1.56
-  },
-  {
-    "beurs": "09 Varia",
-    "ticker": "WOLF",
-    "week_perf": -5.01
+    "ticker": "MDA.TO",
+    "week_perf": -4.55
   },
   {
     "beurs": "047 Toronto",
-    "ticker": "TRI.TO",
-    "week_perf": 12.91
+    "ticker": "CLS.TO",
+    "week_perf": 6.44
   },
   {
     "beurs": "047 Toronto",
-    "ticker": "BB.TO",
-    "week_perf": 7.97
+    "ticker": "ATZ.TO",
+    "week_perf": 2.57
   },
   {
     "beurs": "047 Toronto",
-    "ticker": "DSG.TO",
-    "week_perf": 7.69
+    "ticker": "CEU.TO",
+    "week_perf": 2.09
   },
   {
     "beurs": "047 Toronto",
-    "ticker": "CSU.TO",
-    "week_perf": 7.53
+    "ticker": "TOT.TO",
+    "week_perf": 2.03
   },
   {
     "beurs": "047 Toronto",
-    "ticker": "KXS.TO",
-    "week_perf": 5.32
-  },
-  {
-    "beurs": "048 Nasdaq/NYSE",
-    "ticker": "LQDA",
-    "week_perf": 24.96
-  },
-  {
-    "beurs": "048 Nasdaq/NYSE",
-    "ticker": "HCSG",
-    "week_perf": 19.85
-  },
-  {
-    "beurs": "048 Nasdaq/NYSE",
-    "ticker": "OSPN",
-    "week_perf": 14.52
-  },
-  {
-    "beurs": "048 Nasdaq/NYSE",
-    "ticker": "QLYS",
-    "week_perf": 14.0
-  },
-  {
-    "beurs": "048 Nasdaq/NYSE",
-    "ticker": "CART",
-    "week_perf": 13.08
-  },
-  {
-    "beurs": "050 Zurich",
-    "ticker": "STMN.SW",
-    "week_perf": 6.37
+    "ticker": "VLE.TO",
+    "week_perf": 1.64
   },
   {
     "beurs": "050 Zurich",
     "ticker": "SDZ.SW",
-    "week_perf": 5.33
-  },
-  {
-    "beurs": "050 Zurich",
-    "ticker": "YPSN.SW",
-    "week_perf": 2.98
-  },
-  {
-    "beurs": "050 Zurich",
-    "ticker": "SKAN.SW",
-    "week_perf": 1.66
-  },
-  {
-    "beurs": "050 Zurich",
-    "ticker": "OERL.SW",
-    "week_perf": -5.65
-  },
-  {
-    "beurs": "056 NYSE int",
-    "ticker": "SSL",
-    "week_perf": 14.91
-  },
-  {
-    "beurs": "056 NYSE int",
-    "ticker": "SPOT",
-    "week_perf": 12.62
-  },
-  {
-    "beurs": "056 NYSE int",
-    "ticker": "BB",
-    "week_perf": 9.31
-  },
-  {
-    "beurs": "056 NYSE int",
-    "ticker": "VAL",
-    "week_perf": 8.88
-  },
-  {
-    "beurs": "056 NYSE int",
-    "ticker": "ESTC",
-    "week_perf": 8.28
+    "week_perf": 0.02
   },
   {
     "beurs": "057 NYSE",
-    "ticker": "BMI",
-    "week_perf": 19.78
+    "ticker": "AMG",
+    "week_perf": -2.4
   },
   {
-    "beurs": "057 NYSE",
-    "ticker": "EFX",
-    "week_perf": 15.0
-  },
-  {
-    "beurs": "057 NYSE",
-    "ticker": "QTWO",
-    "week_perf": 11.52
-  },
-  {
-    "beurs": "057 NYSE",
-    "ticker": "IOT",
-    "week_perf": 11.46
-  },
-  {
-    "beurs": "057 NYSE",
-    "ticker": "TRU",
-    "week_perf": 11.43
+    "beurs": "058 TSXV",
+    "ticker": "LMN.V",
+    "week_perf": -0.46
   },
   {
     "beurs": "058 TSXV",
     "ticker": "ARTG.V",
-    "week_perf": -5.83
+    "week_perf": -3.8
   }
 ]
